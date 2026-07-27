@@ -1,9 +1,5 @@
 # Nukri
 
-A simple Hello World Go project.
+A fast and elegant terminal file manager written in Go
 
-## Run
-
-```bash
-go run ./cmd/nukri
-```
+# Curently WIP 
