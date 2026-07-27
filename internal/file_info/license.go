@@ -5,6 +5,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/urdadx/nukri/internal/core"
 )
@@ -97,7 +98,7 @@ func isCanonicalLicenseCandidateName(name string) bool {
 		"license", "licence", "copying", "copyright", "unlicense", "unlicence", "notice", "readme", "readme.txt", "readme.md",
 	}
 	var prefixCandidates = []string{
-		"license.", "licence.", "copying.", "copyright.", "unlicense.", "unlicence.", "notice.", "readme.",
+		"license", "licence", "copying", "copyright", "unlicense", "unlicence", "notice", "readme",
 	}
 
 	if slices.Contains(exactCandidates, name) {
@@ -107,7 +108,7 @@ func isCanonicalLicenseCandidateName(name string) bool {
 	for _, candidate := range prefixCandidates {
 		if after, ok := strings.CutPrefix(name, candidate); ok {
 			suffix := after
-			if len(suffix) > 0 {
+			if len(suffix) > 1 {
 				firstChar := rune(suffix[0])
 				if firstChar == '.' || firstChar == '_' || firstChar == '-' {
 					return true
@@ -120,21 +121,18 @@ func isCanonicalLicenseCandidateName(name string) bool {
 }
 
 func canSniffLicenseContent(baseFacts FileFacts) bool {
-	if baseFacts.Preview.Kind == PlainText || baseFacts.Preview.Kind == Markdown && baseFacts.BuiltinClass == core.FileClassDocument || baseFacts.BuiltinClass == core.FileClassFile {
-		return true
-	}
-	return false
+	textPreview := baseFacts.Preview.Kind == PlainText || baseFacts.Preview.Kind == Markdown
+	textClass := baseFacts.BuiltinClass == core.FileClassDocument || baseFacts.BuiltinClass == core.FileClassFile
+	return textPreview && textClass
 }
 
 func canSniffLicenseMarkers(ext string, baseFacts FileFacts) bool {
-	if ext == "md" || ext == "markdown" || ext == "rst" || ext == "mdown" || ext == "mdx" || ext == "mkd" && canSniffLicenseContent(baseFacts) {
-		return true
-	}
-	return false
+	textExtension := ext == "md" || ext == "markdown" || ext == "rst" || ext == "mdown" || ext == "mdx" || ext == "mkd"
+	return textExtension && canSniffLicenseContent(baseFacts)
 }
 
 func readLicenseTextPrefix(path string, byteLimit int) (string, error) {
-	if isRegularFile(path) {
+	if !isRegularFile(path) {
 		return "", nil
 	}
 
@@ -256,8 +254,8 @@ func normalizeLicenseText(text string) string {
 	var previousSpace bool = true
 
 	for _, char := range text {
-		lower := rune(char)
-		if (lower >= 'a' && lower <= 'z') || (lower >= '0' && lower <= '9') {
+		lower := unicode.ToLower(char)
+		if unicode.IsLetter(lower) || unicode.IsNumber(lower) {
 			normalized.WriteRune(lower)
 			previousSpace = false
 		} else if !previousSpace {
@@ -277,8 +275,8 @@ func normalizeHighSignalText(text string) string {
 	var previousSpace bool = true
 
 	for _, char := range text {
-		lower := rune(char)
-		if (lower >= 'a' && lower <= 'z') || (lower >= '0' && lower <= '9') {
+		lower := unicode.ToLower(char)
+		if unicode.IsLetter(lower) || unicode.IsNumber(lower) {
 			normalized.WriteRune(lower)
 			previousSpace = false
 		} else if lower == '.' || lower == '-' || lower == '_' {
@@ -331,7 +329,7 @@ func hasStrongLicenseMarkers(text string) bool {
 
 	for _, signature := range HighSignalLicenseSignatures {
 		for _, marker := range signature.TopMarkers {
-			if strings.Contains(normalizedSignatureText, strings.ToLower(marker)) {
+			if strings.Contains(normalizedSignatureText, normalizeHighSignalText(marker)) {
 				return true
 			}
 		}
@@ -418,18 +416,12 @@ func containsAll(haystack string, needles []string) bool {
 
 func containsPhrase(normalizedText string, phrase string) bool {
 	needle := normalizeHighSignalText(phrase)
-	if needle == "" && strings.Contains(normalizedText, needle) {
-		return true
-	}
-	return false
+	return needle != "" && strings.Contains(normalizedText, needle)
 }
 
 func startsWithPhrase(normalizedText string, phrase string) bool {
 	needle := normalizeHighSignalText(phrase)
-	if needle == "" && strings.HasPrefix(normalizedText, needle) {
-		return true
-	}
-	return false
+	return needle != "" && strings.HasPrefix(normalizedText, needle)
 }
 
 func matchesSignature(normalizedText string, signature HighSignalLicenseSignature) bool {
@@ -446,31 +438,31 @@ func matchesSignature(normalizedText string, signature HighSignalLicenseSignatur
 	return true
 }
 
-func detectLicenseDocuments(text string) LicenseDetection {
+func detectLicenseDocuments(text string) (LicenseDetection, bool) {
 	detection, ok := detectSPDXIdentifier(text)
 	if ok {
-		return detection
+		return detection, true
 	}
 
 	normalized := normalizeHighSignalText(text)
 	detection = detectKnownLicense(normalized)
 	if detection.IsSpecific {
-		return detection
-	}
-
-	if startsLikeStandaloneLicense(normalized) {
-		return LicenseDetection{IsSpecific: false}
-	}
-
-	if looksLikeLicenseDocument(normalized) {
-		return LicenseDetection{IsSpecific: false}
+		return detection, true
 	}
 
 	if detection, ok := detectHighSignalLicense(text); ok {
-		return detection
+		return detection, true
 	}
 
-	return LicenseDetection{}
+	if startsLikeStandaloneLicense(normalized) {
+		return LicenseDetection{IsSpecific: false}, true
+	}
+
+	if looksLikeLicenseDocument(normalized) {
+		return LicenseDetection{IsSpecific: false}, true
+	}
+
+	return LicenseDetection{}, false
 }
 
 func detectKnownLicense(normalized string) LicenseDetection {
@@ -486,18 +478,18 @@ func detectKnownLicense(normalized string) LicenseDetection {
 
 	if containsAll(normalized, []string{"permission to use copy modify and or distribute this software for any purpose with or without fee is hereby granted",
 		"the software is provided as is"}) {
-		return LicenseDetection{IsSpecific: true, DetailLabel: "GNU General Public License v3.0"}
+		return LicenseDetection{IsSpecific: true, DetailLabel: "ISC License"}
 	}
 
 	if containsAll(normalized, []string{"redistribution and use in source and binary forms with or without modification are permitted provided that the following conditions are met",
 		"neither the name of"}) {
-		return LicenseDetection{IsSpecific: true, DetailLabel: "BSD 2-Clause License"}
+		return LicenseDetection{IsSpecific: true, DetailLabel: "BSD 3-Clause License"}
 	}
 
 	if containsAll(normalized, []string{"permission is hereby granted free of charge to any person obtaining a copy",
 		"the software is furnished to do so",
 		"the software is provided as is"}) {
-		return LicenseDetection{IsSpecific: true, DetailLabel: "BSD 3-Clause License"}
+		return LicenseDetection{IsSpecific: true, DetailLabel: "MIT License"}
 	}
 
 	if containsAll(normalized, []string{"this is free and unencumbered software released into the public domain",
@@ -595,18 +587,20 @@ func SniffLicenseFileType(path string, name string, ext string, baseFacts FileFa
 	}
 
 	if !canonicalCandidate {
-		hasSpdx, ok := detectSPDXIdentifier(text)
-		if !ok && hasStrongLicenseMarkers(text) {
-			return licenseFileFacts(hasSpdx, baseFacts)
+		if detection, ok := detectSPDXIdentifier(text); ok {
+			return licenseFileFacts(detection, baseFacts)
 		}
-		if !ok && !startsLikeStandaloneLicense(text) {
+		if !hasStrongLicenseMarkers(text) && !startsLikeStandaloneLicense(text) {
 			return baseFacts
 		}
 	}
 
-	detection := detectLicenseDocuments(text)
-	if detection.IsSpecific {
+	detection, detected := detectLicenseDocuments(text)
+	if detected {
 		return licenseFileFacts(detection, baseFacts)
+	}
+	if canonicalCandidate {
+		return licenseFileFacts(LicenseDetection{}, baseFacts)
 	}
 
 	return baseFacts
@@ -630,13 +624,16 @@ func SniffBrowserLicenseFileType(path string, name string, ext string, baseFacts
 		return baseFacts
 	}
 
-	if !canonicalCandidate && !hasStrongLicenseMarkers(prefix) || !startsLikeStandaloneLicense(prefix) {
+	if !canonicalCandidate && !hasStrongLicenseMarkers(prefix) && !startsLikeStandaloneLicense(prefix) {
 		return baseFacts
 	}
 
-	detection := detectLicenseDocuments(prefix)
-	if detection.IsSpecific {
+	detection, detected := detectLicenseDocuments(prefix)
+	if detected {
 		return licenseFileFacts(detection, baseFacts)
+	}
+	if canonicalCandidate {
+		return licenseFileFacts(LicenseDetection{}, baseFacts)
 	}
 
 	return baseFacts
