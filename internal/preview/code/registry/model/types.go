@@ -1,16 +1,20 @@
 package model
 
-import fileinfo "github.com/urdadx/nukri/internal/file_info"
+type CodeBackend int
+
+const (
+	Plain CodeBackend = iota
+	Chroma
+	Custom
+)
+
+type StructuredFormat string
 
 type RegisteredLanguage struct {
 	CanonicalID      string
 	DisplayLabel     string
-	Backend          fileinfo.CodeBackend
-	StructuredFormat *fileinfo.StructuredFormat
-}
-
-func (l RegisteredLanguage) PreviewSpec() fileinfo.PreviewSpec {
-	return fileinfo.CodePreview(l.CanonicalID, l.Backend, l.StructuredFormat)
+	Backend          CodeBackend
+	StructuredFormat *StructuredFormat
 }
 
 type RegistryEntry struct {
@@ -22,7 +26,7 @@ type RegistryEntry struct {
 	MarkdownFences      []string
 }
 
-func Language(canonicalID, displayLabel string, backend fileinfo.CodeBackend, structuredFormat *fileinfo.StructuredFormat) RegisteredLanguage {
+func Language(canonicalID, displayLabel string, backend CodeBackend, structuredFormat *StructuredFormat) RegisteredLanguage {
 	return RegisteredLanguage{
 		CanonicalID:      canonicalID,
 		DisplayLabel:     displayLabel,

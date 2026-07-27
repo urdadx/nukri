@@ -533,34 +533,6 @@ func languageForModeline(token string) (registeredLanguage, bool) {
 	return languageForCodeSyntax(key)
 }
 
-func inspectExactName(name string) (FileFacts, bool) {
-	codeNames := map[string]string{"makefile": "make", "gnumakefile": "make", "dockerfile": "docker", "jenkinsfile": "groovy"}
-	if syntax, ok := codeNames[name]; ok {
-		label := name + " file"
-		return FileFacts{BuiltinClass: core.FileClassCode, SpecificTypeLabel: &label, Preview: CodePreview(syntax, Chroma, nil)}, true
-	}
-	return FileFacts{}, false
-}
-
-func inspectExtension(ext string) FileFacts {
-	imageLabels := map[string]string{"png": "PNG image", "jpg": "JPEG image", "jpeg": "JPEG image", "gif": "GIF image", "webp": "WebP image", "svg": "SVG image"}
-	if label, ok := imageLabels[ext]; ok {
-		return imageFacts(label)
-	}
-	archiveLabels := map[string]string{"zip": "ZIP archive", "tar": "TAR archive", "gz": "Gzip archive", "xz": "XZ archive", "bz2": "Bzip2 archive", "zst": "Zstandard archive", "7z": "7-Zip archive", "rar": "RAR archive"}
-	if label, ok := archiveLabels[ext]; ok {
-		return plain(core.FileClassArchive, stringPtr(label))
-	}
-	codeSyntax := map[string]string{"go": "go", "rs": "rust", "py": "python", "js": "javascript", "ts": "typescript", "jsx": "jsx", "tsx": "tsx", "c": "c", "h": "c", "cpp": "cpp", "hpp": "cpp", "java": "java", "rb": "ruby", "php": "php", "pl": "perl", "ex": "elixir", "exs": "elixir", "sh": "sh", "bash": "bash", "zsh": "zsh", "fish": "fish", "sql": "sql"}
-	if syntax, ok := codeSyntax[ext]; ok {
-		return FileFacts{BuiltinClass: core.FileClassCode, Preview: CodePreview(syntax, Chroma, nil)}
-	}
-	if ext == "conf" || ext == "cfg" || ext == "ini" {
-		return FileFacts{BuiltinClass: core.FileClassConfig, Preview: CodePreview(ext, Custom, nil)}
-	}
-	return plain(core.FileClassFile, nil)
-}
-
 func sniffBrowserLicenseFileType(name, ext string, facts FileFacts) (FileFacts, bool) {
 	base := strings.TrimSuffix(name, "."+ext)
 	if base == "license" || base == "licence" || base == "copying" || base == "copyright" {

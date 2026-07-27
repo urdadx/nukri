@@ -1,13 +1,12 @@
 package data
 
 import (
-	fileinfo "github.com/urdadx/nukri/internal/file_info"
 	registry "github.com/urdadx/nukri/internal/preview/code/registry/model"
 )
 
 var Tooling = []registry.RegistryEntry{
 	registry.Entry(
-		registry.Language("sql", "SQL", fileinfo.Chroma, nil),
+		registry.Language("sql", "SQL", registry.Chroma, nil),
 		[]string{"sql"},
 		nil,
 		nil,
@@ -15,7 +14,7 @@ var Tooling = []registry.RegistryEntry{
 		[]string{"sql"},
 	),
 	registry.Entry(
-		registry.Language("diff", "Diff", fileinfo.Chroma, nil),
+		registry.Language("diff", "Diff", registry.Chroma, nil),
 		[]string{"diff", "patch"},
 		nil,
 		nil,
@@ -23,7 +22,7 @@ var Tooling = []registry.RegistryEntry{
 		[]string{"diff", "patch"},
 	),
 	registry.Entry(
-		registry.Language("latex", "LaTeX", fileinfo.Chroma, nil),
+		registry.Language("latex", "LaTeX", registry.Chroma, nil),
 		[]string{"tex", "ltx"},
 		nil,
 		nil,
@@ -31,7 +30,7 @@ var Tooling = []registry.RegistryEntry{
 		[]string{"latex", "tex"},
 	),
 	registry.Entry(
-		registry.Language("bibtex", "BibTeX", fileinfo.Chroma, nil),
+		registry.Language("bibtex", "BibTeX", registry.Chroma, nil),
 		[]string{"bib"},
 		nil,
 		nil,
@@ -39,7 +38,7 @@ var Tooling = []registry.RegistryEntry{
 		[]string{"bibtex", "bib"},
 	),
 	registry.Entry(
-		registry.Language("tex", "TeX", fileinfo.Chroma, nil),
+		registry.Language("tex", "TeX", registry.Chroma, nil),
 		[]string{"sty", "cls"},
 		nil,
 		nil,
@@ -47,7 +46,7 @@ var Tooling = []registry.RegistryEntry{
 		[]string{"tex"},
 	),
 	registry.Entry(
-		registry.Language("dockerfile", "Dockerfile", fileinfo.Chroma, nil),
+		registry.Language("dockerfile", "Dockerfile", registry.Chroma, nil),
 		nil,
 		[]string{"dockerfile", "containerfile"},
 		nil,
@@ -55,7 +54,7 @@ var Tooling = []registry.RegistryEntry{
 		[]string{"dockerfile", "docker"},
 	),
 	registry.Entry(
-		registry.Language("hcl", "HCL", fileinfo.Chroma, nil),
+		registry.Language("hcl", "HCL", registry.Chroma, nil),
 		[]string{"hcl"},
 		[]string{".terraform.lock.hcl"},
 		nil,
@@ -63,7 +62,7 @@ var Tooling = []registry.RegistryEntry{
 		[]string{"hcl"},
 	),
 	registry.Entry(
-		registry.Language("terraform", "Terraform", fileinfo.Chroma, nil),
+		registry.Language("terraform", "Terraform", registry.Chroma, nil),
 		[]string{"tf", "tfvars", "tfbackend"},
 		[]string{"terraform.rc", ".terraformrc"},
 		nil,
@@ -71,7 +70,7 @@ var Tooling = []registry.RegistryEntry{
 		[]string{"terraform", "tf", "tfvars"},
 	),
 	registry.Entry(
-		registry.Language("groovy", "Groovy", fileinfo.Chroma, nil),
+		registry.Language("groovy", "Groovy", registry.Chroma, nil),
 		[]string{"groovy", "gvy", "gradle"},
 		[]string{"build.gradle", "settings.gradle", "init.gradle"},
 		[]string{"groovy"},
@@ -79,7 +78,7 @@ var Tooling = []registry.RegistryEntry{
 		[]string{"groovy", "gradle"},
 	),
 	registry.Entry(
-		registry.Language("scala", "Scala", fileinfo.Chroma, nil),
+		registry.Language("scala", "Scala", registry.Chroma, nil),
 		[]string{"scala", "sbt"},
 		[]string{"build.sbt"},
 		[]string{"scala"},
@@ -87,7 +86,7 @@ var Tooling = []registry.RegistryEntry{
 		[]string{"scala", "sbt"},
 	),
 	registry.Entry(
-		registry.Language("just", "Just", fileinfo.Chroma, nil),
+		registry.Language("just", "Just", registry.Chroma, nil),
 		nil,
 		[]string{"justfile", ".justfile"},
 		nil,
@@ -95,7 +94,7 @@ var Tooling = []registry.RegistryEntry{
 		[]string{"just"},
 	),
 	registry.Entry(
-		registry.Language("make", "Makefile", fileinfo.Chroma, nil),
+		registry.Language("make", "Makefile", registry.Chroma, nil),
 		[]string{"mk", "mak"},
 		[]string{"makefile", "gnumakefile", "bsdmakefile"},
 		nil,
@@ -103,7 +102,7 @@ var Tooling = []registry.RegistryEntry{
 		[]string{"make", "makefile"},
 	),
 	registry.Entry(
-		registry.Language("nix", "Nix", fileinfo.Chroma, nil),
+		registry.Language("nix", "Nix", registry.Chroma, nil),
 		[]string{"nix"},
 		nil,
 		nil,
@@ -111,7 +110,7 @@ var Tooling = []registry.RegistryEntry{
 		[]string{"nix"},
 	),
 	registry.Entry(
-		registry.Language("cmake", "CMake", fileinfo.Chroma, nil),
+		registry.Language("cmake", "CMake", registry.Chroma, nil),
 		[]string{"cmake"},
 		[]string{"cmakelists.txt"},
 		nil,

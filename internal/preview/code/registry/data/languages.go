@@ -1,13 +1,12 @@
 package data
 
 import (
-	fileinfo "github.com/urdadx/nukri/internal/file_info"
 	registry "github.com/urdadx/nukri/internal/preview/code/registry/model"
 )
 
 var Languages = []registry.RegistryEntry{
 	registry.Entry(
-		registry.Language("perl", "Perl", fileinfo.Chroma, nil),
+		registry.Language("perl", "Perl", registry.Chroma, nil),
 		[]string{"pl", "pm", "pod", "t"},
 		[]string{"cpanfile"},
 		[]string{"perl"},
@@ -15,7 +14,7 @@ var Languages = []registry.RegistryEntry{
 		[]string{"perl", "pl", "pm"},
 	),
 	registry.Entry(
-		registry.Language("haskell", "Haskell", fileinfo.Chroma, nil),
+		registry.Language("haskell", "Haskell", registry.Chroma, nil),
 		[]string{"hs", "lhs"},
 		nil,
 		[]string{"runhaskell"},
@@ -23,7 +22,7 @@ var Languages = []registry.RegistryEntry{
 		[]string{"haskell", "hs", "lhs"},
 	),
 	registry.Entry(
-		registry.Language("julia", "Julia", fileinfo.Chroma, nil),
+		registry.Language("julia", "Julia", registry.Chroma, nil),
 		[]string{"jl"},
 		nil,
 		[]string{"julia"},
@@ -31,7 +30,7 @@ var Languages = []registry.RegistryEntry{
 		[]string{"julia", "jl"},
 	),
 	registry.Entry(
-		registry.Language("r", "R", fileinfo.Chroma, nil),
+		registry.Language("r", "R", registry.Chroma, nil),
 		[]string{"r"},
 		[]string{".rprofile"},
 		[]string{"rscript"},
@@ -39,7 +38,7 @@ var Languages = []registry.RegistryEntry{
 		[]string{"r", "rscript"},
 	),
 	registry.Entry(
-		registry.Language("rust", "Rust", fileinfo.Chroma, nil),
+		registry.Language("rust", "Rust", registry.Chroma, nil),
 		[]string{"rs"},
 		nil,
 		nil,
@@ -47,7 +46,7 @@ var Languages = []registry.RegistryEntry{
 		[]string{"rust", "rs"},
 	),
 	registry.Entry(
-		registry.Language("go", "Go", fileinfo.Chroma, nil),
+		registry.Language("go", "Go", registry.Chroma, nil),
 		[]string{"go"},
 		nil,
 		nil,
@@ -55,7 +54,7 @@ var Languages = []registry.RegistryEntry{
 		[]string{"go", "golang"},
 	),
 	registry.Entry(
-		registry.Language("c", "C", fileinfo.Chroma, nil),
+		registry.Language("c", "C", registry.Chroma, nil),
 		[]string{"c", "h"},
 		nil,
 		nil,
@@ -63,7 +62,7 @@ var Languages = []registry.RegistryEntry{
 		[]string{"c", "h"},
 	),
 	registry.Entry(
-		registry.Language("cpp", "C++", fileinfo.Chroma, nil),
+		registry.Language("cpp", "C++", registry.Chroma, nil),
 		[]string{"cpp", "cc", "cxx", "hpp", "hh", "hxx"},
 		nil,
 		nil,
@@ -71,7 +70,7 @@ var Languages = []registry.RegistryEntry{
 		[]string{"cpp", "c++", "cc", "cxx", "hpp", "hh", "hxx"},
 	),
 	registry.Entry(
-		registry.Language("cs", "C#", fileinfo.Chroma, nil),
+		registry.Language("cs", "C#", registry.Chroma, nil),
 		[]string{"cs", "csx"},
 		nil,
 		nil,
@@ -79,7 +78,7 @@ var Languages = []registry.RegistryEntry{
 		[]string{"cs", "csharp", "c#"},
 	),
 	registry.Entry(
-		registry.Language("java", "Java", fileinfo.Chroma, nil),
+		registry.Language("java", "Java", registry.Chroma, nil),
 		[]string{"java"},
 		nil,
 		nil,
@@ -87,7 +86,7 @@ var Languages = []registry.RegistryEntry{
 		[]string{"java"},
 	),
 	registry.Entry(
-		registry.Language("dart", "Dart", fileinfo.Chroma, nil),
+		registry.Language("dart", "Dart", registry.Chroma, nil),
 		[]string{"dart"},
 		nil,
 		nil,
@@ -95,7 +94,7 @@ var Languages = []registry.RegistryEntry{
 		[]string{"dart"},
 	),
 	registry.Entry(
-		registry.Language("zig", "Zig", fileinfo.Chroma, nil),
+		registry.Language("zig", "Zig", registry.Chroma, nil),
 		[]string{"zig"},
 		nil,
 		nil,
@@ -103,7 +102,7 @@ var Languages = []registry.RegistryEntry{
 		[]string{"zig"},
 	),
 	registry.Entry(
-		registry.Language("php", "PHP", fileinfo.Chroma, nil),
+		registry.Language("php", "PHP", registry.Chroma, nil),
 		[]string{"php"},
 		nil,
 		nil,
@@ -111,7 +110,7 @@ var Languages = []registry.RegistryEntry{
 		[]string{"php"},
 	),
 	registry.Entry(
-		registry.Language("swift", "Swift", fileinfo.Chroma, nil),
+		registry.Language("swift", "Swift", registry.Chroma, nil),
 		[]string{"swift"},
 		nil,
 		nil,
@@ -119,7 +118,7 @@ var Languages = []registry.RegistryEntry{
 		[]string{"swift"},
 	),
 	registry.Entry(
-		registry.Language("kotlin", "Kotlin", fileinfo.Chroma, nil),
+		registry.Language("kotlin", "Kotlin", registry.Chroma, nil),
 		[]string{"kt", "kts"},
 		nil,
 		nil,
@@ -127,7 +126,7 @@ var Languages = []registry.RegistryEntry{
 		[]string{"kotlin", "kt", "kts"},
 	),
 	registry.Entry(
-		registry.Language("elixir", "Elixir", fileinfo.Chroma, nil),
+		registry.Language("elixir", "Elixir", registry.Chroma, nil),
 		[]string{"ex", "exs"},
 		nil,
 		[]string{"elixir"},
@@ -135,7 +134,7 @@ var Languages = []registry.RegistryEntry{
 		[]string{"elixir", "ex", "exs"},
 	),
 	registry.Entry(
-		registry.Language("fortran", "Fortran", fileinfo.Chroma, nil),
+		registry.Language("fortran", "Fortran", registry.Chroma, nil),
 		[]string{"f", "for", "f90", "f95", "f03", "f08", "fpp"},
 		nil,
 		nil,
@@ -143,7 +142,7 @@ var Languages = []registry.RegistryEntry{
 		[]string{"fortran", "f90", "f95", "f03", "f08"},
 	),
 	registry.Entry(
-		registry.Language("cobol", "COBOL", fileinfo.Chroma, nil),
+		registry.Language("cobol", "COBOL", registry.Chroma, nil),
 		[]string{"cbl", "cob", "cobol", "cpy"},
 		nil,
 		nil,
@@ -151,7 +150,7 @@ var Languages = []registry.RegistryEntry{
 		[]string{"cobol", "cbl", "cob", "cpy"},
 	),
 	registry.Entry(
-		registry.Language("clojure", "Clojure", fileinfo.Chroma, nil),
+		registry.Language("clojure", "Clojure", registry.Chroma, nil),
 		[]string{"clj", "cljs", "cljc", "edn"},
 		[]string{"project.clj", "deps.edn", "bb.edn", "shadow-cljs.edn"},
 		[]string{"clojure", "clj", "bb"},
@@ -159,7 +158,7 @@ var Languages = []registry.RegistryEntry{
 		[]string{"clojure", "clj", "cljs", "cljc", "edn"},
 	),
 	registry.Entry(
-		registry.Language("ruby", "Ruby", fileinfo.Chroma, nil),
+		registry.Language("ruby", "Ruby", registry.Chroma, nil),
 		[]string{"rb"},
 		nil,
 		nil,
@@ -167,7 +166,7 @@ var Languages = []registry.RegistryEntry{
 		[]string{"ruby", "rb"},
 	),
 	registry.Entry(
-		registry.Language("python", "Python", fileinfo.Chroma, nil),
+		registry.Language("python", "Python", registry.Chroma, nil),
 		[]string{"py", "pyi", "pyw", "pyx"},
 		nil,
 		nil,
@@ -175,7 +174,7 @@ var Languages = []registry.RegistryEntry{
 		[]string{"python", "py"},
 	),
 	registry.Entry(
-		registry.Language("lua", "Lua", fileinfo.Chroma, nil),
+		registry.Language("lua", "Lua", registry.Chroma, nil),
 		[]string{"lua"},
 		nil,
 		nil,

@@ -1,13 +1,12 @@
 package data
 
 import (
-	fileinfo "github.com/urdadx/nukri/internal/file_info"
 	registry "github.com/urdadx/nukri/internal/preview/code/registry/model"
 )
 
 var Web = []registry.RegistryEntry{
 	registry.Entry(
-		registry.Language("html", "HTML", fileinfo.Chroma, nil),
+		registry.Language("html", "HTML", registry.Chroma, nil),
 		[]string{"html", "htm", "xhtml"},
 		nil,
 		nil,
@@ -15,7 +14,7 @@ var Web = []registry.RegistryEntry{
 		[]string{"html"},
 	),
 	registry.Entry(
-		registry.Language("xml", "XML", fileinfo.Chroma, nil),
+		registry.Language("xml", "XML", registry.Chroma, nil),
 		[]string{"xml", "xsd", "xsl", "xslt", "svg"},
 		nil,
 		nil,
@@ -23,7 +22,7 @@ var Web = []registry.RegistryEntry{
 		[]string{"xml", "xhtml", "svg", "markup"},
 	),
 	registry.Entry(
-		registry.Language("css", "CSS", fileinfo.Chroma, nil),
+		registry.Language("css", "CSS", registry.Chroma, nil),
 		[]string{"css"},
 		nil,
 		nil,
@@ -31,7 +30,7 @@ var Web = []registry.RegistryEntry{
 		[]string{"css"},
 	),
 	registry.Entry(
-		registry.Language("scss", "SCSS", fileinfo.Chroma, nil),
+		registry.Language("scss", "SCSS", registry.Chroma, nil),
 		[]string{"scss"},
 		nil,
 		nil,
@@ -39,7 +38,7 @@ var Web = []registry.RegistryEntry{
 		[]string{"scss"},
 	),
 	registry.Entry(
-		registry.Language("sass", "Sass", fileinfo.Chroma, nil),
+		registry.Language("sass", "Sass", registry.Chroma, nil),
 		[]string{"sass"},
 		nil,
 		nil,
@@ -47,7 +46,7 @@ var Web = []registry.RegistryEntry{
 		[]string{"sass"},
 	),
 	registry.Entry(
-		registry.Language("less", "Less", fileinfo.Chroma, nil),
+		registry.Language("less", "Less", registry.Chroma, nil),
 		[]string{"less"},
 		nil,
 		nil,
@@ -55,7 +54,7 @@ var Web = []registry.RegistryEntry{
 		[]string{"less"},
 	),
 	registry.Entry(
-		registry.Language("javascript", "JavaScript", fileinfo.Chroma, nil),
+		registry.Language("javascript", "JavaScript", registry.Chroma, nil),
 		[]string{"js", "mjs", "cjs"},
 		nil,
 		nil,
@@ -63,7 +62,7 @@ var Web = []registry.RegistryEntry{
 		[]string{"js", "javascript"},
 	),
 	registry.Entry(
-		registry.Language("jsx", "JSX", fileinfo.Chroma, nil),
+		registry.Language("jsx", "JSX", registry.Chroma, nil),
 		[]string{"jsx"},
 		nil,
 		nil,
@@ -71,7 +70,7 @@ var Web = []registry.RegistryEntry{
 		[]string{"jsx"},
 	),
 	registry.Entry(
-		registry.Language("typescript", "TypeScript", fileinfo.Chroma, nil),
+		registry.Language("typescript", "TypeScript", registry.Chroma, nil),
 		[]string{"ts", "mts", "cts"},
 		nil,
 		nil,
@@ -79,7 +78,7 @@ var Web = []registry.RegistryEntry{
 		[]string{"ts", "typescript"},
 	),
 	registry.Entry(
-		registry.Language("tsx", "TSX", fileinfo.Chroma, nil),
+		registry.Language("tsx", "TSX", registry.Chroma, nil),
 		[]string{"tsx"},
 		nil,
 		nil,
@@ -87,7 +86,7 @@ var Web = []registry.RegistryEntry{
 		[]string{"tsx"},
 	),
 	registry.Entry(
-		registry.Language("qml", "QML", fileinfo.Chroma, nil),
+		registry.Language("qml", "QML", registry.Chroma, nil),
 		[]string{"qml"},
 		nil,
 		nil,

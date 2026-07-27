@@ -1,13 +1,12 @@
 package data
 
 import (
-	fileinfo "github.com/urdadx/nukri/internal/file_info"
 	registry "github.com/urdadx/nukri/internal/preview/code/registry/model"
 )
 
 var Shell = []registry.RegistryEntry{
 	registry.Entry(
-		registry.Language("sh", "Shell", fileinfo.Chroma, nil),
+		registry.Language("sh", "Shell", registry.Chroma, nil),
 		[]string{"sh"},
 		[]string{".profile", ".xprofile", ".xsessionrc", ".envrc"},
 		[]string{"sh"},
@@ -15,7 +14,7 @@ var Shell = []registry.RegistryEntry{
 		[]string{"sh", "shell"},
 	),
 	registry.Entry(
-		registry.Language("bash", "Bash", fileinfo.Chroma, nil),
+		registry.Language("bash", "Bash", registry.Chroma, nil),
 		[]string{"bash"},
 		[]string{
 			".bashrc",
@@ -30,7 +29,7 @@ var Shell = []registry.RegistryEntry{
 		[]string{"bash"},
 	),
 	registry.Entry(
-		registry.Language("zsh", "Zsh", fileinfo.Chroma, nil),
+		registry.Language("zsh", "Zsh", registry.Chroma, nil),
 		[]string{"zsh"},
 		[]string{".zshrc", ".zprofile", ".zshenv", ".zlogin", ".zlogout"},
 		[]string{"zsh"},
@@ -38,7 +37,7 @@ var Shell = []registry.RegistryEntry{
 		[]string{"zsh"},
 	),
 	registry.Entry(
-		registry.Language("ksh", "KornShell", fileinfo.Chroma, nil),
+		registry.Language("ksh", "KornShell", registry.Chroma, nil),
 		[]string{"ksh"},
 		[]string{".kshrc", ".mkshrc"},
 		[]string{"ksh"},
@@ -46,7 +45,7 @@ var Shell = []registry.RegistryEntry{
 		[]string{"ksh"},
 	),
 	registry.Entry(
-		registry.Language("fish", "Fish", fileinfo.Chroma, nil),
+		registry.Language("fish", "Fish", registry.Chroma, nil),
 		[]string{"fish"},
 		nil,
 		[]string{"fish"},
@@ -54,7 +53,7 @@ var Shell = []registry.RegistryEntry{
 		[]string{"fish"},
 	),
 	registry.Entry(
-		registry.Language("powershell", "PowerShell", fileinfo.Chroma, nil),
+		registry.Language("powershell", "PowerShell", registry.Chroma, nil),
 		[]string{"ps1", "psm1", "psd1"},
 		nil,
 		[]string{"pwsh", "powershell"},

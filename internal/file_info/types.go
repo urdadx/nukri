@@ -39,6 +39,7 @@ const (
 	Document
 	Epub
 	Mobi
+	Docm
 )
 
 func (d DocumentFormat) DetailLabel() string {
@@ -77,6 +78,8 @@ func (d DocumentFormat) DetailLabel() string {
 		return "EPUB eBook"
 	case Mobi:
 		return "Mobipocket eBook"
+	case Docm:
+		return "Microsoft Word Macro-Enabled Document"
 	default:
 		return "Unknown Document Format"
 	}
