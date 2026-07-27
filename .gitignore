@@ -1,0 +1,10 @@
+# Go build output
+bin/
+dist/
+
+# Test binaries and coverage
+*.test
+coverage.out
+
+# Local environment files
+.env

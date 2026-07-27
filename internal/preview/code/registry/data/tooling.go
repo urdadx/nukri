@@ -1,0 +1,121 @@
+package data
+
+import (
+	fileinfo "github.com/urdadx/nukri/internal/file_info"
+	registry "github.com/urdadx/nukri/internal/preview/code/registry/model"
+)
+
+var Tooling = []registry.RegistryEntry{
+	registry.Entry(
+		registry.Language("sql", "SQL", fileinfo.Chroma, nil),
+		[]string{"sql"},
+		nil,
+		nil,
+		[]string{"sql"},
+		[]string{"sql"},
+	),
+	registry.Entry(
+		registry.Language("diff", "Diff", fileinfo.Chroma, nil),
+		[]string{"diff", "patch"},
+		nil,
+		nil,
+		[]string{"diff", "patch"},
+		[]string{"diff", "patch"},
+	),
+	registry.Entry(
+		registry.Language("latex", "LaTeX", fileinfo.Chroma, nil),
+		[]string{"tex", "ltx"},
+		nil,
+		nil,
+		[]string{"latex", "tex"},
+		[]string{"latex", "tex"},
+	),
+	registry.Entry(
+		registry.Language("bibtex", "BibTeX", fileinfo.Chroma, nil),
+		[]string{"bib"},
+		nil,
+		nil,
+		[]string{"bibtex", "bib"},
+		[]string{"bibtex", "bib"},
+	),
+	registry.Entry(
+		registry.Language("tex", "TeX", fileinfo.Chroma, nil),
+		[]string{"sty", "cls"},
+		nil,
+		nil,
+		[]string{"tex"},
+		[]string{"tex"},
+	),
+	registry.Entry(
+		registry.Language("dockerfile", "Dockerfile", fileinfo.Chroma, nil),
+		nil,
+		[]string{"dockerfile", "containerfile"},
+		nil,
+		[]string{"dockerfile"},
+		[]string{"dockerfile", "docker"},
+	),
+	registry.Entry(
+		registry.Language("hcl", "HCL", fileinfo.Chroma, nil),
+		[]string{"hcl"},
+		[]string{".terraform.lock.hcl"},
+		nil,
+		[]string{"hcl"},
+		[]string{"hcl"},
+	),
+	registry.Entry(
+		registry.Language("terraform", "Terraform", fileinfo.Chroma, nil),
+		[]string{"tf", "tfvars", "tfbackend"},
+		[]string{"terraform.rc", ".terraformrc"},
+		nil,
+		[]string{"terraform", "tf", "tfvars"},
+		[]string{"terraform", "tf", "tfvars"},
+	),
+	registry.Entry(
+		registry.Language("groovy", "Groovy", fileinfo.Chroma, nil),
+		[]string{"groovy", "gvy", "gradle"},
+		[]string{"build.gradle", "settings.gradle", "init.gradle"},
+		[]string{"groovy"},
+		[]string{"groovy", "gradle"},
+		[]string{"groovy", "gradle"},
+	),
+	registry.Entry(
+		registry.Language("scala", "Scala", fileinfo.Chroma, nil),
+		[]string{"scala", "sbt"},
+		[]string{"build.sbt"},
+		[]string{"scala"},
+		[]string{"scala", "sbt"},
+		[]string{"scala", "sbt"},
+	),
+	registry.Entry(
+		registry.Language("just", "Just", fileinfo.Chroma, nil),
+		nil,
+		[]string{"justfile", ".justfile"},
+		nil,
+		[]string{"just"},
+		[]string{"just"},
+	),
+	registry.Entry(
+		registry.Language("make", "Makefile", fileinfo.Chroma, nil),
+		[]string{"mk", "mak"},
+		[]string{"makefile", "gnumakefile", "bsdmakefile"},
+		nil,
+		[]string{"make", "makefile"},
+		[]string{"make", "makefile"},
+	),
+	registry.Entry(
+		registry.Language("nix", "Nix", fileinfo.Chroma, nil),
+		[]string{"nix"},
+		nil,
+		nil,
+		[]string{"nix"},
+		[]string{"nix"},
+	),
+	registry.Entry(
+		registry.Language("cmake", "CMake", fileinfo.Chroma, nil),
+		[]string{"cmake"},
+		[]string{"cmakelists.txt"},
+		nil,
+		[]string{"cmake"},
+		[]string{"cmake"},
+	),
+}
