@@ -9,6 +9,7 @@ var Groups = [][]registry.RegistryEntry{
 	Web,
 	Tooling,
 	Shell,
+	Formats,
 }
 
 func AllLanguages() []registry.RegistryEntry {

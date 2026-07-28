@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/urdadx/nukri/internal/core"
+	"github.com/urdadx/nukri/internal/preview/code/registry"
 )
 
 const ConfigSniffByteLimit = 16 * 1024
@@ -64,18 +65,12 @@ func inspectPathWithName(path, displayName string, hasDisplayName bool, kind cor
 			facts = sniffed
 		}
 	}
-	if sniffed, ok := sniffLicenseFileType(path, name, ext, facts); ok {
-		return sniffed
-	}
-	return facts
+	return SniffLicenseFileType(path, name, ext, facts)
 }
 
 func inspectPathWithNameFast(path, displayName string, hasDisplayName bool, kind core.EntryKind) FileFacts {
 	_, name, ext, facts := inspectPathWithNameBase(path, displayName, hasDisplayName, kind)
-	if sniffed, ok := sniffBrowserLicenseFileType(name, ext, facts); ok {
-		return sniffed
-	}
-	return facts
+	return SniffBrowserLicenseFileType(path, name, ext, facts)
 }
 
 func inspectPathWithNameBase(path, displayName string, hasDisplayName bool, kind core.EntryKind) (string, string, string, FileFacts) {
@@ -234,21 +229,12 @@ func sniffShebangScriptType(buffer []byte) (FileFacts, bool) {
 	if !ok {
 		return FileFacts{}, false
 	}
-	language, ok := languageForShebang(interpreter)
+	language, ok := registry.LanguageForShebangInterpreter(interpreter)
 	if !ok {
 		return FileFacts{}, false
 	}
-	labels := map[string]string{
-		"bash": "Bash script", "zsh": "Zsh script", "ksh": "KornShell script", "sh": "Shell script",
-		"fish": "Fish script", "elixir": "Elixir script", "groovy": "Groovy script", "perl": "Perl script",
-		"haskell": "Haskell script", "julia": "Julia script", "r": "R script", "powershell": "PowerShell script",
-		"clojure": "Clojure script",
-	}
-	label, ok := labels[language.canonicalID]
-	if !ok {
-		return FileFacts{}, false
-	}
-	return FileFacts{BuiltinClass: core.FileClassCode, SpecificTypeLabel: stringPtr(label), Preview: language.previewSpec()}, true
+	label := language.DisplayLabel + " script"
+	return FileFacts{BuiltinClass: core.FileClassCode, SpecificTypeLabel: stringPtr(label), Preview: previewForLanguage(language)}, true
 }
 
 func shebangInterpreterName(firstLine string) (string, bool) {
@@ -283,14 +269,14 @@ func sniffConfigFileType(path string) (FileFacts, bool) {
 	}
 	iniScore, shellScore := scoreConfigPrefix(prefix)
 	if iniScore >= StrongIniThreshold && iniScore >= saturatingAdd(shellScore, ScoreMargin) {
-		language, ok := languageForCodeSyntax("ini")
+		language, ok := registry.LanguageForCodeSyntax("ini")
 		return configFileFacts(language), ok
 	}
 	if shellScore >= StrongShellThreshold && shellScore >= saturatingAdd(iniScore, ScoreMargin) {
-		language, ok := languageForCodeSyntax("sh")
+		language, ok := registry.LanguageForCodeSyntax("sh")
 		return configFileFacts(language), ok
 	}
-	language, ok := languageForCodeSyntax("config")
+	language, ok := registry.LanguageForCodeSyntax("config")
 	return configFileFacts(language), ok
 }
 
@@ -375,12 +361,12 @@ func extractVimModeHint(line string) (string, bool) {
 }
 
 func configFactsFromHint(token string) (FileFacts, bool) {
-	language, ok := languageForModeline(token)
+	language, ok := registry.LanguageForModeline(token)
 	return configFileFacts(language), ok
 }
 
-func configFileFacts(language registeredLanguage) FileFacts {
-	return FileFacts{BuiltinClass: core.FileClassConfig, Preview: language.previewSpec()}
+func configFileFacts(language registry.RegisteredLanguage) FileFacts {
+	return FileFacts{BuiltinClass: core.FileClassConfig, Preview: previewForLanguage(language)}
 }
 
 func scoreConfigPrefix(prefix string) (uint8, uint8) {
@@ -474,78 +460,6 @@ func saturatingAdd(a, b uint8) uint8 {
 		return ^uint8(0)
 	}
 	return a + b
-}
-
-type registeredLanguage struct {
-	canonicalID string
-	codeSyntax  string
-	backend     CodeBackend
-	structured  *StructuredFormat
-}
-
-func (l registeredLanguage) previewSpec() PreviewSpec {
-	return CodePreview(l.codeSyntax, l.backend, l.structured)
-}
-
-var languages = map[string]registeredLanguage{
-	"bash":       {canonicalID: "bash", codeSyntax: "bash", backend: Chroma},
-	"zsh":        {canonicalID: "zsh", codeSyntax: "zsh", backend: Chroma},
-	"ksh":        {canonicalID: "ksh", codeSyntax: "bash", backend: Chroma},
-	"sh":         {canonicalID: "sh", codeSyntax: "sh", backend: Chroma},
-	"fish":       {canonicalID: "fish", codeSyntax: "fish", backend: Chroma},
-	"elixir":     {canonicalID: "elixir", codeSyntax: "elixir", backend: Chroma},
-	"groovy":     {canonicalID: "groovy", codeSyntax: "groovy", backend: Chroma},
-	"perl":       {canonicalID: "perl", codeSyntax: "perl", backend: Chroma},
-	"haskell":    {canonicalID: "haskell", codeSyntax: "haskell", backend: Chroma},
-	"julia":      {canonicalID: "julia", codeSyntax: "julia", backend: Chroma},
-	"r":          {canonicalID: "r", codeSyntax: "r", backend: Chroma},
-	"powershell": {canonicalID: "powershell", codeSyntax: "powershell", backend: Chroma},
-	"clojure":    {canonicalID: "clojure", codeSyntax: "clojure", backend: Chroma},
-	"ini":        {canonicalID: "ini", codeSyntax: "ini", backend: Custom},
-	"config":     {canonicalID: "config", codeSyntax: "config", backend: Custom},
-}
-
-func languageForShebang(interpreter string) (registeredLanguage, bool) {
-	aliases := map[string]string{
-		"dash": "sh", "ash": "sh", "elixir": "elixir", "groovy": "groovy", "perl": "perl",
-		"runhaskell": "haskell", "julia": "julia", "Rscript": "r", "pwsh": "powershell",
-		"powershell": "powershell", "clojure": "clojure",
-	}
-	key := interpreter
-	if alias, ok := aliases[interpreter]; ok {
-		key = alias
-	}
-	language, ok := languages[key]
-	return language, ok
-}
-
-func languageForCodeSyntax(syntax string) (registeredLanguage, bool) {
-	language, ok := languages[normalizeKey(syntax)]
-	return language, ok
-}
-
-func languageForModeline(token string) (registeredLanguage, bool) {
-	aliases := map[string]string{"shell": "sh", "shell-script": "sh", "conf": "config", "cfg": "config", "dosini": "ini"}
-	key := normalizeKey(token)
-	if alias, ok := aliases[key]; ok {
-		key = alias
-	}
-	return languageForCodeSyntax(key)
-}
-
-func sniffBrowserLicenseFileType(name, ext string, facts FileFacts) (FileFacts, bool) {
-	base := strings.TrimSuffix(name, "."+ext)
-	if base == "license" || base == "licence" || base == "copying" || base == "copyright" {
-		return FileFacts{BuiltinClass: core.FileClassLicense, SpecificTypeLabel: stringPtr("License file"), Preview: PlainTextPreview()}, true
-	}
-	return facts, false
-}
-
-func sniffLicenseFileType(path, name, ext string, facts FileFacts) (FileFacts, bool) {
-	if sniffed, ok := sniffBrowserLicenseFileType(name, ext, facts); ok {
-		return sniffed, true
-	}
-	return facts, false
 }
 
 func stringPtr(value string) *string {

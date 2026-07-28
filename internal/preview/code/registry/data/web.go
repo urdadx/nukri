@@ -57,7 +57,7 @@ var Web = []registry.RegistryEntry{
 		registry.Language("javascript", "JavaScript", registry.Chroma, nil),
 		[]string{"js", "mjs", "cjs"},
 		nil,
-		nil,
+		[]string{"node", "nodejs"},
 		[]string{"javascript"},
 		[]string{"js", "javascript"},
 	),

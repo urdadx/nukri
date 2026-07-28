@@ -14,6 +14,12 @@ const (
 	Plain  = model.Plain
 	Chroma = model.Chroma
 	Custom = model.Custom
+
+	StructuredJSON  = model.StructuredJSON
+	StructuredJSONC = model.StructuredJSONC
+	StructuredJSON5 = model.StructuredJSON5
+	StructuredTOML  = model.StructuredTOML
+	StructuredYAML  = model.StructuredYAML
 )
 
 var Language = model.Language

@@ -1,120 +1,91 @@
 package fileinfo
 
 import (
-	"strings"
-
 	"github.com/urdadx/nukri/internal/core"
+	"github.com/urdadx/nukri/internal/preview/code/registry"
 )
 
-func previewForExactName(name string) PreviewSpec {
-	name = normalizeKey(name)
-	switch name {
-	case "pkgbuild", ".bashrc", ".bash_profile", ".bash_login", ".bash_logout", ".bash_aliases":
-		return CodePreview("bash", Chroma, nil)
-	case ".profile", ".xprofile", ".xsessionrc", ".envrc":
-		return CodePreview("sh", Chroma, nil)
-	case ".zshrc", ".zprofile", ".zshenv", ".zlogin", ".zlogout":
-		return CodePreview("zsh", Chroma, nil)
-	case ".kshrc", ".mkshrc":
-		return CodePreview("ksh", Chroma, nil)
-	case "makefile", "gnumakefile", "bsdmakefile":
-		return CodePreview("make", Chroma, nil)
-	case "cmakelists.txt":
-		return CodePreview("cmake", Chroma, nil)
-	case "dockerfile", "containerfile":
-		return CodePreview("dockerfile", Chroma, nil)
-	case "terraform.rc", ".terraformrc":
-		return CodePreview("terraform", Chroma, nil)
-	case ".terraform.lock.hcl":
-		return CodePreview("hcl", Chroma, nil)
-	case "build.gradle", "settings.gradle", "init.gradle":
-		return CodePreview("groovy", Chroma, nil)
-	case "build.sbt":
-		return CodePreview("scala", Chroma, nil)
-	case "project.clj", "deps.edn", "bb.edn", "shadow-cljs.edn":
-		return CodePreview("clojure", Chroma, nil)
-	case "justfile", ".justfile":
-		return CodePreview("just", Chroma, nil)
-	case ".rprofile":
-		return CodePreview("r", Chroma, nil)
-	case "cargo.lock", "poetry.lock", "uv.lock":
-		return previewForExtension("toml")
-	case "package.json", "tsconfig.json", "deno.json", "package-lock.json", "composer.lock", "pipfile.lock", "flake.lock":
-		return previewForExtension("json")
-	case "deno.jsonc":
-		return previewForExtension("jsonc")
-	case "compose.yml", "compose.yaml", "docker-compose.yml", "docker-compose.yaml", "pnpm-lock.yaml", "pnpm-workspace.yaml":
-		return previewForExtension("yaml")
-	case "gemfile.lock", "bun.lock":
-		return CodePreview("config", Custom, nil)
-	default:
-		if isEnvName(name) {
-			return CodePreview("config", Custom, nil)
-		}
-	}
-	panic("exact-name registry entry should exist for code preview")
+type exactNameFacts struct {
+	class core.FileClass
+	label string
+}
+
+var exactNames = map[string]exactNameFacts{
+	"pkgbuild":            {core.FileClassConfig, "Arch build script"},
+	"makefile":            {core.FileClassConfig, "Makefile"},
+	"gnumakefile":         {core.FileClassConfig, "Makefile"},
+	"bsdmakefile":         {core.FileClassConfig, "Makefile"},
+	"cmakelists.txt":      {core.FileClassConfig, "CMake project"},
+	"dockerfile":          {core.FileClassConfig, "Docker build file"},
+	"containerfile":       {core.FileClassConfig, "Docker build file"},
+	"terraform.rc":        {core.FileClassConfig, "Terraform CLI config"},
+	".terraformrc":        {core.FileClassConfig, "Terraform CLI config"},
+	".terraform.lock.hcl": {core.FileClassData, "Terraform lockfile"},
+	"build.gradle":        {core.FileClassConfig, "Gradle build script"},
+	"settings.gradle":     {core.FileClassConfig, "Gradle build script"},
+	"init.gradle":         {core.FileClassConfig, "Gradle build script"},
+	"build.sbt":           {core.FileClassConfig, "sbt build definition"},
+	"project.clj":         {core.FileClassConfig, "Leiningen project"},
+	"deps.edn":            {core.FileClassConfig, "Clojure deps config"},
+	"bb.edn":              {core.FileClassConfig, "Babashka config"},
+	"shadow-cljs.edn":     {core.FileClassConfig, "shadow-cljs config"},
+	"justfile":            {core.FileClassConfig, "Justfile"},
+	".justfile":           {core.FileClassConfig, "Justfile"},
+	".rprofile":           {core.FileClassConfig, "R profile"},
+	".bashrc":             {core.FileClassConfig, "Bash config"},
+	".bash_profile":       {core.FileClassConfig, "Bash config"},
+	".bash_login":         {core.FileClassConfig, "Bash config"},
+	".bash_logout":        {core.FileClassConfig, "Bash config"},
+	".bash_aliases":       {core.FileClassConfig, "Bash config"},
+	".profile":            {core.FileClassConfig, "Shell config"},
+	".xprofile":           {core.FileClassConfig, "Shell config"},
+	".xsessionrc":         {core.FileClassConfig, "Shell config"},
+	".envrc":              {core.FileClassConfig, "Shell config"},
+	".zshrc":              {core.FileClassConfig, "Zsh config"},
+	".zprofile":           {core.FileClassConfig, "Zsh config"},
+	".zshenv":             {core.FileClassConfig, "Zsh config"},
+	".zlogin":             {core.FileClassConfig, "Zsh config"},
+	".zlogout":            {core.FileClassConfig, "Zsh config"},
+	".kshrc":              {core.FileClassConfig, "KornShell config"},
+	".mkshrc":             {core.FileClassConfig, "KornShell config"},
+	"cargo.lock":          {core.FileClassData, ""},
+	"poetry.lock":         {core.FileClassData, ""},
+	"uv.lock":             {core.FileClassData, "Lockfile"},
+	"package.json":        {core.FileClassConfig, ""},
+	"tsconfig.json":       {core.FileClassConfig, ""},
+	"deno.json":           {core.FileClassConfig, ""},
+	"package-lock.json":   {core.FileClassData, ""},
+	"composer.lock":       {core.FileClassData, "Lockfile"},
+	"pipfile.lock":        {core.FileClassData, "Lockfile"},
+	"flake.lock":          {core.FileClassData, "Lockfile"},
+	"gemfile.lock":        {core.FileClassData, "Lockfile"},
+	"bun.lock":            {core.FileClassData, "Lockfile"},
+	"deno.jsonc":          {core.FileClassConfig, "JSON with comments"},
+	"compose.yml":         {core.FileClassConfig, ""},
+	"compose.yaml":        {core.FileClassConfig, ""},
+	"docker-compose.yml":  {core.FileClassConfig, ""},
+	"docker-compose.yaml": {core.FileClassConfig, ""},
+	"pnpm-lock.yaml":      {core.FileClassConfig, ""},
+	"pnpm-workspace.yaml": {core.FileClassConfig, ""},
 }
 
 func inspectExactName(name string) (FileFacts, bool) {
 	name = normalizeKey(name)
-	class := core.FileClassConfig
-	label := ""
-
-	switch name {
-	case "pkgbuild":
-		label = "Arch build script"
-	case "makefile", "gnumakefile", "bsdmakefile":
-		label = "Makefile"
-	case "cmakelists.txt":
-		label = "CMake project"
-	case "dockerfile", "containerfile":
-		label = "Docker build file"
-	case "terraform.rc", ".terraformrc":
-		label = "Terraform CLI config"
-	case ".terraform.lock.hcl":
-		class, label = core.FileClassData, "Terraform lockfile"
-	case "build.gradle", "settings.gradle", "init.gradle":
-		label = "Gradle build script"
-	case "build.sbt":
-		label = "sbt build definition"
-	case "project.clj":
-		label = "Leiningen project"
-	case "deps.edn":
-		label = "Clojure deps config"
-	case "bb.edn":
-		label = "Babashka config"
-	case "shadow-cljs.edn":
-		label = "shadow-cljs config"
-	case "justfile", ".justfile":
-		label = "Justfile"
-	case ".rprofile":
-		label = "R profile"
-	case ".bashrc", ".bash_profile", ".bash_login", ".bash_logout", ".bash_aliases":
-		label = "Bash config"
-	case ".profile", ".xprofile", ".xsessionrc", ".envrc":
-		label = "Shell config"
-	case ".zshrc", ".zprofile", ".zshenv", ".zlogin", ".zlogout":
-		label = "Zsh config"
-	case ".kshrc", ".mkshrc":
-		label = "KornShell config"
-	case "cargo.lock", "poetry.lock", "package-lock.json", "package.json", "tsconfig.json", "deno.json", "compose.yml", "compose.yaml", "docker-compose.yml", "docker-compose.yaml", "pnpm-lock.yaml", "pnpm-workspace.yaml":
-		if name == "cargo.lock" || name == "poetry.lock" || name == "package-lock.json" {
-			class = core.FileClassData
-		}
-	case "uv.lock", "composer.lock", "pipfile.lock", "flake.lock", "gemfile.lock", "bun.lock":
-		class, label = core.FileClassData, "Lockfile"
-	case "deno.jsonc":
-		label = "JSON with comments"
-	default:
+	metadata, ok := exactNames[name]
+	if !ok {
 		if !isEnvName(name) {
 			return FileFacts{}, false
 		}
-		label = "Environment file"
+		metadata = exactNameFacts{core.FileClassConfig, "Environment file"}
 	}
-
-	return facts(class, label, previewForExactName(name)), true
+	language, ok := registry.LanguageForExactFilename(name)
+	if !ok {
+		return FileFacts{}, false
+	}
+	return facts(metadata.class, metadata.label, previewForLanguage(language)), true
 }
 
 func isEnvName(name string) bool {
-	return strings.HasPrefix(name, ".env") || strings.HasPrefix(name, "env.")
+	language, ok := registry.LanguageForExactFilename(name)
+	return ok && language.CanonicalID == "dotenv"
 }

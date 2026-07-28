@@ -7,10 +7,10 @@ import (
 var Shell = []registry.RegistryEntry{
 	registry.Entry(
 		registry.Language("sh", "Shell", registry.Chroma, nil),
-		[]string{"sh"},
+		[]string{"sh", "dash", "ash"},
 		[]string{".profile", ".xprofile", ".xsessionrc", ".envrc"},
 		[]string{"sh"},
-		[]string{"sh", "shell"},
+		[]string{"sh", "shell", "shell-script"},
 		[]string{"sh", "shell"},
 	),
 	registry.Entry(

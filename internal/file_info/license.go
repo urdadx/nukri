@@ -10,7 +10,7 @@ import (
 	"github.com/urdadx/nukri/internal/core"
 )
 
-const FastLicenseSniffByteLmit = 4 * 1024
+const FastLicenseSniffByteLimit = 4 * 1024
 const LicenseSniffByteLimit = 64 * 1024
 const LicenseMarkerLineLimit = 12
 const LicensePreambleLineLimit = 8
@@ -118,6 +118,10 @@ func isCanonicalLicenseCandidateName(name string) bool {
 	}
 
 	return false
+}
+
+func isDefinitiveLicenseName(name string) bool {
+	return isCanonicalLicenseCandidateName(name) && name != "readme" && name != "readme.txt" && name != "readme.md" && !strings.HasPrefix(name, "readme.") && !strings.HasPrefix(name, "readme_") && !strings.HasPrefix(name, "readme-")
 }
 
 func canSniffLicenseContent(baseFacts FileFacts) bool {
@@ -407,7 +411,7 @@ func startsLikeStandaloneLicense(text string) bool {
 
 func containsAll(haystack string, needles []string) bool {
 	for _, needle := range needles {
-		if !strings.Contains(haystack, needle) {
+		if !containsPhrase(haystack, needle) {
 			return false
 		}
 	}
@@ -599,7 +603,7 @@ func SniffLicenseFileType(path string, name string, ext string, baseFacts FileFa
 	if detected {
 		return licenseFileFacts(detection, baseFacts)
 	}
-	if canonicalCandidate {
+	if isDefinitiveLicenseName(name) {
 		return licenseFileFacts(LicenseDetection{}, baseFacts)
 	}
 
@@ -619,7 +623,7 @@ func SniffBrowserLicenseFileType(path string, name string, ext string, baseFacts
 		return baseFacts
 	}
 
-	prefix, error := readLicenseTextPrefix(path, FastLicenseSniffByteLmit)
+	prefix, error := readLicenseTextPrefix(path, FastLicenseSniffByteLimit)
 	if error != nil || prefix == "" {
 		return baseFacts
 	}
@@ -632,7 +636,7 @@ func SniffBrowserLicenseFileType(path string, name string, ext string, baseFacts
 	if detected {
 		return licenseFileFacts(detection, baseFacts)
 	}
-	if canonicalCandidate {
+	if isDefinitiveLicenseName(name) {
 		return licenseFileFacts(LicenseDetection{}, baseFacts)
 	}
 

@@ -26,8 +26,8 @@ var Tooling = []registry.RegistryEntry{
 		[]string{"tex", "ltx"},
 		nil,
 		nil,
-		[]string{"latex", "tex"},
-		[]string{"latex", "tex"},
+		[]string{"latex"},
+		[]string{"latex"},
 	),
 	registry.Entry(
 		registry.Language("bibtex", "BibTeX", registry.Chroma, nil),

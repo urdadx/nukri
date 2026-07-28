@@ -6,38 +6,17 @@
 
 package fileinfo
 
-import "github.com/urdadx/nukri/internal/core"
+import (
+	"github.com/urdadx/nukri/internal/core"
+	"github.com/urdadx/nukri/internal/preview/code/registry"
+)
 
 func previewForExtension(ext string) PreviewSpec {
-	syntax := map[string]string{
-		"json": "json", "jsonc": "jsonc", "json5": "json5", "toml": "toml", "yaml": "yaml", "yml": "yaml",
-		"html": "html", "htm": "html", "xhtml": "html", "xml": "xml", "xsd": "xml", "xsl": "xml", "xslt": "xml", "svg": "xml",
-		"css": "css", "scss": "scss", "sass": "sass", "less": "less", "qml": "qml",
-		"js": "javascript", "mjs": "javascript", "cjs": "javascript", "jsx": "jsx", "ts": "typescript", "mts": "typescript", "cts": "typescript", "tsx": "tsx",
-		"sql": "sql", "diff": "diff", "patch": "diff", "tex": "latex", "ltx": "latex", "bib": "bibtex", "sty": "tex", "cls": "tex",
-		"nix": "nix", "hcl": "hcl", "tf": "terraform", "tfvars": "terraform", "tfbackend": "terraform", "cmake": "cmake",
-		"lock": "config", "ini": "ini", "keys": "ini", "conf": "config", "cfg": "config", "env": "config", "desktop": "ini", "log": "log",
-		"c": "c", "h": "c", "cpp": "cpp", "cc": "cpp", "cxx": "cpp", "hpp": "cpp", "hh": "cpp", "hxx": "cpp", "mk": "make", "mak": "make",
-		"sh": "sh", "bash": "bash", "zsh": "zsh", "ksh": "ksh", "fish": "fish", "ps1": "powershell", "psm1": "powershell", "psd1": "powershell",
-		"py": "python", "pyi": "python", "pyw": "python", "pyx": "python", "rs": "rust", "go": "go", "java": "java", "php": "php", "swift": "swift",
-		"kt": "kotlin", "kts": "kotlin", "cs": "cs", "csx": "cs", "dart": "dart", "f": "fortran", "for": "fortran", "f90": "fortran", "f95": "fortran", "f03": "fortran", "f08": "fortran", "fpp": "fortran",
-		"cbl": "cobol", "cob": "cobol", "cobol": "cobol", "cpy": "cobol", "zig": "zig", "groovy": "groovy", "gvy": "groovy", "gradle": "groovy", "scala": "scala", "sbt": "scala",
-		"pl": "perl", "pm": "perl", "pod": "perl", "t": "perl", "hs": "haskell", "lhs": "haskell", "jl": "julia", "r": "r", "ex": "elixir", "exs": "elixir",
-		"clj": "clojure", "cljs": "clojure", "cljc": "clojure", "edn": "clojure", "rb": "ruby", "lua": "lua",
-	}[ext]
-
-	structured := map[string]StructuredFormat{
-		"json": StructuredJSON, "jsonc": StructuredJSONC, "json5": StructuredJSON5,
-		"toml": StructuredTOML, "yaml": StructuredYAML, "yml": StructuredYAML,
+	language, ok := registry.LanguageForExtension(ext)
+	if !ok {
+		panic("extension registry entry should exist for code preview: " + ext)
 	}
-	if format, ok := structured[ext]; ok {
-		return CodePreview(syntax, Custom, &format)
-	}
-	backend := Chroma
-	if syntax == "config" || syntax == "ini" {
-		backend = Custom
-	}
-	return CodePreview(syntax, backend, nil)
+	return previewForLanguage(language)
 }
 
 func facts(class core.FileClass, label string, preview PreviewSpec) FileFacts {

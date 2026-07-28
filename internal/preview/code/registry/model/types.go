@@ -10,6 +10,14 @@ const (
 
 type StructuredFormat string
 
+const (
+	StructuredJSON  StructuredFormat = "json"
+	StructuredJSONC StructuredFormat = "jsonc"
+	StructuredJSON5 StructuredFormat = "json5"
+	StructuredTOML  StructuredFormat = "toml"
+	StructuredYAML  StructuredFormat = "yaml"
+)
+
 type RegisteredLanguage struct {
 	CanonicalID      string
 	DisplayLabel     string

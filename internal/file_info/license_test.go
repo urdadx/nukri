@@ -14,7 +14,7 @@ func TestReadLicenseTextPrefixReadsRegularFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	text, err := readLicenseTextPrefix(path, FastLicenseSniffByteLmit)
+	text, err := readLicenseTextPrefix(path, FastLicenseSniffByteLimit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,5 +75,37 @@ func TestCanonicalUnknownLicenseUsesGenericLabel(t *testing.T) {
 	}
 	if facts.SpecificTypeLabel == nil || *facts.SpecificTypeLabel != "License Document" {
 		t.Fatalf("SpecificTypeLabel = %v, want License Document", facts.SpecificTypeLabel)
+	}
+}
+
+func TestDetectLicenseDocuments(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		want string
+	}{
+		{
+			"ISC",
+			"Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted. The software is provided as is.",
+			"ISC License",
+		},
+		{
+			"WTFPL",
+			"DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE\nEveryone is permitted to copy and distribute verbatim or modified copies of this license document, and changing it is allowed as long as the name is changed.",
+			"WTFPL (Do What The Fuck You Want To Public License)",
+		},
+		{
+			"SPDX",
+			"// SPDX-License-Identifier: Apache-2.0\n",
+			"Apache License 2.0",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			detection, ok := detectLicenseDocuments(test.text)
+			if !ok || !detection.IsSpecific || detection.DetailLabel != test.want {
+				t.Fatalf("detection = %#v, ok = %v, want %q", detection, ok, test.want)
+			}
+		})
 	}
 }
