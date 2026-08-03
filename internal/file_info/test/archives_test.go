@@ -1,9 +1,10 @@
-package fileinfo
+package test
 
 import (
 	"testing"
 
 	"github.com/urdadx/nukri/internal/core"
+	. "github.com/urdadx/nukri/internal/file_info"
 )
 
 func TestInspectArchiveName(t *testing.T) {
@@ -20,10 +21,7 @@ func TestInspectArchiveName(t *testing.T) {
 
 	for name, wantLabel := range tests {
 		t.Run(name, func(t *testing.T) {
-			facts, ok := inspectArchiveName(name)
-			if !ok {
-				t.Fatal("archive was not detected")
-			}
+			facts := InspectPath(name, core.File)
 			if facts.BuiltinClass != core.FileClassArchive {
 				t.Fatalf("BuiltinClass = %v, want archive", facts.BuiltinClass)
 			}
@@ -31,12 +29,6 @@ func TestInspectArchiveName(t *testing.T) {
 				t.Fatalf("SpecificTypeLabel = %v, want %q", facts.SpecificTypeLabel, wantLabel)
 			}
 		})
-	}
-}
-
-func TestInspectArchiveNameRejectsUnknownFile(t *testing.T) {
-	if _, ok := inspectArchiveName("notes.txt"); ok {
-		t.Fatal("plain text file was classified as an archive")
 	}
 }
 

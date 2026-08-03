@@ -1,0 +1,1 @@
+When writing tests, move them into a test folder. create one if it doesnt exist already
