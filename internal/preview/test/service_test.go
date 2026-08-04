@@ -137,6 +137,42 @@ func TestRenderCSVTruncatesRaggedData(t *testing.T) {
 	}
 }
 
+func TestRenderTorrent(t *testing.T) {
+	service := preview.NewService()
+	result := renderSample(t, service, "minimal.torrent")
+	value, ok := result.(*preview.TorrentPreview)
+	if !ok {
+		t.Fatalf("result = %T, want *preview.TorrentPreview", result)
+	}
+	if value.Torrent.Name != "sample.txt" || value.Torrent.TotalSize != 12_345 || !value.Torrent.Private {
+		t.Fatalf("torrent = %#v", value.Torrent)
+	}
+	if value.Torrent.InfoHashV1 == "" || len(value.Torrent.Trackers) != 1 {
+		t.Fatalf("torrent hashes/trackers = %#v", value.Torrent)
+	}
+	if len(value.Files) != 1 || value.Files[0].Path != "sample.txt" || value.Files[0].Size != 12_345 {
+		t.Fatalf("files = %#v", value.Files)
+	}
+	view, err := preview.BuildView(value, preview.ViewOptions{Width: 60})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.Title != "sample.txt" || !strings.Contains(strings.Join(view.Lines, "\n"), "Info hash v1") {
+		t.Fatalf("view = %#v", view)
+	}
+}
+
+func TestRenderTorrentRejectsMalformedMetainfo(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "broken.torrent")
+	if err := os.WriteFile(path, []byte("not bencode"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	facts := fileinfo.InspectPath(path, core.File)
+	if _, err := preview.NewService().Render(context.Background(), preview.Request{Path: path, Facts: facts}); err == nil {
+		t.Fatal("malformed torrent should fail")
+	}
+}
+
 func TestRenderSVG(t *testing.T) {
 	service := preview.NewService()
 	result := renderSample(t, service, "diamond.svg")
@@ -255,6 +291,34 @@ func TestListArchive(t *testing.T) {
 		if entry.Path == "" {
 			t.Fatalf("archive contains an entry without a path: %#v", entry)
 		}
+	}
+}
+
+func TestRenderISO(t *testing.T) {
+	service := preview.NewService()
+	requireCapability(t, service.Capabilities().ISO, "isoinfo")
+	path := writeISOSample(t)
+	facts := fileinfo.InspectPath(path, core.File)
+	result, err := service.Render(context.Background(), preview.Request{Path: path, Facts: facts})
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, ok := result.(*preview.ISOPreview)
+	if !ok {
+		t.Fatalf("result = %T, want *preview.ISOPreview", result)
+	}
+	if value.ISO.VolumeID != "NUKRI_TEST" || value.ISO.BlockSize == 0 || value.ISO.FileSize == 0 {
+		t.Fatalf("ISO metadata = %#v", value.ISO)
+	}
+	found := false
+	for _, entry := range value.Entries {
+		if strings.HasSuffix(entry.Path, "/hello.txt") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("ISO entries = %#v, want hello.txt", value.Entries)
 	}
 }
 
@@ -440,4 +504,26 @@ func writeVideoSample(t *testing.T) string {
 		t.Fatalf("create video sample: %v: %s", err, output)
 	}
 	return path
+}
+
+func writeISOSample(t *testing.T) string {
+	t.Helper()
+	genisoimage, err := exec.LookPath("genisoimage")
+	if err != nil {
+		t.Skip("ISO fixture creation requires genisoimage")
+	}
+	directory := t.TempDir()
+	source := filepath.Join(directory, "source")
+	if err := os.Mkdir(source, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "hello.txt"), []byte("hello ISO"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	output := filepath.Join(directory, "sample.iso")
+	command := exec.Command(genisoimage, "-quiet", "-R", "-V", "NUKRI_TEST", "-o", output, source)
+	if commandOutput, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("create ISO sample: %v: %s", err, commandOutput)
+	}
+	return output
 }

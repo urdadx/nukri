@@ -31,6 +31,9 @@ const (
 	DefaultMaxCSVRows          = 100
 	DefaultMaxCSVColumns       = 50
 	DefaultMaxCSVCellRunes     = 1_000
+	DefaultMaxTorrentBytes     = 8 << 20
+	DefaultMaxTorrentFiles     = 10_000
+	DefaultMaxTorrentTrackers  = 100
 )
 
 type Request struct {
@@ -117,6 +120,59 @@ type CSVMetadata struct {
 	Delimiter   rune
 }
 
+type TorrentPreview struct {
+	Torrent   Torrent
+	Files     []TorrentFile
+	Metadata  []Field
+	Truncated bool
+}
+
+type Torrent struct {
+	Name         string
+	InfoHashV1   string
+	InfoHashV2   string
+	Comment      string
+	CreatedBy    string
+	CreationDate int64
+	Private      bool
+	PieceLength  int64
+	PieceCount   int
+	TotalSize    int64
+	Trackers     []string
+	WebSeeds     []string
+}
+
+type TorrentFile struct {
+	Path string
+	Size int64
+}
+
+type ISOPreview struct {
+	ISO       ISO
+	Entries   []ISOEntry
+	Metadata  []Field
+	Truncated bool
+}
+
+type ISO struct {
+	SystemID      string
+	VolumeID      string
+	VolumeSetID   string
+	PublisherID   string
+	DataPreparer  string
+	ApplicationID string
+	BlockSize     int64
+	VolumeBlocks  int64
+	FileSize      int64
+	RockRidge     bool
+	Joliet        bool
+	Bootable      bool
+}
+
+type ISOEntry struct {
+	Path string
+}
+
 func (*PDFPreview) isPreview()       {}
 func (*SVGPreview) isPreview()       {}
 func (*OfficePreview) isPreview()    {}
@@ -129,6 +185,8 @@ func (*FontPreview) isPreview()      {}
 func (*AudioPreview) isPreview()     {}
 func (*VideoPreview) isPreview()     {}
 func (*CSVPreview) isPreview()       {}
+func (*TorrentPreview) isPreview()   {}
+func (*ISOPreview) isPreview()       {}
 
 type Image struct {
 	MediaType string
@@ -225,6 +283,7 @@ type Tools struct {
 	EbookConvert string
 	FFProbe      string
 	FFmpeg       string
+	ISOInfo      string
 }
 
 type Capabilities struct {
@@ -237,6 +296,7 @@ type Capabilities struct {
 	Fonts     bool
 	Audio     bool
 	Video     bool
+	ISO       bool
 }
 
 func safeText(value string) string {

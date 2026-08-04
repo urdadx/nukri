@@ -28,6 +28,9 @@ type Service struct {
 	maxCSVRows          int
 	maxCSVColumns       int
 	maxCSVCellRunes     int
+	maxTorrentBytes     int64
+	maxTorrentFiles     int
+	maxTorrentTrackers  int
 }
 
 func NewService() *Service {
@@ -52,6 +55,9 @@ func NewServiceWithTools(tools Tools) *Service {
 		maxCSVRows:          DefaultMaxCSVRows,
 		maxCSVColumns:       DefaultMaxCSVColumns,
 		maxCSVCellRunes:     DefaultMaxCSVCellRunes,
+		maxTorrentBytes:     DefaultMaxTorrentBytes,
+		maxTorrentFiles:     DefaultMaxTorrentFiles,
+		maxTorrentTrackers:  DefaultMaxTorrentTrackers,
 	}
 }
 
@@ -64,6 +70,7 @@ func DiscoverTools() Tools {
 		EbookConvert: lookPath("ebook-convert"),
 		FFProbe:      lookPath("ffprobe"),
 		FFmpeg:       lookPath("ffmpeg"),
+		ISOInfo:      lookPath("isoinfo"),
 	}
 }
 
@@ -87,6 +94,7 @@ func (s *Service) Capabilities() Capabilities {
 		Fonts:     true,
 		Audio:     s.tools.FFProbe != "" && s.tools.FFmpeg != "",
 		Video:     s.tools.FFProbe != "" && s.tools.FFmpeg != "",
+		ISO:       s.tools.ISOInfo != "",
 	}
 }
 
@@ -119,6 +127,12 @@ func (s *Service) Render(ctx context.Context, request Request) (Preview, error) 
 	}
 	if request.Facts.Preview.Kind == fileinfo.Csv {
 		return s.renderCSV(ctx, path)
+	}
+	if request.Facts.Preview.Kind == fileinfo.Torrent {
+		return s.renderTorrent(ctx, path)
+	}
+	if request.Facts.Preview.Kind == fileinfo.Iso {
+		return s.renderISO(ctx, path)
 	}
 	if request.Facts.BuiltinClass == core.FileClassImage && strings.EqualFold(filepath.Ext(path), ".svg") {
 		return s.renderSVG(ctx, path)

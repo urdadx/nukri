@@ -81,6 +81,10 @@ func BuildView(value Preview, options ViewOptions) (View, error) {
 		return metadataVisualView(title, detail, value.Metadata, &value.Frame), nil
 	case *CSVPreview:
 		return csvView(value, width, options.ColumnOffset), nil
+	case *TorrentPreview:
+		return torrentView(value, width, options.ColumnOffset), nil
+	case *ISOPreview:
+		return isoView(value, width, options.ColumnOffset), nil
 	case nil:
 		return View{}, ErrUnsupported
 	default:
@@ -154,6 +158,49 @@ func csvView(value *CSVPreview, width, offset int) View {
 	horizontal := offset > 0 || value.Metadata.ColumnCount > visibleCSVColumnCount(value, width, offset)
 	detail := fmt.Sprintf("%d rows x %d columns", value.Metadata.RowCount, value.Metadata.ColumnCount)
 	return View{Title: title, Detail: detail, Lines: lines, Footer: footer, Scroll: tableScroll(horizontal)}
+}
+
+func torrentView(value *TorrentPreview, width, offset int) View {
+	rows := make([][]string, 0, len(value.Files))
+	for _, file := range value.Files {
+		rows = append(rows, []string{formatByteSize(file.Size), file.Path})
+	}
+	lines, footer, horizontal := tableLines(
+		[]string{"Size", "Path"}, rows, len(value.Files), width, offset,
+	)
+	metadata := fieldLines(value.Metadata)
+	if len(metadata) != 0 && len(lines) != 0 {
+		metadata = append(metadata, "")
+	}
+	lines = append(metadata, lines...)
+	if value.Truncated {
+		footer = joinFooter(footer, "file listing truncated")
+	}
+	return View{
+		Title: value.Torrent.Name, Detail: "BitTorrent metainfo", Lines: lines,
+		Footer: footer, Scroll: tableScroll(horizontal),
+	}
+}
+
+func isoView(value *ISOPreview, width, offset int) View {
+	rows := make([][]string, 0, len(value.Entries))
+	for _, entry := range value.Entries {
+		rows = append(rows, []string{entry.Path})
+	}
+	lines, footer, horizontal := tableLines([]string{"Path"}, rows, len(value.Entries), width, offset)
+	metadata := fieldLines(value.Metadata)
+	if len(metadata) != 0 && len(lines) != 0 {
+		metadata = append(metadata, "")
+	}
+	lines = append(metadata, lines...)
+	if value.Truncated {
+		footer = joinFooter(footer, "file listing truncated")
+	}
+	title := value.ISO.VolumeID
+	if title == "" {
+		title = "ISO image"
+	}
+	return View{Title: title, Detail: "ISO 9660 filesystem", Lines: lines, Footer: footer, Scroll: tableScroll(horizontal)}
 }
 
 func tableLines(headers []string, rows [][]string, totalRows, width, offset int) ([]string, string, bool) {

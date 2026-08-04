@@ -28,6 +28,8 @@ func TestBuildViewForEveryPreviewType(t *testing.T) {
 		{"audio", &preview.AudioPreview{Audio: preview.Audio{Title: "Song"}, Visual: image, Metadata: metadata}, "Song", true},
 		{"video", &preview.VideoPreview{Video: preview.Video{Title: "Movie"}, Frame: image, Metadata: metadata}, "Movie", true},
 		{"CSV", &preview.CSVPreview{Rows: [][]string{{"name"}, {"nukri"}}, Metadata: preview.CSVMetadata{RowCount: 2, ColumnCount: 1, Delimiter: ','}}, "CSV", false},
+		{"torrent", &preview.TorrentPreview{Torrent: preview.Torrent{Name: "download"}, Files: []preview.TorrentFile{{Path: "file.bin", Size: 4}}}, "download", false},
+		{"ISO", &preview.ISOPreview{ISO: preview.ISO{VolumeID: "INSTALL"}, Entries: []preview.ISOEntry{{Path: "/file.txt"}}}, "INSTALL", false},
 	}
 
 	for _, test := range tests {
