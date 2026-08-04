@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"os"
@@ -51,6 +52,88 @@ func TestRenderMarkdown(t *testing.T) {
 		if !strings.Contains(visibleText, value) {
 			t.Errorf("rendered Markdown does not contain %q: %q", value, visibleText)
 		}
+	}
+}
+
+func TestRenderCSV(t *testing.T) {
+	service := preview.NewService()
+	for _, test := range []struct {
+		name      string
+		delimiter rune
+		rows      int
+		columns   int
+	}{
+		{name: "minimal.csv", delimiter: ',', rows: 3, columns: 3},
+		{name: "minimal.tsv", delimiter: '\t', rows: 2, columns: 3},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result := renderSample(t, service, test.name)
+			value, ok := result.(*preview.CSVPreview)
+			if !ok {
+				t.Fatalf("result = %T, want *preview.CSVPreview", result)
+			}
+			if value.Metadata.Delimiter != test.delimiter || value.Metadata.RowCount != test.rows || value.Metadata.ColumnCount != test.columns {
+				t.Fatalf("metadata = %#v", value.Metadata)
+			}
+			if len(value.Rows) != test.rows || value.RowsTruncated || value.ColumnsTruncated || value.CellsTruncated {
+				t.Fatalf("preview = %#v", value)
+			}
+			table := preview.RenderCSVTable(value, preview.CSVTableOptions{Width: 40})
+			if !strings.Contains(table, value.Rows[0][0]) || !strings.Contains(table, fmt.Sprintf("Rows 1-%d of %d", test.rows, test.rows)) {
+				t.Fatalf("table = %q", table)
+			}
+		})
+	}
+}
+
+func TestRenderCSVTableHorizontalOffset(t *testing.T) {
+	value := &preview.CSVPreview{
+		Rows:     [][]string{{"alpha", "beta", "gamma", "delta"}, {"1", "2", "3", "4"}},
+		Metadata: preview.CSVMetadata{RowCount: 2, ColumnCount: 4, Delimiter: ','},
+	}
+	table := preview.RenderCSVTable(value, preview.CSVTableOptions{Width: 20, ColumnOffset: 2})
+	if strings.Contains(table, "alpha") || !strings.Contains(table, "gamma") || !strings.Contains(table, "more left") {
+		t.Fatalf("table = %q", table)
+	}
+}
+
+func TestRenderCSVTruncatesRaggedData(t *testing.T) {
+	var source strings.Builder
+	for row := 0; row < 101; row++ {
+		columns := 2
+		if row == 0 {
+			columns = 51
+		}
+		for column := 0; column < columns; column++ {
+			if column != 0 {
+				source.WriteByte(',')
+			}
+			if row == 1 && column == 0 {
+				source.WriteString(strings.Repeat("x", 1_001))
+			} else {
+				source.WriteString("value")
+			}
+		}
+		source.WriteByte('\n')
+	}
+	path := filepath.Join(t.TempDir(), "large.csv")
+	if err := os.WriteFile(path, []byte(source.String()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	facts := fileinfo.InspectPath(path, core.File)
+	result, err := preview.NewService().Render(context.Background(), preview.Request{Path: path, Facts: facts})
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, ok := result.(*preview.CSVPreview)
+	if !ok {
+		t.Fatalf("result = %T, want *preview.CSVPreview", result)
+	}
+	if value.Metadata.RowCount != 101 || value.Metadata.ColumnCount != 51 || len(value.Rows) != 100 {
+		t.Fatalf("preview dimensions = %#v", value)
+	}
+	if !value.RowsTruncated || !value.ColumnsTruncated || !value.CellsTruncated {
+		t.Fatalf("truncation flags = %#v", value)
 	}
 }
 

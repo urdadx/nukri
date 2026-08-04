@@ -7,6 +7,8 @@ require (
 	github.com/charmbracelet/glamour v1.0.0
 	github.com/charmbracelet/x/ansi v0.10.2
 	github.com/mathieu-keller/epub-parser/v2 v2.0.18
+	github.com/mattn/go-runewidth v0.0.17
+	github.com/mattn/go-sixel v0.0.12
 	github.com/tdewolff/canvas v0.0.0-20260803134256-8e86b9abb917
 	github.com/tdewolff/font v0.0.0-20260527091451-1663e68cb8a4
 	github.com/xo/resvg v0.7.0
@@ -36,11 +38,11 @@ require (
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/mattn/go-runewidth v0.0.17 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.27 // indirect
 	github.com/muesli/reflow v0.3.0 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
+	github.com/soniakeys/quant v1.0.0 // indirect
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef // indirect
 	github.com/srwiley/scanx v0.0.0-20190309010443-e94503791388 // indirect
 	github.com/tdewolff/minify/v2 v2.24.13 // indirect

@@ -27,6 +27,10 @@ const (
 	DefaultMarkdownWidth       = 80
 	DefaultMaxFontBytes        = 32 << 20
 	DefaultMaxDirectoryEntries = 10_000
+	DefaultMaxCSVBytes         = 2 << 20
+	DefaultMaxCSVRows          = 100
+	DefaultMaxCSVColumns       = 50
+	DefaultMaxCSVCellRunes     = 1_000
 )
 
 type Request struct {
@@ -99,6 +103,20 @@ type VideoPreview struct {
 	Metadata []Field
 }
 
+type CSVPreview struct {
+	Rows             [][]string
+	Metadata         CSVMetadata
+	RowsTruncated    bool
+	ColumnsTruncated bool
+	CellsTruncated   bool
+}
+
+type CSVMetadata struct {
+	RowCount    int
+	ColumnCount int
+	Delimiter   rune
+}
+
 func (*PDFPreview) isPreview()       {}
 func (*SVGPreview) isPreview()       {}
 func (*OfficePreview) isPreview()    {}
@@ -110,6 +128,7 @@ func (*EPUBPreview) isPreview()      {}
 func (*FontPreview) isPreview()      {}
 func (*AudioPreview) isPreview()     {}
 func (*VideoPreview) isPreview()     {}
+func (*CSVPreview) isPreview()       {}
 
 type Image struct {
 	MediaType string

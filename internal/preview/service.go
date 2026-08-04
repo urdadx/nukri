@@ -24,6 +24,10 @@ type Service struct {
 	maxMarkdownBytes    int64
 	maxFontBytes        int64
 	maxDirectoryEntries int
+	maxCSVBytes         int64
+	maxCSVRows          int
+	maxCSVColumns       int
+	maxCSVCellRunes     int
 }
 
 func NewService() *Service {
@@ -44,6 +48,10 @@ func NewServiceWithTools(tools Tools) *Service {
 		maxMarkdownBytes:    DefaultMaxMarkdownBytes,
 		maxFontBytes:        DefaultMaxFontBytes,
 		maxDirectoryEntries: DefaultMaxDirectoryEntries,
+		maxCSVBytes:         DefaultMaxCSVBytes,
+		maxCSVRows:          DefaultMaxCSVRows,
+		maxCSVColumns:       DefaultMaxCSVColumns,
+		maxCSVCellRunes:     DefaultMaxCSVCellRunes,
 	}
 }
 
@@ -108,6 +116,9 @@ func (s *Service) Render(ctx context.Context, request Request) (Preview, error) 
 	}
 	if request.Facts.Preview.Kind == fileinfo.Markdown {
 		return s.renderMarkdown(ctx, path, request.Width)
+	}
+	if request.Facts.Preview.Kind == fileinfo.Csv {
+		return s.renderCSV(ctx, path)
 	}
 	if request.Facts.BuiltinClass == core.FileClassImage && strings.EqualFold(filepath.Ext(path), ".svg") {
 		return s.renderSVG(ctx, path)
