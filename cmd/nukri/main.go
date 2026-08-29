@@ -9,11 +9,14 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/urdadx/nukri/internal/config/icons"
 	"github.com/urdadx/nukri/internal/core"
 	fileinfo "github.com/urdadx/nukri/internal/file_info"
 )
 
 func main() {
+	icons.InitIcon(true, "")
+
 	const directory = "."
 	entries, err := os.ReadDir(directory)
 	if err != nil {
