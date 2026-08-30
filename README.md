@@ -1,5 +1,9 @@
 # Nukri
 
-A fast and elegant terminal file manager written in Go
+A fast and elegant terminal file manager for linux written in Go. Currently a work in progress
 
-# Curently WIP 
+![alt text](image-1.png)
+
+
+
+
