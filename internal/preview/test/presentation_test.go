@@ -21,6 +21,7 @@ func TestBuildViewForEveryPreviewType(t *testing.T) {
 		{"office", &preview.OfficePreview{Format: fileinfo.Docx, Page: image}, "Microsoft Word Open XML Document", true},
 		{"ebook", &preview.EbookPreview{Format: fileinfo.Mobi, Page: image}, "Mobipocket eBook", true},
 		{"Markdown", &preview.MarkdownPreview{Text: "heading\nbody"}, "Markdown", false},
+		{"text", &preview.TextPreview{Title: "Go module manifest", Text: "module example.com/project"}, "Go module manifest", false},
 		{"directory", &preview.DirectoryPreview{Entries: []preview.DirectoryEntry{{Name: "file.txt", Size: 4}}, TotalItems: 1, FileCount: 1}, "Directory", false},
 		{"archive", &preview.ArchivePreview{Archive: preview.Archive{Entries: []preview.ArchiveEntry{{Path: "file.txt", Size: 4}}}}, "Archive", false},
 		{"EPUB", &preview.EPUBPreview{Book: preview.EPUB{Titles: []string{"Book"}}, Metadata: metadata}, "Book", false},

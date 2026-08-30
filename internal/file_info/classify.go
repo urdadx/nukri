@@ -1,7 +1,8 @@
 package fileinfo
 
-// This file classifies filesystem entries by name, extension, and file content,
-// selects an appropriate preview format, and caches results for unchanged files.
+/*
+This package provides functions to inspect files and directories, determine their types, and generate metadata (FileFacts) for use in the application. It includes caching mechanisms to avoid redundant inspections of unchanged files, and it selects an appropriate preview format, and caches results for unchanged files.
+*/
 
 import (
 	"bytes"
@@ -77,7 +78,6 @@ func inspectPathWithNameBase(path, displayName string, hasDisplayName bool, kind
 	if kind == core.Directory {
 		return "", "", "", FileFacts{BuiltinClass: core.FileClassDirectory, Preview: PlainTextPreview()}
 	}
-
 	nameForType := displayName
 	if !hasDisplayName {
 		nameForType = filepath.Base(path)

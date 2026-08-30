@@ -18,6 +18,7 @@ const (
 type ViewOptions struct {
 	Width        int
 	ColumnOffset int
+	SyntaxStyle  string
 }
 
 // View is the presentation boundary consumed by a preview-pane UI. Visual is
@@ -46,7 +47,13 @@ func BuildView(value Preview, options ViewOptions) (View, error) {
 	case *EbookPreview:
 		return metadataVisualView(value.Format.DetailLabel(), "First page", value.Metadata, &value.Page), nil
 	case *MarkdownPreview:
-		return View{Title: "Markdown", Lines: strings.Split(value.Text, "\n"), Scroll: VerticalScroll}, nil
+		highlighted, err := highlightSource(value.Text, "markdown", options.SyntaxStyle)
+		if err != nil {
+			return View{}, err
+		}
+		return View{Title: "Markdown", Lines: strings.Split(strings.TrimSuffix(highlighted, "\n"), "\n"), Scroll: VerticalScroll}, nil
+	case *TextPreview:
+		return View{Title: value.Title, Lines: strings.Split(value.Text, "\n"), Scroll: VerticalScroll}, nil
 	case *DirectoryPreview:
 		return directoryView(value, width, options.ColumnOffset), nil
 	case *ArchivePreview:

@@ -60,3 +60,22 @@ func TestInspectPathDoesNotClassifyOrdinaryReadmeAsLicense(t *testing.T) {
 		t.Fatalf("facts = %#v, want document", facts)
 	}
 }
+
+func TestInspectPathClassifiesGoModuleFiles(t *testing.T) {
+	tests := []struct {
+		name       string
+		wantClass  core.FileClass
+		wantSyntax string
+	}{
+		{name: "go.mod", wantClass: core.FileClassConfig, wantSyntax: "go-mod"},
+		{name: "go.sum", wantClass: core.FileClassData, wantSyntax: "go-sum"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			facts := inspectTemporaryFile(t, test.name, []byte("example content\n"))
+			if facts.BuiltinClass != test.wantClass || facts.Preview.CodeSyntax == nil || *facts.Preview.CodeSyntax != test.wantSyntax {
+				t.Fatalf("facts = %#v", facts)
+			}
+		})
+	}
+}

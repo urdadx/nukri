@@ -15,7 +15,12 @@ func RenderList(width, height int, s Styles, data Data) string {
 	if len(data.Entries) == 0 {
 		return lipgloss.NewStyle().Foreground(s.Muted).Background(s.PanelBG).Render("This folder is empty")
 	}
-	rows := make([]string, 0, min(height, len(data.Entries)))
+	start := 0
+	if data.Selected >= height {
+		start = data.Selected - height + 1
+	}
+	end := min(len(data.Entries), start+height)
+	rows := make([]string, 0, max(0, end-start))
 	rowStyle := lipgloss.NewStyle().Foreground(s.PanelFG).Background(s.PanelBG)
 	selectedStyle := rowStyle.Foreground(s.SelectedFG).Background(s.SelectedBG).Bold(true)
 	metadataStyle := rowStyle.Foreground(s.SidebarFG)
@@ -24,10 +29,8 @@ func RenderList(width, height int, s Styles, data Data) string {
 		nameColumn = max(nameColumn, lipgloss.Width(item.Entry.Name))
 	}
 	nameColumn = min(nameColumn+6, max(1, width-27))
-	for i, item := range data.Entries {
-		if len(rows) >= height {
-			break
-		}
+	for i := start; i < end; i++ {
+		item := data.Entries[i]
 		entry := item.Entry
 		metadata := ""
 		nameWidth := width - 4
@@ -36,6 +39,9 @@ func RenderList(width, height int, s Styles, data Data) string {
 			detail := formatSize(entry.Size)
 			if entry.IsDirectory() {
 				detail = "folder"
+				if item.ItemCount != nil {
+					detail = fmt.Sprintf("%d items", *item.ItemCount)
+				}
 			}
 			metadata = fmt.Sprintf("%-10s %9s", detail, formatModified(entry.Modified))
 		}
@@ -61,14 +67,14 @@ func RenderList(width, height int, s Styles, data Data) string {
 }
 
 func formatSize(size int64) string {
-	if size < 1024 {
+	if size < 1000 {
 		return fmt.Sprintf("%d B", size)
 	}
-	units := []string{"KiB", "MiB", "GiB", "TiB"}
+	units := []string{"kB", "MB", "GB", "TB"}
 	value := float64(size)
 	for _, unit := range units {
-		value /= 1024
-		if value < 1024 || unit == units[len(units)-1] {
+		value /= 1000
+		if value < 1000 || unit == units[len(units)-1] {
 			return fmt.Sprintf("%.1f %s", value, unit)
 		}
 	}
@@ -79,7 +85,8 @@ func formatModified(value time.Time) string {
 	if value.IsZero() {
 		return "unknown"
 	}
-	age := time.Since(value)
+	now := time.Now()
+	age := now.Sub(value)
 	switch {
 	case age < time.Minute:
 		return "just now"
@@ -87,7 +94,13 @@ func formatModified(value time.Time) string {
 		return fmt.Sprintf("%dm ago", int(age.Minutes()))
 	case age < 24*time.Hour:
 		return fmt.Sprintf("%dh ago", int(age.Hours()))
-	default:
-		return fmt.Sprintf("%dd ago", int(age.Hours()/24))
 	}
+	months := (now.Year()-value.Year())*12 + int(now.Month()-value.Month())
+	if months > 0 && now.Before(value.AddDate(0, months, 0)) {
+		months--
+	}
+	if months > 0 {
+		return fmt.Sprintf("%dmo ago", months)
+	}
+	return fmt.Sprintf("%dd ago", int(age.Hours()/24))
 }

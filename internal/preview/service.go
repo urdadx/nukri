@@ -149,5 +149,8 @@ func (s *Service) Render(ctx context.Context, request Request) (Preview, error) 
 	if request.Facts.BuiltinClass == core.FileClassArchive {
 		return s.listArchive(ctx, path)
 	}
+	if request.Facts.Preview.Kind == fileinfo.Source || request.Facts.Preview.Kind == fileinfo.PlainText {
+		return s.renderText(ctx, path, request.Facts)
+	}
 	return nil, ErrUnsupported
 }

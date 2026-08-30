@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"path/filepath"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/urdadx/nukri/internal/preview"
@@ -9,14 +11,21 @@ import (
 )
 
 type Model struct {
-	width, height int
-	styles        Styles
-	data          browser.Data
-	preview       *preview.Service
+	width, height  int
+	styles         Styles
+	data           browser.Data
+	preview        *preview.Service
+	backHistory    []historyEntry
+	forwardHistory []historyEntry
+}
+
+type historyEntry struct {
+	path         string
+	selectedPath string
 }
 
 func New(t theme.Theme) Model {
-	return Model{width: 120, height: 32, styles: NewStyles(t), preview: preview.NewService(), data: browser.Data{Selected: -1}}
+	return Model{width: 120, height: 32, styles: NewStyles(t), preview: preview.NewService(), data: browser.Data{Selected: -1, PreviewSelected: -1}}
 }
 
 func (Model) Init() tea.Cmd { return loadFilesystem }
@@ -25,31 +34,300 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	switch message := message.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = message.Width, message.Height
+		m.clampPreviewOffset()
 	case loadedMsg:
 		m.data.CWD, m.data.Places, m.data.Entries = message.cwd, message.places, message.entries
+		m.data.LoadError = ""
+		m.data.Selected = -1
+		m.data.Preview = preview.View{}
+		m.data.PreviewEntries = nil
+		m.data.PreviewIsDir = false
+		m.data.PreviewSelected = -1
+		m.data.PreviewOffset = 0
+		m.data.PreviewError = ""
+		m.data.PreviewLoading = false
 		if message.err != nil {
 			m.data.LoadError = message.err.Error()
 		}
 		if len(message.entries) != 0 {
-			m.data.Selected = 0
+			m.data.Selected = entryIndexByPath(message.entries, message.selectedPath)
 			m.data.PreviewLoading = true
 			layout := browser.ResolveLayout(m.width, max(1, m.height-1))
-			return m, loadPreview(m.preview, message.entries[0], layout.PreviewWidth-4)
+			return m, loadPreview(m.preview, message.entries[m.data.Selected], layout.PreviewWidth-4, m.styles.Theme.CodeSyntaxHighlight)
 		}
 	case previewMsg:
 		if m.data.Selected >= 0 && m.data.Selected < len(m.data.Entries) && m.data.Entries[m.data.Selected].Entry.Path == message.path {
 			m.data.PreviewLoading = false
 			m.data.Preview = message.view
+			m.data.PreviewEntries = message.entries
+			m.data.PreviewIsDir = message.directory
+			m.data.PreviewSelected = -1
+			if message.directory && len(message.entries) > 0 {
+				m.data.PreviewSelected = 0
+			}
+			m.data.PreviewError = ""
 			if message.err != nil {
 				m.data.PreviewError = message.err.Error()
 			}
 		}
+	case tea.MouseMsg:
+		if message.Button == tea.MouseButtonLeft && message.Action == tea.MouseActionPress {
+			if path := m.sidebarPathAt(message.X, message.Y); path != "" {
+				return m.navigateTo(path, "", true)
+			}
+		}
+		if m.mouseOverPreview(message.X, message.Y) {
+			switch message.Button {
+			case tea.MouseButtonWheelUp:
+				m.scrollPreview(-m.previewWheelStep())
+			case tea.MouseButtonWheelDown:
+				m.scrollPreview(m.previewWheelStep())
+			default:
+				return m, nil
+			}
+		}
 	case tea.KeyMsg:
-		if message.String() == "q" || message.String() == "ctrl+c" {
+		switch message.String() {
+		case "q", "ctrl+c":
 			return m, tea.Quit
+		case "down", "j":
+			return m.moveSelection(1)
+		case "up", "k":
+			return m.moveSelection(-1)
+		case "enter":
+			return m.enterSelected()
+		case "backspace", "left", "h":
+			return m.goParent()
+		case "alt+left":
+			return m.goHistoryBack()
+		case "alt+right":
+			return m.goHistoryForward()
+		case "tab":
+			return m.cyclePlace(1)
+		case "shift+tab":
+			return m.cyclePlace(-1)
+		case "pgdown", "ctrl+d":
+			m.scrollPreview(m.previewPageSize())
+			return m, nil
+		case "pgup", "ctrl+u":
+			m.scrollPreview(-m.previewPageSize())
+			return m, nil
 		}
 	}
 	return m, nil
+}
+
+func (m Model) sidebarPathAt(x, y int) string {
+	layout := browser.ResolveLayout(m.width, max(1, m.height-1))
+	if layout.SidebarWidth == 0 || x < 0 || x >= layout.SidebarWidth || y < 3 || y >= m.height-1 {
+		return ""
+	}
+	compact := layout.SidebarWidth <= 5
+	rowIndex := y - 3
+	renderedRow := 0
+	for _, row := range m.data.Places {
+		if row.Section != "" {
+			if !compact {
+				renderedRow++
+			}
+			continue
+		}
+		if renderedRow == rowIndex {
+			if item := row.GetItem(); item != nil {
+				return item.Path
+			}
+			return ""
+		}
+		renderedRow++
+	}
+	return ""
+}
+
+func entryIndexByPath(entries []browser.Entry, path string) int {
+	if path != "" {
+		for index := range entries {
+			if entries[index].Entry.Path == path {
+				return index
+			}
+		}
+	}
+	return 0
+}
+
+func (m Model) enterSelected() (tea.Model, tea.Cmd) {
+	if m.data.Selected < 0 || m.data.Selected >= len(m.data.Entries) {
+		return m, nil
+	}
+	entry := m.data.Entries[m.data.Selected].Entry
+	if !entry.IsDirectory() {
+		return m, nil
+	}
+	return m.navigateTo(entry.Path, "", true)
+}
+
+func (m Model) goParent() (tea.Model, tea.Cmd) {
+	if m.data.CWD == "" {
+		return m, nil
+	}
+	parent := filepath.Dir(m.data.CWD)
+	if parent == m.data.CWD {
+		return m, nil
+	}
+	return m.navigateTo(parent, m.data.CWD, true)
+}
+
+func (m Model) cyclePlace(delta int) (tea.Model, tea.Cmd) {
+	paths := make([]string, 0, len(m.data.Places))
+	for _, row := range m.data.Places {
+		if item := row.GetItem(); item != nil {
+			paths = append(paths, item.Path)
+		}
+	}
+	if len(paths) == 0 {
+		return m, nil
+	}
+	current := -1
+	for index, path := range paths {
+		if path == m.data.CWD {
+			current = index
+			break
+		}
+	}
+	next := 0
+	if current >= 0 {
+		next = (current + delta + len(paths)) % len(paths)
+	} else if delta < 0 {
+		next = len(paths) - 1
+	}
+	return m.navigateTo(paths[next], "", true)
+}
+
+func (m Model) goHistoryBack() (tea.Model, tea.Cmd) {
+	if len(m.backHistory) == 0 {
+		return m, nil
+	}
+	target := m.backHistory[len(m.backHistory)-1]
+	m.backHistory = m.backHistory[:len(m.backHistory)-1]
+	m.forwardHistory = append(m.forwardHistory, m.currentHistoryEntry())
+	return m.navigateTo(target.path, target.selectedPath, false)
+}
+
+func (m Model) goHistoryForward() (tea.Model, tea.Cmd) {
+	if len(m.forwardHistory) == 0 {
+		return m, nil
+	}
+	target := m.forwardHistory[len(m.forwardHistory)-1]
+	m.forwardHistory = m.forwardHistory[:len(m.forwardHistory)-1]
+	m.backHistory = append(m.backHistory, m.currentHistoryEntry())
+	return m.navigateTo(target.path, target.selectedPath, false)
+}
+
+func (m Model) currentHistoryEntry() historyEntry {
+	selectedPath := ""
+	if m.data.Selected >= 0 && m.data.Selected < len(m.data.Entries) {
+		selectedPath = m.data.Entries[m.data.Selected].Entry.Path
+	}
+	return historyEntry{path: m.data.CWD, selectedPath: selectedPath}
+}
+
+func (m Model) navigateTo(path, selectedPath string, recordHistory bool) (tea.Model, tea.Cmd) {
+	if path == "" || path == m.data.CWD {
+		return m, nil
+	}
+	if recordHistory && m.data.CWD != "" {
+		m.backHistory = append(m.backHistory, m.currentHistoryEntry())
+		m.forwardHistory = nil
+	}
+	m.data.CWD = path
+	m.data.Entries = nil
+	m.data.Selected = -1
+	m.data.LoadError = ""
+	m.data.Preview = preview.View{}
+	m.data.PreviewEntries = nil
+	m.data.PreviewIsDir = false
+	m.data.PreviewSelected = -1
+	m.data.PreviewOffset = 0
+	m.data.PreviewError = ""
+	m.data.PreviewLoading = false
+	return m, loadDirectory(path, selectedPath)
+}
+
+func (m Model) mouseOverPreview(x, y int) bool {
+	layout := browser.ResolveLayout(m.width, max(1, m.height-1))
+	if layout.PreviewWidth == 0 || y < 0 || y >= m.height-1 {
+		return false
+	}
+	if layout.Stacked {
+		return x >= layout.SidebarWidth && x < m.width && y >= layout.FilesHeight
+	}
+	return x >= layout.SidebarWidth+layout.FilesWidth && x < m.width
+}
+
+func (m Model) moveSelection(delta int) (tea.Model, tea.Cmd) {
+	if len(m.data.Entries) == 0 {
+		return m, nil
+	}
+	next := min(max(m.data.Selected+delta, 0), len(m.data.Entries)-1)
+	if next == m.data.Selected {
+		return m, nil
+	}
+	m.data.Selected = next
+	m.data.Preview = preview.View{}
+	m.data.PreviewEntries = nil
+	m.data.PreviewIsDir = false
+	m.data.PreviewSelected = -1
+	m.data.PreviewOffset = 0
+	m.data.PreviewError = ""
+	m.data.PreviewLoading = true
+	layout := browser.ResolveLayout(m.width, max(1, m.height-1))
+	return m, loadPreview(m.preview, m.data.Entries[next], layout.PreviewWidth-4, m.styles.Theme.CodeSyntaxHighlight)
+}
+
+func (m *Model) scrollPreview(delta int) {
+	m.data.PreviewOffset += delta
+	m.clampPreviewOffset()
+}
+
+func (m Model) previewPageSize() int {
+	return max(1, m.previewVisibleLines()/2)
+}
+
+func (m Model) previewWheelStep() int {
+	return min(max(m.previewVisibleLines()/6, 2), 4)
+}
+
+func (m Model) previewVisibleLines() int {
+	layout := browser.ResolveLayout(m.width, max(1, m.height-1))
+	height := m.height - 1
+	if layout.Stacked {
+		height = layout.PreviewHeight
+	}
+	if layout.PreviewWidth == 0 {
+		return 0
+	}
+	return max(0, height-4)
+}
+
+func (m Model) previewLineCount() int {
+	switch {
+	case m.data.PreviewLoading, m.data.PreviewError != "":
+		return 1
+	case m.data.PreviewIsDir:
+		return max(1, len(m.data.PreviewEntries))
+	default:
+		count := 2 + len(m.data.Preview.Lines)
+		if m.data.Preview.Visual != nil {
+			count += 2
+		}
+		if m.data.Preview.Footer != "" {
+			count += 2
+		}
+		return count
+	}
+}
+
+func (m *Model) clampPreviewOffset() {
+	m.data.PreviewOffset = min(max(m.data.PreviewOffset, 0), max(0, m.previewLineCount()-m.previewVisibleLines()))
 }
 
 func (m Model) View() string {

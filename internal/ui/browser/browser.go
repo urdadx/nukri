@@ -12,17 +12,22 @@ type Entry struct {
 	Facts     fileinfo.FileFacts
 	Icon      string
 	IconColor string
+	ItemCount *int
 }
 
 type Data struct {
-	CWD            string
-	Places         []core.SidebarRow
-	Entries        []Entry
-	Selected       int
-	Preview        preview.View
-	PreviewLoading bool
-	PreviewError   string
-	LoadError      string
+	CWD             string
+	Places          []core.SidebarRow
+	Entries         []Entry
+	Selected        int
+	Preview         preview.View
+	PreviewEntries  []Entry
+	PreviewIsDir    bool
+	PreviewSelected int
+	PreviewOffset   int
+	PreviewLoading  bool
+	PreviewError    string
+	LoadError       string
 }
 
 type Styles struct {

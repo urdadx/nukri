@@ -48,10 +48,97 @@ func TestRenderMarkdown(t *testing.T) {
 		t.Fatalf("result = %#v, want rendered text", result)
 	}
 	visibleText := ansi.Strip(markdown.Text)
+	if visibleText != markdown.Text {
+		t.Fatal("Markdown preview should not contain terminal escape sequences")
+	}
 	for _, value := range []string{"Nukri Markdown", "bold text", "First item", "fmt.Println"} {
 		if !strings.Contains(visibleText, value) {
 			t.Errorf("rendered Markdown does not contain %q: %q", value, visibleText)
 		}
+	}
+}
+
+func TestRenderMarkdownSourceCanBeHighlightedWithChroma(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "structured.md")
+	source := "---\ntitle: Example\n---\n# Heading\n\n> quoted text\n\n- [x] complete\n- **bold** and `code`\n\n[site](https://example.com)\n\n```go\nfmt.Println(\"ok\")\n```\n"
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	facts := fileinfo.InspectPath(path, core.File)
+	result, err := preview.NewService().Render(context.Background(), preview.Request{Path: path, Facts: facts, Width: 32})
+	if err != nil {
+		t.Fatal(err)
+	}
+	markdown := result.(*preview.MarkdownPreview)
+	for _, expected := range []string{"---", "title: Example", "# Heading", "> quoted text", "- [x] complete", "**bold**", "`code`", "[site](https://example.com)", "```go", "fmt.Println"} {
+		if !strings.Contains(markdown.Text, expected) {
+			t.Errorf("Markdown source does not contain %q:\n%s", expected, markdown.Text)
+		}
+	}
+	if strings.Contains(markdown.Text, "\x1b[") {
+		t.Fatal("loaded Markdown source contains ANSI escape sequences")
+	}
+	view, err := preview.BuildView(markdown, preview.ViewOptions{SyntaxStyle: "monokai"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	highlighted := strings.Join(view.Lines, "\n")
+	if !strings.Contains(highlighted, "\x1b[") {
+		t.Fatal("Markdown view is not syntax highlighted")
+	}
+	if stripped := ansi.Strip(highlighted); !strings.Contains(stripped, strings.TrimSuffix(source, "\n")) {
+		t.Fatalf("highlighting changed Markdown source:\n%s", stripped)
+	}
+}
+
+func TestRenderMarkdownCapsRenderedLines(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "large.md")
+	var source strings.Builder
+	for index := range 1_000 {
+		fmt.Fprintf(&source, "- item %d\n", index)
+	}
+	if err := os.WriteFile(path, []byte(source.String()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	facts := fileinfo.InspectPath(path, core.File)
+	result, err := preview.NewService().Render(context.Background(), preview.Request{Path: path, Facts: facts, Width: 60})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(result.(*preview.MarkdownPreview).Text, "\n")
+	if len(lines) != 800 {
+		t.Fatalf("rendered line count = %d, want 800", len(lines))
+	}
+}
+
+func TestRenderGoModuleFilesAsText(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		title   string
+	}{
+		{name: "go.mod", content: "module example.com/project\n\ngo 1.25\n", title: "Go module manifest"},
+		{name: "go.sum", content: "example.com/dependency v1.0.0 h1:checksum\n", title: "Go checksum file"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), test.name)
+			if err := os.WriteFile(path, []byte(test.content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			facts := fileinfo.InspectPath(path, core.File)
+			result, err := preview.NewService().Render(context.Background(), preview.Request{Path: path, Facts: facts, Width: 60})
+			if err != nil {
+				t.Fatal(err)
+			}
+			view, err := preview.BuildView(result, preview.ViewOptions{Width: 60})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if view.Title != test.title || !strings.Contains(strings.Join(view.Lines, "\n"), strings.TrimSpace(test.content)) {
+				t.Fatalf("view = %#v", view)
+			}
+		})
 	}
 }
 

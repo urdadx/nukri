@@ -20,7 +20,7 @@ func main() {
 		log.Fatal(err)
 	}
 	icons.InitIcon(true, selectedTheme.DirectoryIconColor)
-	if _, err := tea.NewProgram(ui.New(selectedTheme), tea.WithAltScreen()).Run(); err != nil {
+	if _, err := tea.NewProgram(ui.New(selectedTheme), tea.WithAltScreen(), tea.WithMouseCellMotion()).Run(); err != nil {
 		log.Fatal(err)
 	}
 }

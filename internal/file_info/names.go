@@ -61,6 +61,8 @@ var exactNames = map[string]exactNameFacts{
 	"gemfile.lock":        {core.FileClassData, "Lockfile"},
 	"bun.lock":            {core.FileClassData, "Lockfile"},
 	"deno.jsonc":          {core.FileClassConfig, "JSON with comments"},
+	"go.mod":              {core.FileClassConfig, "Go module manifest"},
+	"go.sum":              {core.FileClassData, "Go checksum file"},
 	"compose.yml":         {core.FileClassConfig, ""},
 	"compose.yaml":        {core.FileClassConfig, ""},
 	"docker-compose.yml":  {core.FileClassConfig, ""},

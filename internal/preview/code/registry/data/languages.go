@@ -54,6 +54,22 @@ var Languages = []registry.RegistryEntry{
 		[]string{"go", "golang"},
 	),
 	registry.Entry(
+		registry.Language("go-mod", "Go module", registry.Chroma, nil),
+		nil,
+		[]string{"go.mod"},
+		nil,
+		nil,
+		nil,
+	),
+	registry.Entry(
+		registry.Language("go-sum", "Go checksums", registry.Plain, nil),
+		nil,
+		[]string{"go.sum"},
+		nil,
+		nil,
+		nil,
+	),
+	registry.Entry(
 		registry.Language("c", "C", registry.Chroma, nil),
 		[]string{"c", "h"},
 		nil,

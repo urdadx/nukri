@@ -71,6 +71,11 @@ type MarkdownPreview struct {
 	Text string
 }
 
+type TextPreview struct {
+	Title string
+	Text  string
+}
+
 type DirectoryPreview struct {
 	Entries     []DirectoryEntry
 	TotalItems  int
@@ -178,6 +183,7 @@ func (*SVGPreview) isPreview()       {}
 func (*OfficePreview) isPreview()    {}
 func (*EbookPreview) isPreview()     {}
 func (*MarkdownPreview) isPreview()  {}
+func (*TextPreview) isPreview()      {}
 func (*DirectoryPreview) isPreview() {}
 func (*ArchivePreview) isPreview()   {}
 func (*EPUBPreview) isPreview()      {}
