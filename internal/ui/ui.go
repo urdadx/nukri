@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"os"
 	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -15,8 +16,11 @@ type Model struct {
 	styles         Styles
 	data           browser.Data
 	preview        *preview.Service
+	previewPool    *PreviewPool
+	visualState    *browser.VisualState
 	backHistory    []historyEntry
 	forwardHistory []historyEntry
+	prefetchSeq    int
 }
 
 type historyEntry struct {
@@ -25,7 +29,8 @@ type historyEntry struct {
 }
 
 func New(t theme.Theme) Model {
-	return Model{width: 120, height: 32, styles: NewStyles(t), preview: preview.NewService(), data: browser.Data{Selected: -1, PreviewSelected: -1}}
+	svc := preview.NewService()
+	return Model{width: 120, height: 32, styles: NewStyles(t), preview: svc, previewPool: NewPreviewPool(svc, 2), visualState: &browser.VisualState{}, data: browser.Data{Selected: -1, PreviewSelected: -1}}
 }
 
 func (Model) Init() tea.Cmd { return loadFilesystem }
@@ -53,7 +58,9 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.data.Selected = entryIndexByPath(message.entries, message.selectedPath)
 			m.data.PreviewLoading = true
 			layout := browser.ResolveLayout(m.width, max(1, m.height-1))
-			return m, loadPreview(m.preview, message.entries[m.data.Selected], layout.PreviewWidth-4, m.styles.Theme.CodeSyntaxHighlight)
+			width := layout.PreviewWidth - 4
+			m, prefetch := schedulePrefetch(m, message.entries, m.data.Selected, width, m.styles.Theme.CodeSyntaxHighlight)
+			return m, tea.Batch(loadPreview(m.previewPool, message.entries[m.data.Selected], width, m.initialCodeWindow(), m.styles.Theme.CodeSyntaxHighlight), prefetch)
 		}
 	case previewMsg:
 		if m.data.Selected >= 0 && m.data.Selected < len(m.data.Entries) && m.data.Entries[m.data.Selected].Entry.Path == message.path {
@@ -70,6 +77,8 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				m.data.PreviewError = message.err.Error()
 			}
 		}
+	case prefetchMsg:
+		m.submitPrefetch(message)
 	case tea.MouseMsg:
 		if message.Button == tea.MouseButtonLeft && message.Action == tea.MouseActionPress {
 			if path := m.sidebarPathAt(message.X, message.Y); path != "" {
@@ -79,9 +88,9 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if m.mouseOverPreview(message.X, message.Y) {
 			switch message.Button {
 			case tea.MouseButtonWheelUp:
-				m.scrollPreview(-m.previewWheelStep())
+				return m, m.scrollPreview(-m.previewWheelStep())
 			case tea.MouseButtonWheelDown:
-				m.scrollPreview(m.previewWheelStep())
+				return m, m.scrollPreview(m.previewWheelStep())
 			default:
 				return m, nil
 			}
@@ -107,11 +116,9 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case "shift+tab":
 			return m.cyclePlace(-1)
 		case "pgdown", "ctrl+d":
-			m.scrollPreview(m.previewPageSize())
-			return m, nil
+			return m, m.scrollPreview(m.previewPageSize())
 		case "pgup", "ctrl+u":
-			m.scrollPreview(-m.previewPageSize())
-			return m, nil
+			return m, m.scrollPreview(-m.previewPageSize())
 		}
 	}
 	return m, nil
@@ -280,12 +287,50 @@ func (m Model) moveSelection(delta int) (tea.Model, tea.Cmd) {
 	m.data.PreviewError = ""
 	m.data.PreviewLoading = true
 	layout := browser.ResolveLayout(m.width, max(1, m.height-1))
-	return m, loadPreview(m.preview, m.data.Entries[next], layout.PreviewWidth-4, m.styles.Theme.CodeSyntaxHighlight)
+	width := layout.PreviewWidth - 4
+	m, prefetch := schedulePrefetch(m, m.data.Entries, next, width, m.styles.Theme.CodeSyntaxHighlight)
+	return m, tea.Batch(loadPreview(m.previewPool, m.data.Entries[next], width, m.initialCodeWindow(), m.styles.Theme.CodeSyntaxHighlight), prefetch)
 }
 
-func (m *Model) scrollPreview(delta int) {
+// initialCodeWindow is the leading-line budget for the first render of a code
+// preview. It covers the visible pane with margin so the first paint stays cheap
+// for very large sources; scrolling past it triggers an incremental extend.
+func (m Model) initialCodeWindow() int {
+	return max(m.previewVisibleLines()*2, 40)
+}
+
+// moreCodeLines reports whether the current code preview is truncated — more
+// lines exist beyond the window already rendered into View.Lines.
+func (m Model) moreCodeLines() bool {
+	return m.data.Preview.TotalLines > len(m.data.Preview.Lines)
+}
+
+// previewAtBottom reports whether the preview pane is scrolled to the end of the
+// currently-loaded lines.
+func (m Model) previewAtBottom() bool {
+	return m.data.PreviewOffset >= max(0, m.previewLineCount()-m.previewVisibleLines())
+}
+
+// extendCodePreview re-renders the selected code file with a larger leading-line
+// window, returning a command that updates the pane with the added lines once
+// rendered. It is only scheduled when more lines actually remain.
+func (m Model) extendCodePreview() tea.Cmd {
+	if m.data.Selected < 0 || m.data.Selected >= len(m.data.Entries) || !m.moreCodeLines() {
+		return nil
+	}
+	window := max(len(m.data.Preview.Lines)*2, m.initialCodeWindow())
+	layout := browser.ResolveLayout(m.width, max(1, m.height-1))
+	width := layout.PreviewWidth - 4
+	return extendPreview(m.previewPool, m.data.Entries[m.data.Selected], width, window, m.styles.Theme.CodeSyntaxHighlight)
+}
+
+func (m *Model) scrollPreview(delta int) tea.Cmd {
 	m.data.PreviewOffset += delta
 	m.clampPreviewOffset()
+	if delta > 0 && m.previewAtBottom() && m.moreCodeLines() {
+		return m.extendCodePreview()
+	}
+	return nil
 }
 
 func (m Model) previewPageSize() int {
@@ -344,7 +389,7 @@ func (m Model) View() string {
 		SidebarFG: lipgloss.Color(t.SidebarFG), SidebarBG: lipgloss.Color(t.SidebarBG), SidebarTitle: lipgloss.Color(t.FilePanelTopPath), SidebarBorder: lipgloss.Color(t.FilePanelBorder), SidebarIcon: lipgloss.Color(t.FilePanelTopDirectoryIcon),
 		SidebarSelectedFG: lipgloss.Color(t.SidebarItemSelectedFG), SidebarSelectedBG: lipgloss.Color(t.SidebarItemSelectedBG), Cursor: lipgloss.Color(t.Cursor),
 	}
-	body := browser.Render(bodyWidth, bodyHeight, browserStyles, m.data)
+	body := browser.Render(bodyWidth, bodyHeight, m.visualState, os.Stdout, browserStyles, m.data)
 	view := lipgloss.JoinVertical(lipgloss.Left, body, renderFooter(m.width, m.styles, m.data))
 	return m.styles.Root.Width(m.width).Height(m.height).MaxWidth(m.width).MaxHeight(m.height).Render(view)
 }

@@ -2,6 +2,7 @@ package preview
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"image/png"
 	"os"
@@ -10,15 +11,45 @@ import (
 	"strings"
 )
 
-func (s *Service) renderPDF(ctx context.Context, path string) (*PDFPreview, error) {
+// renderPDF renders the first page of a PDF to a PNG preview. Rendering is
+// delegated to the external pdftocairo tool at the display target size. The
+// rendered page (and its metadata) is cached on disk keyed by the source file
+// identity and target size, so revisiting a PDF — or rendering the same size
+// again — skips the (relatively expensive) rasterization pass entirely.
+func (s *Service) renderPDF(ctx context.Context, path string, cellWidth int) (*PDFPreview, error) {
 	if s.tools.PDFInfo == "" || s.tools.PDFToCairo == "" {
 		return nil, fmt.Errorf("PDF preview: %w", ErrToolUnavailable)
 	}
-	metadataOutput, err := runCommand(ctx, 256<<10, s.tools.PDFInfo, path)
+	info, err := os.Stat(path)
 	if err != nil {
-		return nil, fmt.Errorf("read PDF metadata: %w", err)
+		return nil, fmt.Errorf("stat PDF preview: %w", err)
 	}
-	metadata := parsePDFInfo(string(metadataOutput))
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	targetSize := s.imageTargetSize(cellWidth)
+	cacheKey := s.imageCache.Key(path, info.Size(), info.ModTime(), targetSize)
+	if cached, ok := s.imageCache.Get(cacheKey); ok {
+		metadata, err := s.decodeMeta(cached.Metadata)
+		if err != nil {
+			return nil, fmt.Errorf("decode cached PDF metadata: %w", err)
+		}
+		return &PDFPreview{
+			Page: Image{
+				MediaType: "image/png",
+				Data:      append([]byte(nil), cached.Data...),
+				Width:     cached.Width,
+				Height:    cached.Height,
+			},
+			Metadata: metadata,
+		}, nil
+	}
+
+	metadata, err := s.pdfMetadata(ctx, path)
+	if err != nil {
+		return nil, err
+	}
 
 	directory, err := os.MkdirTemp("", "nukri-pdf-*")
 	if err != nil {
@@ -28,7 +59,7 @@ func (s *Service) renderPDF(ctx context.Context, path string) (*PDFPreview, erro
 	prefix := filepath.Join(directory, "page")
 	_, err = runCommand(ctx, 64<<10, s.tools.PDFToCairo,
 		"-png", "-singlefile", "-f", "1", "-l", "1",
-		"-scale-to", strconv.Itoa(s.maxImageDimension), path, prefix,
+		"-scale-to", strconv.Itoa(targetSize), path, prefix,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("render PDF first page: %w", err)
@@ -37,7 +68,38 @@ func (s *Service) renderPDF(ctx context.Context, path string) (*PDFPreview, erro
 	if err != nil {
 		return nil, fmt.Errorf("read PDF first page: %w", err)
 	}
+	encodedMeta, err := json.Marshal(metadata)
+	if err != nil {
+		return nil, fmt.Errorf("encode PDF metadata: %w", err)
+	}
+	if image.Width > 0 && image.Height > 0 {
+		s.imageCache.Put(cacheKey, image.Data, image.Width, image.Height, "png", image.Width, image.Height, info.Size(), encodedMeta)
+	}
 	return &PDFPreview{Page: image, Metadata: metadata}, nil
+}
+
+// decodeMeta deserializes metadata previously stored via cache Put. A nil or
+// empty payload yields an empty (non-nil) metadata slice.
+func (s *Service) decodeMeta(data []byte) ([]Field, error) {
+	if len(data) == 0 {
+		return []Field{}, nil
+	}
+	var fields []Field
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return nil, err
+	}
+	return fields, nil
+}
+
+// pdfMetadata runs pdfinfo to gather PDF metadata. This is cheap relative to the
+// page rasterization, and its result is stored in the page cache so it is not
+// re-run on a cache hit.
+func (s *Service) pdfMetadata(ctx context.Context, path string) ([]Field, error) {
+	metadataOutput, err := runCommand(ctx, 256<<10, s.tools.PDFInfo, path)
+	if err != nil {
+		return nil, fmt.Errorf("read PDF metadata: %w", err)
+	}
+	return parsePDFInfo(string(metadataOutput)), nil
 }
 
 func parsePDFInfo(output string) []Field {

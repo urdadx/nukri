@@ -1,6 +1,7 @@
 package preview
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -28,12 +29,21 @@ func (s *Service) renderText(ctx context.Context, path string, facts fileinfo.Fi
 		return nil, err
 	}
 	title := "Text"
+	var codeLanguage string
 	if facts.SpecificTypeLabel != nil && *facts.SpecificTypeLabel != "" {
 		title = *facts.SpecificTypeLabel
 	} else if facts.Preview.CodeSyntax != nil && *facts.Preview.CodeSyntax != "" {
 		title = *facts.Preview.CodeSyntax
 	}
-	return &TextPreview{Title: title, Text: sanitizeText(string(source))}, nil
+	if facts.Preview.CodeSyntax != nil && *facts.Preview.CodeSyntax != "" &&
+		(facts.Preview.CodeBackend == fileinfo.Chroma || facts.Preview.CodeBackend == fileinfo.Custom) {
+		codeLanguage = *facts.Preview.CodeSyntax
+	}
+	text := string(source)
+	if bytes.IndexByte(source, 0) >= 0 {
+		text = "Binary file"
+	}
+	return &TextPreview{Title: title, Text: sanitizeText(text), CodeLanguage: codeLanguage}, nil
 }
 
 func sanitizeText(value string) string {

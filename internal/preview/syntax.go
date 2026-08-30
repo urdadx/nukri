@@ -13,7 +13,7 @@ import (
 func highlightSource(source, language, styleName string) (string, error) {
 	lexer := lexers.Get(language)
 	if lexer == nil {
-		lexer = lexers.Fallback
+		return source, nil
 	}
 	style := styles.Get(styleName)
 	if style == nil {

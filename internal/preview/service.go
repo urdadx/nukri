@@ -15,6 +15,7 @@ type Service struct {
 	tools               Tools
 	maxImageDimension   int
 	maxImageBytes       int64
+	imageCache          *imageCache
 	maxArchiveEntries   int
 	maxToolOutput       int64
 	maxEPUBBytes        int64
@@ -42,6 +43,7 @@ func NewServiceWithTools(tools Tools) *Service {
 		tools:               tools,
 		maxImageDimension:   DefaultMaxImageDimension,
 		maxImageBytes:       DefaultMaxImageBytes,
+		imageCache:          newImageCache(""),
 		maxArchiveEntries:   DefaultMaxArchiveEntries,
 		maxToolOutput:       DefaultMaxToolOutput,
 		maxEPUBBytes:        DefaultMaxEPUBBytes,
@@ -113,13 +115,13 @@ func (s *Service) Render(ctx context.Context, request Request) (Preview, error) 
 		format := *request.Facts.Preview.DocumentFormat
 		switch {
 		case format == fileinfo.Pdf:
-			return s.renderPDF(ctx, path)
+			return s.renderPDF(ctx, path, request.Width)
 		case format == fileinfo.Epub:
 			return s.renderEPUB(ctx, path)
 		case isOfficeDocument(format):
-			return s.renderOfficeDocument(ctx, path, format)
+			return s.renderOfficeDocument(ctx, path, format, request.Width)
 		case isEbook(format):
-			return s.renderEbook(ctx, path, format)
+			return s.renderEbook(ctx, path, format, request.Width)
 		}
 	}
 	if request.Facts.Preview.Kind == fileinfo.Markdown {
@@ -136,6 +138,9 @@ func (s *Service) Render(ctx context.Context, request Request) (Preview, error) 
 	}
 	if request.Facts.BuiltinClass == core.FileClassImage && strings.EqualFold(filepath.Ext(path), ".svg") {
 		return s.renderSVG(ctx, path)
+	}
+	if request.Facts.BuiltinClass == core.FileClassImage {
+		return s.renderImage(ctx, path, request.Facts, request.Width)
 	}
 	if request.Facts.BuiltinClass == core.FileClassFont {
 		return s.renderFont(ctx, path)

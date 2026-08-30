@@ -59,7 +59,7 @@ func TestBrowserFillsAllocatedWidth(t *testing.T) {
 		SidebarFG: "#ffffff", SidebarBG: "#000000", SidebarTitle: "#00aaff", SidebarBorder: "#555555",
 		SidebarSelectedFG: "#ffffff", SidebarSelectedBG: "#222222",
 	}
-	view := browser.Render(118, 27, styles, browser.Data{Selected: -1})
+	view := browser.Render(118, 27, &browser.VisualState{}, nil, styles, browser.Data{Selected: -1})
 	if got := lipgloss.Width(view); got != 118 {
 		t.Fatalf("browser width = %d, want 118", got)
 	}
@@ -76,7 +76,7 @@ func TestPanelPreservesMultilineContent(t *testing.T) {
 		{Entry: core.Entry{Name: "first", Kind: core.File}, Icon: "f"},
 		{Entry: core.Entry{Name: "second", Kind: core.File}, Icon: "f"},
 	}}
-	view := browser.Render(100, 20, styles, data)
+	view := browser.Render(100, 20, &browser.VisualState{}, nil, styles, data)
 	if !strings.Contains(view, "first") || !strings.Contains(view, "second") {
 		t.Fatal("browser panel discarded multiline entry content")
 	}
@@ -101,7 +101,7 @@ func TestDirectoryRowsAndPreviewUseEntries(t *testing.T) {
 			{Entry: core.Entry{Name: "file.txt", Kind: core.File, Size: 3900}, Icon: "f"},
 		},
 	}
-	view := browser.Render(100, 20, styles, data)
+	view := browser.Render(100, 20, &browser.VisualState{}, nil, styles, data)
 	for _, expected := range []string{"3 items", "child", "file.txt", "3.9 kB"} {
 		if !strings.Contains(view, expected) {
 			t.Fatalf("directory view does not contain %q", expected)
@@ -257,7 +257,7 @@ func TestPreviewIsClippedAndOffset(t *testing.T) {
 		Entries:  []browser.Entry{{Entry: core.Entry{Name: "sample.txt", Kind: core.File}, Icon: "f"}},
 		Preview:  preview.View{Title: "Text", Lines: previewLines}, PreviewOffset: 5,
 	}
-	view := browser.RenderPreview(50, 8, styles, data)
+	view := browser.RenderPreview(50, 8, 24, 3, &browser.VisualState{}, nil, styles, data)
 	if got := lipgloss.Height(view); got != 8 {
 		t.Fatalf("preview height = %d, want 8", got)
 	}

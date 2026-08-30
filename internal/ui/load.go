@@ -6,8 +6,6 @@ The file also includes utility functions to determine the appropriate icon for e
 package ui
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -95,25 +93,22 @@ func loadDirectoryMessage(cwd string) tea.Msg {
 	return loadedMsg{cwd: cwd, places: places.BuildSidebarRows(), entries: entries}
 }
 
-func loadPreview(service *preview.Service, entry browser.Entry, width int, syntaxStyle string) tea.Cmd {
+func loadPreview(pool *PreviewPool, entry browser.Entry, width, codeWindow int, syntaxStyle string) tea.Cmd {
+	done := pool.Submit(entry, width, syntaxStyle, codeWindow, true)
 	return func() tea.Msg {
-		value, err := service.Render(context.Background(), preview.Request{Path: entry.Entry.Path, Facts: entry.Facts, Width: max(1, width)})
-		if err != nil {
-			if errors.Is(err, preview.ErrUnsupported) {
-				err = fmt.Errorf("preview is not available for this file type")
-			} else if errors.Is(err, preview.ErrToolUnavailable) {
-				err = fmt.Errorf("the required preview tool is not installed")
-			}
-			return previewMsg{path: entry.Entry.Path, err: err}
-		}
-		message := previewMsg{path: entry.Entry.Path}
-		if directory, ok := value.(*preview.DirectoryPreview); ok {
-			message.directory = true
-			message.entries = directoryPreviewEntries(entry.Entry.Path, directory.Entries)
-		}
-		view, err := preview.BuildView(value, preview.ViewOptions{Width: max(1, width), SyntaxStyle: syntaxStyle})
-		message.view, message.err = view, err
-		return message
+		return <-done
+	}
+}
+
+// extendPreview re-requests a code preview with a larger leading-line window so
+// the already-loaded lines are preserved while more are rendered. It runs at
+// high priority but carries a distinct cache key (the larger window), so it does
+// not collide with — and cheaply reuses the disk cache written by — the earlier
+// preview render.
+func extendPreview(pool *PreviewPool, entry browser.Entry, width, codeWindow int, syntaxStyle string) tea.Cmd {
+	done := pool.Submit(entry, width, syntaxStyle, codeWindow, true)
+	return func() tea.Msg {
+		return <-done
 	}
 }
 

@@ -1,6 +1,8 @@
 package browser
 
 import (
+	"io"
+
 	"github.com/charmbracelet/lipgloss"
 	"github.com/urdadx/nukri/internal/core"
 	fileinfo "github.com/urdadx/nukri/internal/file_info"
@@ -37,7 +39,7 @@ type Styles struct {
 	SidebarSelectedFG, SidebarSelectedBG, Cursor                   lipgloss.Color
 }
 
-func Render(width, height int, styles Styles, data Data) string {
+func Render(width, height int, visualState *VisualState, visualWriter io.Writer, styles Styles, data Data) string {
 	layout := ResolveLayout(width, height)
 	if layout.FilesWidth == width {
 		return RenderEntries(width, height, styles, data)
@@ -45,13 +47,13 @@ func Render(width, height int, styles Styles, data Data) string {
 	if layout.Stacked {
 		content := lipgloss.JoinVertical(lipgloss.Left,
 			RenderEntries(layout.FilesWidth, layout.FilesHeight, styles, data),
-			RenderPreview(layout.PreviewWidth, layout.PreviewHeight, styles, data),
+			RenderPreview(layout.PreviewWidth, layout.PreviewHeight, layout.SidebarWidth+2, layout.FilesHeight+3, visualState, visualWriter, styles, data),
 		)
 		return lipgloss.JoinHorizontal(lipgloss.Top, RenderSidebar(layout.SidebarWidth, height, styles, data), content)
 	}
 	parts := []string{RenderSidebar(layout.SidebarWidth, height, styles, data), RenderEntries(layout.FilesWidth, height, styles, data)}
 	if layout.PreviewWidth > 0 {
-		parts = append(parts, RenderPreview(layout.PreviewWidth, height, styles, data))
+		parts = append(parts, RenderPreview(layout.PreviewWidth, height, layout.SidebarWidth+layout.FilesWidth+2, 3, visualState, visualWriter, styles, data))
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Top, parts...)
 }

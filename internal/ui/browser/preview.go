@@ -2,16 +2,18 @@ package browser
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 )
 
-func RenderPreview(width, height int, s Styles, data Data) string {
+func RenderPreview(width, height, originX, originY int, visualState *VisualState, visualWriter io.Writer, s Styles, data Data) string {
 	bodyWidth := max(1, width-4)
 	muted := lipgloss.NewStyle().Foreground(s.Muted).Background(s.PanelBG)
 	title := " Preview "
 	text := []string{"Nothing selected"}
+	showingVisual := false
 	if data.Selected >= 0 && data.Selected < len(data.Entries) {
 		entry := data.Entries[data.Selected]
 		title = " " + entry.Icon + "  " + entry.Entry.Name + " "
@@ -27,13 +29,18 @@ func RenderPreview(width, height int, s Styles, data Data) string {
 			}
 		default:
 			text = append([]string{muted.Render(joinDetail(data.Preview.Title, data.Preview.Detail)), ""}, data.Preview.Lines...)
-			if data.Preview.Visual != nil {
-				text = append(text, "", muted.Render("Visual preview available"))
+			if data.Preview.Visual != nil && visualState != nil {
+				showingVisual = true
+				columns, rows := fitImageToPane(data.Preview.Visual.Width, data.Preview.Visual.Height, max(1, bodyWidth), max(1, height-4), defaultCellAspect)
+				visualState.renderVisual(visualWriter, data.Preview.Visual, originX, originY, columns, rows)
 			}
 			if data.Preview.Footer != "" {
 				text = append(text, "", muted.Render(data.Preview.Footer))
 			}
 		}
+	}
+	if !showingVisual && visualState != nil {
+		visualState.Clear()
 	}
 	visibleLines := max(0, height-4)
 	totalLines := len(text)

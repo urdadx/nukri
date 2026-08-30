@@ -142,6 +142,37 @@ func TestRenderGoModuleFilesAsText(t *testing.T) {
 	}
 }
 
+func TestRenderSourceCodeIsSyntaxHighlighted(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "main.go")
+	source := "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n"
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	facts := fileinfo.InspectPath(path, core.File)
+	result, err := preview.NewService().Render(context.Background(), preview.Request{Path: path, Facts: facts, Width: 60})
+	if err != nil {
+		t.Fatal(err)
+	}
+	text, ok := result.(*preview.TextPreview)
+	if !ok {
+		t.Fatalf("result = %T, want *preview.TextPreview", result)
+	}
+	if text.CodeLanguage != "go" {
+		t.Fatalf("CodeLanguage = %q, want go", text.CodeLanguage)
+	}
+	view, err := preview.BuildView(text, preview.ViewOptions{SyntaxStyle: "monokai"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	highlighted := strings.Join(view.Lines, "\n")
+	if !strings.Contains(highlighted, "\x1b[") {
+		t.Fatal("source code view is not syntax highlighted")
+	}
+	if stripped := ansi.Strip(highlighted); !strings.Contains(stripped, strings.TrimSuffix(source, "\n")) {
+		t.Fatalf("highlighting changed source code:\n%s", stripped)
+	}
+}
+
 func TestRenderCSV(t *testing.T) {
 	service := preview.NewService()
 	for _, test := range []struct {

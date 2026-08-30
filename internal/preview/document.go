@@ -26,7 +26,7 @@ func isEbook(format fileinfo.DocumentFormat) bool {
 	return format == fileinfo.Mobi || format == fileinfo.Azw3
 }
 
-func (s *Service) renderOfficeDocument(ctx context.Context, path string, format fileinfo.DocumentFormat) (*OfficePreview, error) {
+func (s *Service) renderOfficeDocument(ctx context.Context, path string, format fileinfo.DocumentFormat, cellWidth int) (*OfficePreview, error) {
 	if s.tools.LibreOffice == "" {
 		return nil, fmt.Errorf("document preview: %w", ErrToolUnavailable)
 	}
@@ -48,14 +48,14 @@ func (s *Service) renderOfficeDocument(ctx context.Context, path string, format 
 	if _, err := os.Stat(output); err != nil {
 		return nil, fmt.Errorf("locate converted document: %w", err)
 	}
-	pdf, err := s.renderPDF(ctx, output)
+	pdf, err := s.renderPDF(ctx, output, cellWidth)
 	if err != nil {
 		return nil, err
 	}
 	return &OfficePreview{Format: format, Page: pdf.Page, Metadata: pdf.Metadata}, nil
 }
 
-func (s *Service) renderEbook(ctx context.Context, path string, format fileinfo.DocumentFormat) (*EbookPreview, error) {
+func (s *Service) renderEbook(ctx context.Context, path string, format fileinfo.DocumentFormat, cellWidth int) (*EbookPreview, error) {
 	if s.tools.EbookConvert == "" {
 		return nil, fmt.Errorf("ebook preview: %w", ErrToolUnavailable)
 	}
@@ -68,7 +68,7 @@ func (s *Service) renderEbook(ctx context.Context, path string, format fileinfo.
 	if _, err := runCommand(ctx, s.maxToolOutput, s.tools.EbookConvert, path, output); err != nil {
 		return nil, fmt.Errorf("convert ebook to PDF: %w", err)
 	}
-	pdf, err := s.renderPDF(ctx, output)
+	pdf, err := s.renderPDF(ctx, output, cellWidth)
 	if err != nil {
 		return nil, err
 	}

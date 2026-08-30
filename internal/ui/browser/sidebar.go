@@ -34,7 +34,7 @@ func RenderSidebar(width, height int, s Styles, data Data) string {
 		textStyle := rowStyle
 		placeIconStyle := iconStyle
 		if item.Path == data.CWD {
-			prefix = "▌"
+			prefix = ""
 			textStyle = selectedStyle
 			placeIconStyle = selectedIconStyle
 		}

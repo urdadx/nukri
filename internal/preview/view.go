@@ -1,6 +1,7 @@
 package preview
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -19,6 +20,10 @@ type ViewOptions struct {
 	Width        int
 	ColumnOffset int
 	SyntaxStyle  string
+	// CodeWindow caps how many leading lines are rendered for syntax-highlighted
+	// code. When <= 0 the whole file is rendered. The UI grows this value to
+	// incrementally extend a code preview as the user scrolls.
+	CodeWindow int
 }
 
 // View is the presentation boundary consumed by a preview-pane UI. Visual is
@@ -30,6 +35,11 @@ type View struct {
 	Visual *Image
 	Footer string
 	Scroll ScrollMode
+	// TotalLines is the total number of lines the preview would render (the full
+	// source for code). Lines may hold only the first CodeWindow of them; the UI
+	// uses TotalLines to know when more can be incrementally loaded. 0 means the
+	// whole content is already present in Lines.
+	TotalLines int
 }
 
 func BuildView(value Preview, options ViewOptions) (View, error) {
@@ -42,6 +52,8 @@ func BuildView(value Preview, options ViewOptions) (View, error) {
 		return metadataVisualView("PDF", "First page", value.Metadata, &value.Page), nil
 	case *SVGPreview:
 		return View{Title: "SVG", Detail: imageDimensions(value.Image), Visual: &value.Image}, nil
+	case *ImagePreview:
+		return metadataVisualView("Image", imageDimensions(value.Image), value.Metadata, &value.Image), nil
 	case *OfficePreview:
 		return metadataVisualView(value.Format.DetailLabel(), "First page", value.Metadata, &value.Page), nil
 	case *EbookPreview:
@@ -53,7 +65,13 @@ func BuildView(value Preview, options ViewOptions) (View, error) {
 		}
 		return View{Title: "Markdown", Lines: strings.Split(strings.TrimSuffix(highlighted, "\n"), "\n"), Scroll: VerticalScroll}, nil
 	case *TextPreview:
-		return View{Title: value.Title, Lines: strings.Split(value.Text, "\n"), Scroll: VerticalScroll}, nil
+		if value.CodeLanguage != "" {
+			if highlighted, total, err := highlightCached(context.Background(), value.CodeLanguage, value.Text, options.SyntaxStyle, 0, options.CodeWindow); err == nil && len(highlighted) > 0 {
+				return View{Title: value.Title, Lines: highlighted, TotalLines: total, Scroll: VerticalScroll}, nil
+			}
+		}
+		lines := strings.Split(value.Text, "\n")
+		return View{Title: value.Title, Lines: lines, Scroll: VerticalScroll}, nil
 	case *DirectoryPreview:
 		return directoryView(value, width, options.ColumnOffset), nil
 	case *ArchivePreview:

@@ -72,8 +72,14 @@ type MarkdownPreview struct {
 }
 
 type TextPreview struct {
-	Title string
-	Text  string
+	Title   string
+	Text    string
+	CodeLanguage string
+}
+
+type ImagePreview struct {
+	Image    Image
+	Metadata []Field
 }
 
 type DirectoryPreview struct {
@@ -180,6 +186,7 @@ type ISOEntry struct {
 
 func (*PDFPreview) isPreview()       {}
 func (*SVGPreview) isPreview()       {}
+func (*ImagePreview) isPreview()     {}
 func (*OfficePreview) isPreview()    {}
 func (*EbookPreview) isPreview()     {}
 func (*MarkdownPreview) isPreview()  {}
