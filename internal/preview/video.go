@@ -12,7 +12,7 @@ import (
 
 func (s *Service) renderVideo(ctx context.Context, path string) (*VideoPreview, error) {
 	if s.tools.FFProbe == "" || s.tools.FFmpeg == "" {
-		return nil, fmt.Errorf("video preview: %w", ErrToolUnavailable)
+		return nil, fmt.Errorf("video preview: %w", ToolUnavailable("ffprobe/ffmpeg"))
 	}
 	output, err := runCommand(ctx, 1<<20, s.tools.FFProbe,
 		"-v", "error", "-show_format", "-show_streams", "-of", "json", path,

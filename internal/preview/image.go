@@ -57,7 +57,6 @@ func (s *Service) renderImage(ctx context.Context, path string, facts fileinfo.F
 				Width:     cached.Width,
 				Height:    cached.Height,
 			},
-			Metadata: s.imageMetadata(facts, cached.Format, cached.SrcW, cached.SrcH, cached.Size),
 		}, nil
 	}
 
@@ -97,7 +96,6 @@ func (s *Service) renderImage(ctx context.Context, path string, facts fileinfo.F
 			Width:     cacheW,
 			Height:    cacheH,
 		},
-		Metadata: s.imageMetadata(facts, format, width, height, info.Size()),
 	}, nil
 }
 
@@ -113,14 +111,6 @@ func (s *Service) imageTargetSize(cellWidth int) int {
 	return min(display, s.maxImageDimension)
 }
 
-func (s *Service) imageMetadata(_ fileinfo.FileFacts, format string, srcW, srcH int, size int64) []Field {
-	return []Field{
-		{Name: "Format", Value: formatLabel(format)},
-		{Name: "Dimensions", Value: fmt.Sprintf("%dx%d px", srcW, srcH)},
-		{Name: "Size", Value: describeImageSize(size)},
-	}
-}
-
 // fitImage returns the decoded image scaled down to fit within maxDimension on
 // its longest side, or the original when it already fits. Images that fit keep
 // their original type; oversized ones are scaled onto a new RGBA canvas.
@@ -134,33 +124,4 @@ func fitImage(src image.Image, width, height, maxDimension int) (image.Image, er
 	dst := image.NewRGBA(image.Rect(0, 0, dstWidth, dstHeight))
 	draw.CatmullRom.Scale(dst, dst.Bounds(), src, src.Bounds(), draw.Over, nil)
 	return dst, nil
-}
-
-func formatLabel(format string) string {
-	switch format {
-	case "jpeg":
-		return "JPEG"
-	case "png":
-		return "PNG"
-	case "gif":
-		return "GIF"
-	case "bmp":
-		return "BMP"
-	case "tiff":
-		return "TIFF"
-	case "webp":
-		return "WEBP"
-	default:
-		return format
-	}
-}
-
-func describeImageSize(size int64) string {
-	if size >= 1<<20 {
-		return fmt.Sprintf("%.1f MiB", float64(size)/(1<<20))
-	}
-	if size >= 1<<10 {
-		return fmt.Sprintf("%.1f KiB", float64(size)/(1<<10))
-	}
-	return fmt.Sprintf("%d bytes", size)
 }

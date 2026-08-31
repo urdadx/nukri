@@ -2,6 +2,7 @@ package preview
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"unicode"
 
@@ -13,6 +14,24 @@ var (
 	ErrToolUnavailable = errors.New("preview tool is unavailable")
 	ErrOutputTooLarge  = errors.New("preview output exceeds limit")
 )
+
+// ToolUnavailableError names the external command a preview needs. It wraps
+// ErrToolUnavailable so callers can detect the condition with errors.Is while
+// still surfacing which tool to install.
+type ToolUnavailableError struct {
+	Tool string
+}
+
+func (e *ToolUnavailableError) Error() string {
+	return fmt.Sprintf("preview tool %q is not installed", e.Tool)
+}
+
+func (e *ToolUnavailableError) Unwrap() error { return ErrToolUnavailable }
+
+// ToolUnavailable returns an error naming the missing external tool.
+func ToolUnavailable(tool string) error {
+	return &ToolUnavailableError{Tool: tool}
+}
 
 const (
 	DefaultMaxImageDimension   = 1600

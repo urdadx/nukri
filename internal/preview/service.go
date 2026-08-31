@@ -89,7 +89,7 @@ func (s *Service) Capabilities() Capabilities {
 	return Capabilities{
 		PDF:       s.tools.PDFInfo != "" && s.tools.PDFToCairo != "",
 		SVG:       true,
-		Archives:  s.tools.SevenZip != "",
+		Archives:  true, // ZIP-based containers (.zip/.jar/.cbz/.apk/...) list natively
 		Documents: s.tools.LibreOffice != "" && s.tools.PDFInfo != "" && s.tools.PDFToCairo != "",
 		EPUB:      true,
 		Ebooks:    s.tools.EbookConvert != "" && s.tools.PDFInfo != "" && s.tools.PDFToCairo != "",

@@ -28,7 +28,7 @@ func isEbook(format fileinfo.DocumentFormat) bool {
 
 func (s *Service) renderOfficeDocument(ctx context.Context, path string, format fileinfo.DocumentFormat, cellWidth int) (*OfficePreview, error) {
 	if s.tools.LibreOffice == "" {
-		return nil, fmt.Errorf("document preview: %w", ErrToolUnavailable)
+		return nil, fmt.Errorf("document preview: %w", ToolUnavailable("libreoffice"))
 	}
 	directory, err := os.MkdirTemp("", "nukri-office-*")
 	if err != nil {
@@ -57,7 +57,7 @@ func (s *Service) renderOfficeDocument(ctx context.Context, path string, format 
 
 func (s *Service) renderEbook(ctx context.Context, path string, format fileinfo.DocumentFormat, cellWidth int) (*EbookPreview, error) {
 	if s.tools.EbookConvert == "" {
-		return nil, fmt.Errorf("ebook preview: %w", ErrToolUnavailable)
+		return nil, fmt.Errorf("ebook preview: %w", ToolUnavailable("ebook-convert"))
 	}
 	directory, err := os.MkdirTemp("", "nukri-ebook-*")
 	if err != nil {

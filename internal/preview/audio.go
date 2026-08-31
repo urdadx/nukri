@@ -45,7 +45,7 @@ type ffprobeFormat struct {
 
 func (s *Service) renderAudio(ctx context.Context, path string) (*AudioPreview, error) {
 	if s.tools.FFProbe == "" || s.tools.FFmpeg == "" {
-		return nil, fmt.Errorf("audio preview: %w", ErrToolUnavailable)
+		return nil, fmt.Errorf("audio preview: %w", ToolUnavailable("ffprobe/ffmpeg"))
 	}
 	output, err := runCommand(ctx, 1<<20, s.tools.FFProbe,
 		"-v", "error", "-show_format", "-show_streams", "-of", "json", path,

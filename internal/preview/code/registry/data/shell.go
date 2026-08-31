@@ -60,4 +60,12 @@ var Shell = []registry.RegistryEntry{
 		[]string{"powershell", "pwsh", "ps1"},
 		[]string{"powershell", "pwsh", "ps1"},
 	),
+	registry.Entry(
+		registry.Language("bat", "Batch", registry.Chroma, nil),
+		[]string{"bat", "cmd", "btm"},
+		nil,
+		nil,
+		[]string{"bat", "batch", "dosbatch", "cmd"},
+		[]string{"bat", "batch", "dosbatch", "cmd"},
+	),
 }

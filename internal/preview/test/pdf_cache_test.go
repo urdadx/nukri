@@ -125,9 +125,9 @@ func TestPDFPreviewServesFromDiskCache(t *testing.T) {
 	}
 }
 
-// TestPDFPreviewRendersToDisplaySize verifies the page is rasterized at the
-// display target size (pdftocairo -scale-to) rather than always at the maximum,
-// and that a narrower pane yields a smaller page.
+// TestPDFPreviewRendersToDisplaySize verifies the page is rasterized at a
+// supersampled multiple of the display target size rather than always at the
+// maximum, and that a narrower pane yields a smaller page.
 func TestPDFPreviewRendersToDisplaySize(t *testing.T) {
 	service := preview.NewService()
 	requireCapability(t, service.Capabilities().PDF, "pdfinfo and pdftocairo")
@@ -135,14 +135,17 @@ func TestPDFPreviewRendersToDisplaySize(t *testing.T) {
 
 	small := renderPDFPreview(t, service, path, 60)
 	longestSmall, _ := orderedDims(small.Page.Width, small.Page.Height)
-	if longestSmall > 480 {
-		t.Fatalf("expected page longest side at display target 480, got %d", longestSmall)
+	if longestSmall <= 480 {
+		t.Fatalf("expected page supersampled above display target 480, got %d", longestSmall)
+	}
+	if longestSmall > 960 {
+		t.Fatalf("expected page longest side at supersampled target 960, got %d", longestSmall)
 	}
 
 	wide := renderPDFPreview(t, service, path, 0)
 	longestWide, _ := orderedDims(wide.Page.Width, wide.Page.Height)
 	if longestWide > 1600 {
-		t.Fatalf("expected page longest side at maxImageDimension 1600, got %d", longestWide)
+		t.Fatalf("expected page longest side capped at maxImageDimension 1600, got %d", longestWide)
 	}
 	if longestWide <= longestSmall {
 		t.Fatalf("expected wider target to yield a larger page; small=%d wide=%d", longestSmall, longestWide)

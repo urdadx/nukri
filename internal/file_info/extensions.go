@@ -148,6 +148,7 @@ func inspectProgrammingExtension(ext string) (FileFacts, bool) {
 		"c": "C source file", "h": "C header", "cpp": "C++ source file", "cc": "C++ source file", "cxx": "C++ source file",
 		"hpp": "C++ header", "hh": "C++ header", "hxx": "C++ header", "mk": "Makefile", "mak": "Makefile",
 		"sh": "Shell script", "bash": "Bash script", "zsh": "Zsh script", "ksh": "KornShell script", "fish": "Fish script",
+		"bat": "Batch file", "cmd": "Batch file", "btm": "Batch file",
 		"ps1": "PowerShell script", "psm1": "PowerShell module", "psd1": "PowerShell data file",
 		"py": "Python source file", "pyi": "Python stub file", "pyw": "Python script (no console)", "pyx": "Cython source file",
 		"rs": "Rust source file", "go": "Go source file", "java": "Java source file", "php": "PHP script", "swift": "Swift source file",

@@ -33,6 +33,7 @@ func RenderPreview(width, height, originX, originY int, visualState *VisualState
 				showingVisual = true
 				columns, rows := fitImageToPane(data.Preview.Visual.Width, data.Preview.Visual.Height, max(1, bodyWidth), max(1, height-4), defaultCellAspect)
 				visualState.renderVisual(visualWriter, data.Preview.Visual, originX, originY, columns, rows)
+				text = append(make([]string, rows), text...)
 			}
 			if data.Preview.Footer != "" {
 				text = append(text, "", muted.Render(data.Preview.Footer))

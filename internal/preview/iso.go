@@ -10,7 +10,7 @@ import (
 
 func (s *Service) renderISO(ctx context.Context, path string) (*ISOPreview, error) {
 	if s.tools.ISOInfo == "" {
-		return nil, fmt.Errorf("ISO preview: %w", ErrToolUnavailable)
+		return nil, fmt.Errorf("ISO preview: %w", ToolUnavailable("isoinfo"))
 	}
 	descriptor, err := runCommand(ctx, 1<<20, s.tools.ISOInfo, "-d", "-i", path)
 	if err != nil {

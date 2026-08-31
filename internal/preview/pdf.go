@@ -11,14 +11,22 @@ import (
 	"strings"
 )
 
+// pdfSupersample is the resolution multiplier applied to the PDF page on
+// rasterization. The page is rendered larger than the on-screen pixel size and
+// the terminal scales it down, which keeps text and vector detail crisp.
+// Rendering directly at the display size would force the terminal to upscale,
+// producing a blurry preview.
+const pdfSupersample = 2
+
 // renderPDF renders the first page of a PDF to a PNG preview. Rendering is
-// delegated to the external pdftocairo tool at the display target size. The
-// rendered page (and its metadata) is cached on disk keyed by the source file
-// identity and target size, so revisiting a PDF — or rendering the same size
-// again — skips the (relatively expensive) rasterization pass entirely.
+// delegated to the external pdftocairo tool at a supersampled resolution of the
+// display target size. The rendered page (and its metadata) is cached on disk
+// keyed by the source file identity and target size, so revisiting a PDF — or
+// rendering the same size again — skips the (relatively expensive)
+// rasterization pass entirely.
 func (s *Service) renderPDF(ctx context.Context, path string, cellWidth int) (*PDFPreview, error) {
 	if s.tools.PDFInfo == "" || s.tools.PDFToCairo == "" {
-		return nil, fmt.Errorf("PDF preview: %w", ErrToolUnavailable)
+		return nil, fmt.Errorf("PDF preview: %w", ToolUnavailable("pdftocairo/pdfinfo"))
 	}
 	info, err := os.Stat(path)
 	if err != nil {
@@ -29,6 +37,7 @@ func (s *Service) renderPDF(ctx context.Context, path string, cellWidth int) (*P
 	}
 
 	targetSize := s.imageTargetSize(cellWidth)
+	renderSize := min(targetSize*pdfSupersample, s.maxImageDimension)
 	cacheKey := s.imageCache.Key(path, info.Size(), info.ModTime(), targetSize)
 	if cached, ok := s.imageCache.Get(cacheKey); ok {
 		metadata, err := s.decodeMeta(cached.Metadata)
@@ -59,7 +68,7 @@ func (s *Service) renderPDF(ctx context.Context, path string, cellWidth int) (*P
 	prefix := filepath.Join(directory, "page")
 	_, err = runCommand(ctx, 64<<10, s.tools.PDFToCairo,
 		"-png", "-singlefile", "-f", "1", "-l", "1",
-		"-scale-to", strconv.Itoa(targetSize), path, prefix,
+		"-scale-to", strconv.Itoa(renderSize), path, prefix,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("render PDF first page: %w", err)

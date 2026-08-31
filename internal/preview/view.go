@@ -186,24 +186,10 @@ func csvView(value *CSVPreview, width, offset int) View {
 }
 
 func torrentView(value *TorrentPreview, width, offset int) View {
-	rows := make([][]string, 0, len(value.Files))
-	for _, file := range value.Files {
-		rows = append(rows, []string{formatByteSize(file.Size), file.Path})
-	}
-	lines, footer, horizontal := tableLines(
-		[]string{"Size", "Path"}, rows, len(value.Files), width, offset,
-	)
-	metadata := fieldLines(value.Metadata)
-	if len(metadata) != 0 && len(lines) != 0 {
-		metadata = append(metadata, "")
-	}
-	lines = append(metadata, lines...)
-	if value.Truncated {
-		footer = joinFooter(footer, "file listing truncated")
-	}
 	return View{
-		Title: value.Torrent.Name, Detail: "BitTorrent metainfo", Lines: lines,
-		Footer: footer, Scroll: tableScroll(horizontal),
+		Title:  value.Torrent.Name,
+		Detail: "BitTorrent metainfo",
+		Lines:  fieldLines(value.Metadata),
 	}
 }
 

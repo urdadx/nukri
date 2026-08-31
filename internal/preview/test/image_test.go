@@ -70,8 +70,8 @@ func TestRenderPNGImagePreview(t *testing.T) {
 	if len(image.Image.Data) == 0 {
 		t.Error("expected PNG data")
 	}
-	if len(image.Metadata) == 0 {
-		t.Error("expected metadata fields")
+	if len(image.Metadata) != 0 {
+		t.Errorf("expected no metadata fields, got %#v", image.Metadata)
 	}
 
 	view, err := preview.BuildView(result, preview.ViewOptions{Width: 40})

@@ -281,8 +281,11 @@ func renderPreview(service *preview.Service, req previewRequest) previewMsg {
 	if err != nil {
 		if errors.Is(err, preview.ErrUnsupported) {
 			err = fmt.Errorf("preview is not available for this file type")
-		} else if errors.Is(err, preview.ErrToolUnavailable) {
-			err = fmt.Errorf("the required preview tool is not installed")
+		} else {
+			var toolErr *preview.ToolUnavailableError
+			if errors.As(err, &toolErr) {
+				err = fmt.Errorf("install %s to preview this file", toolErr.Tool)
+			}
 		}
 		return previewMsg{path: req.entry.Entry.Path, err: err}
 	}
