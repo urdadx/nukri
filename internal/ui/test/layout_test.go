@@ -169,7 +169,7 @@ func TestEntryCursorMovement(t *testing.T) {
 	}
 }
 
-func TestEnterSelectedDirectory(t *testing.T) {
+func TestEnterSelectedEntry(t *testing.T) {
 	root := t.TempDir()
 	child := filepath.Join(root, "child")
 	if err := os.Mkdir(child, 0o700); err != nil {
@@ -200,8 +200,8 @@ func TestEnterSelectedDirectory(t *testing.T) {
 		t.Fatal("new directory selection should request a preview")
 	}
 	_, command := navigated.(ui.Model).Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if command != nil {
-		t.Fatal("enter on a regular file should not navigate")
+	if command == nil {
+		t.Fatal("enter on a regular file should request opening it")
 	}
 	parenting, parentCommand := navigated.(ui.Model).Update(tea.KeyMsg{Type: tea.KeyBackspace})
 	if parentCommand == nil {

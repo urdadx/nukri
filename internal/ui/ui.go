@@ -2,7 +2,9 @@ package ui
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -21,7 +23,11 @@ type Model struct {
 	backHistory    []historyEntry
 	forwardHistory []historyEntry
 	prefetchSeq    int
+	lastClickPath  string
+	lastClickAt    time.Time
 }
+
+const doubleClickWindow = 500 * time.Millisecond
 
 type historyEntry struct {
 	path         string
@@ -83,6 +89,17 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if message.Button == tea.MouseButtonLeft && message.Action == tea.MouseActionPress {
 			if path := m.sidebarPathAt(message.X, message.Y); path != "" {
 				return m.navigateTo(path, "", true)
+			}
+			if index := m.entryIndexAt(message.X, message.Y); index >= 0 {
+				return m.clickEntry(index, time.Now())
+			}
+		}
+		if m.mouseOverEntries(message.X, message.Y) {
+			switch message.Button {
+			case tea.MouseButtonWheelUp:
+				return m.moveSelection(-1)
+			case tea.MouseButtonWheelDown:
+				return m.moveSelection(1)
 			}
 		}
 		if m.mouseOverPreview(message.X, message.Y) {
@@ -166,10 +183,28 @@ func (m Model) enterSelected() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	entry := m.data.Entries[m.data.Selected].Entry
-	if !entry.IsDirectory() {
-		return m, nil
+	if entry.IsDirectory() {
+		return m.navigateTo(entry.Path, "", true)
 	}
-	return m.navigateTo(entry.Path, "", true)
+	return m, openFile(entry.Path)
+}
+
+func openFile(path string) tea.Cmd {
+	return func() tea.Msg {
+		_ = exec.Command("xdg-open", path).Run()
+		return nil
+	}
+}
+
+func (m Model) clickEntry(index int, clickedAt time.Time) (tea.Model, tea.Cmd) {
+	entry := m.data.Entries[index].Entry
+	doubleClick := index == m.data.Selected && entry.Path == m.lastClickPath && clickedAt.Sub(m.lastClickAt) <= doubleClickWindow
+	m.lastClickPath, m.lastClickAt = entry.Path, clickedAt
+	if !doubleClick {
+		return m.moveSelection(index - m.data.Selected)
+	}
+	m.lastClickPath, m.lastClickAt = "", time.Time{}
+	return m.enterSelected()
 }
 
 func (m Model) goParent() (tea.Model, tea.Cmd) {
@@ -268,6 +303,35 @@ func (m Model) mouseOverPreview(x, y int) bool {
 		return x >= layout.SidebarWidth && x < m.width && y >= layout.FilesHeight
 	}
 	return x >= layout.SidebarWidth+layout.FilesWidth && x < m.width
+}
+
+func (m Model) mouseOverEntries(x, y int) bool {
+	layout := browser.ResolveLayout(m.width, max(1, m.height-1))
+	if x < layout.SidebarWidth || x >= layout.SidebarWidth+layout.FilesWidth || y < 0 || y >= m.height-1 {
+		return false
+	}
+	return !layout.Stacked || y < layout.FilesHeight
+}
+
+func (m Model) entryIndexAt(x, y int) int {
+	if !m.mouseOverEntries(x, y) || y < 3 {
+		return -1
+	}
+	layout := browser.ResolveLayout(m.width, max(1, m.height-1))
+	visibleRows := max(0, layout.FilesHeight-4)
+	row := y - 3
+	if row >= visibleRows {
+		return -1
+	}
+	start := 0
+	if m.data.Selected >= visibleRows {
+		start = m.data.Selected - visibleRows + 1
+	}
+	index := start + row
+	if index >= len(m.data.Entries) {
+		return -1
+	}
+	return index
 }
 
 func (m Model) moveSelection(delta int) (tea.Model, tea.Cmd) {
