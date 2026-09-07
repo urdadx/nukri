@@ -20,9 +20,11 @@ type previewRequest struct {
 	codeWindow int
 }
 
-// previewJob is a unit of preview work handed to a pool worker. Each submitter
-// attaches its own result channel; the worker fans the single result out to
-// every subscriber, so concurrent identical requests all observe a value.
+/*
+previewJob is a unit of preview work handed to a pool worker. Each submitter
+attaches its own result channel; the worker fans the single result out to
+every subscriber, so concurrent identical requests all observe a value.
+*/
 type previewJob struct {
 	key    string
 	req    previewRequest
@@ -33,26 +35,32 @@ type previewJob struct {
 	cancel atomic.Bool
 }
 
-// PreviewPool runs preview rendering on a fixed set of worker goroutines so the
-// UI event loop is never blocked by file decoding, PDF rendering or syntax
-// highlighting. It mirrors the way file managers offload preview work to a
-// background thread pool:
-//
-//   - a shared set of workers consumes both a high-priority queue (the currently
-//     selected entry) and a low-priority queue (prefetched neighbors);
-//   - requests are de-duplicated by key and stale in-flight renders are cancelled
-//     as soon as a newer selection takes precedence;
-//   - completed renders are cached by key so revisiting a file is instant.
+/*
+PreviewPool runs preview rendering on a fixed set of worker goroutines so the
+UI event loop is never blocked by file decoding, PDF rendering or syntax
+highlighting. It mirrors the way file managers offload preview work to a
+background thread pool:
+
+  - a shared set of workers consumes both a high-priority queue (the currently
+    selected entry) and a low-priority queue (prefetched neighbors);
+  - requests are de-duplicated by key and stale in-flight renders are cancelled
+    as soon as a newer selection takes precedence;
+  - completed renders are cached by key so revisiting a file is instant.
+*/
 type PreviewPool struct {
 	svc  *preview.Service
 	high chan *previewJob
 	low  chan *previewJob
-
+	/*
+		mu guards the active map, which tracks in-flight jobs by key. It is not held
+		while a worker is executing a job, so the map is only used to de-duplicate
+		and cancel work, not to store results.
+	*/
 	mu     sync.Mutex
 	active map[string]*previewJob
 
-	cacheMu   sync.Mutex
-	cache     map[string]tea.Msg
+	cacheMu    sync.Mutex
+	cache      map[string]tea.Msg
 	cacheOrder []string
 
 	done chan struct{}
@@ -90,6 +98,9 @@ func (p *PreviewPool) Close() {
 	p.wg.Wait()
 }
 
+// worker is the main loop of a single preview renderer goroutine. It consumes
+// jobs from the high-priority queue first, then the low-priority queue. It
+// exits when the pool is closed.
 func (p *PreviewPool) worker() {
 	defer p.wg.Done()
 	for {
@@ -110,6 +121,9 @@ func (p *PreviewPool) worker() {
 	}
 }
 
+// execute performs the actual preview work on a worker goroutine. It checks the
+// cache first, then calls the service to render the preview. It stores the result
+// in the cache and fans it out to all subscribers.
 func (p *PreviewPool) execute(job *previewJob) {
 	defer p.forget(job.key)
 
@@ -131,9 +145,11 @@ func (p *PreviewPool) execute(job *previewJob) {
 	job.complete(msg)
 }
 
-// complete delivers the final message to every subscriber of the job and closes
-// each result channel. It is idempotent: a later caller that subscribed after
-// completion receives the stored result.
+/*
+complete delivers the final message to every subscriber of the job and closes
+each result channel. It is idempotent: a later caller that subscribed after
+completion receives the stored result.
+*/
 func (j *previewJob) complete(msg tea.Msg) {
 	j.mu.Lock()
 	if j.closed {
@@ -168,10 +184,12 @@ func (j *previewJob) subscribe() <-chan tea.Msg {
 	return ch
 }
 
-// Submit queues a preview render and returns a channel that yields exactly one
-// message when the work finishes (or is cancelled). The channel is closed
-// afterwards. When the result is already cached it is returned immediately.
-// codeWindow caps the number of leading code lines rendered (0 = whole file).
+/*
+Submit queues a preview render and returns a channel that yields exactly one
+message when the work finishes (or is cancelled). The channel is closed
+afterwards. When the result is already cached it is returned immediately.
+codeWindow caps the number of leading code lines rendered (0 = whole file).
+*/
 func (p *PreviewPool) Submit(entry browser.Entry, width int, syntax string, codeWindow int, high bool) <-chan tea.Msg {
 	key := previewKey(entry, width, syntax, codeWindow)
 	if cached, ok := p.lookup(key); ok {
@@ -229,6 +247,8 @@ func (p *PreviewPool) lookup(key string) (tea.Msg, bool) {
 	return msg, ok
 }
 
+// store caches a preview message by its key in a simple LRU.
+// It is called only by a worker after the job has completed.
 func (p *PreviewPool) store(key string, msg tea.Msg) {
 	p.cacheMu.Lock()
 	defer p.cacheMu.Unlock()
@@ -252,11 +272,13 @@ func (p *PreviewPool) store(key string, msg tea.Msg) {
 	}
 }
 
-// PreviewKey returns the cache-key string used to de-duplicate and cache a
-// preview request. It is exported so external packages (e.g. tests) can reason
-// about cache identity. Two requests share a cache entry only when the path, on
-// disk size, modification time, preview width, highlight syntax and code window
-// all match.
+/*
+PreviewKey returns the cache-key string used to de-duplicate and cache a
+preview request. It is exported so external packages (e.g. tests) can reason
+about cache identity. Two requests share a cache entry only when the path, on
+disk size, modification time, preview width, highlight syntax and code window
+all match.
+*/
 func PreviewKey(entry browser.Entry, width int, syntax string, codeWindow int) string {
 	return previewKey(entry, width, syntax, codeWindow)
 }

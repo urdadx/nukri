@@ -18,17 +18,22 @@ var codeHighlightService = backend.New()
 
 var codeNewlinePattern = regexp.MustCompile(`\r?\n`)
 
-// defaultCodeWindow is the number of leading lines rendered into the initial
-// View for a highlighted code file. Rendering only a window keeps the first
-// paint cheap for very large sources; the UI extends the window on scroll by
-// re-requesting with a larger count, which cheaply reuses the disk cache.
+/*
+defaultCodeWindow is the number of leading lines rendered into the initial
+View for a highlighted code file. Rendering only a window keeps the first
+paint cheap for very large sources; the UI extends the window on scroll by
+re-requesting with a larger count, which cheaply reuses the disk cache.
+*/
 const defaultCodeWindow = 256
 
-// highlightCodeLines returns the source code rendered as ANSI-coloured lines,
-// styled with the named Chroma style. Lines are returned plain when no lexer
-// or token style applies to them.
+/*
+highlightCodeLines returns the source code rendered as ANSI-coloured lines,
+styled with the named Chroma style. Lines are returned plain when no lexer
+or token style applies to them.
+*/
 func highlightCodeLines(ctx context.Context, codeSyntax, source, styleName string) ([]string, error) {
 	language, ok := registry.LanguageForCodeSyntax(codeSyntax)
+	// use chroma lexer for unknown languages so we can still highlight them with the fallback lexer.
 	if !ok {
 		language = registry.Language(codeSyntax, codeSyntax, registry.Chroma, nil)
 	}
@@ -39,14 +44,17 @@ func highlightCodeLines(ctx context.Context, codeSyntax, source, styleName strin
 	return renderTokenLines(result.Tokens, styleName), nil
 }
 
-// highlightCached renders highlighted code, serving previously-computed results
-// from the on-disk cache so re-renders (pane resize, extended scroll window,
-// revisit) never re-run the highlighter. It returns the rendered lines window
-// [start, start+count) and the total number of lines available. The complete
-// highlighted result is written back to the cache on the first (cache-miss)
-// render. When count <= 0 the whole file is returned.
+/*
+highlightCached returns the highlighted code for a given source, language, and style.
+It attempts to fetch the result from the on-disk cache so re-renders (pane resize, extended scroll window,
+revisit) never re-run the highlighter. It returns the rendered lines window
+[start, start+count) and the total number of lines available. The complete
+highlighted result is written back to the cache on the first (cache-miss)
+render. When count <= 0 the whole file is returned.
+*/
 func highlightCached(ctx context.Context, codeSyntax, source, styleName string, start, count int) ([]string, int, error) {
 	language, ok := registry.LanguageForCodeSyntax(codeSyntax)
+	// use chroma lexer for unknown languages so we can still highlight them with the fallback lexer.
 	if !ok {
 		language = registry.Language(codeSyntax, codeSyntax, registry.Chroma, nil)
 	}
@@ -76,10 +84,12 @@ func renderTokenLines(tokens []backend.Token, styleName string) []string {
 	return strings.Split(strings.TrimSuffix(output, "\n"), "\n")
 }
 
-// renderTokenString builds the highlighted token output as a single string with
-// lines separated by newlines and a trailing newline, without allocating a line
-// slice. This lets huge files be cached and windowed without materializing every
-// line.
+/*
+renderTokenString builds the highlighted token output as a single string with
+lines separated by newlines and a trailing newline, without allocating a line
+slice. This lets huge files be cached and windowed without materializing every
+line.
+*/
 func renderTokenString(tokens []backend.Token, styleName string) string {
 	style := styles.Get(styleName)
 	if style == nil {
@@ -92,11 +102,13 @@ func renderTokenString(tokens []backend.Token, styleName string) string {
 	return output.String()
 }
 
-// codeWindow returns the lines [start, start+count) of a newline-delimited
-// rendered block (an optional trailing newline terminates the final line rather
-// than creating an empty extra line). It scans the block to isolate only the
-// requested window, so a large cached file never needs its full line list
-// materialized. count <= 0 returns every line.
+/*
+codeWindow returns the lines [start, start+count) of a newline-delimited
+rendered block (an optional trailing newline terminates the final line rather
+than creating an empty extra line). It scans the block to isolate only the
+requested window, so a large cached file never needs its full line list
+materialized. count <= 0 returns every line.
+*/
 func codeWindow(content string, start, count int) []string {
 	if content == "" {
 		return []string{}

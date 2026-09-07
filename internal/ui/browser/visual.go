@@ -25,7 +25,7 @@ type VisualState struct {
 
 // renderVisual transmits the given image only when it differs from the last
 // placed image (by content and pane geometry). When unchanged it performs no
-// work, mirroring elio's no-op presentation path for static previews.
+// work.
 func (s *VisualState) renderVisual(writer io.Writer, image *preview.Image, x, y, columns, rows int) {
 	if image == nil || writer == nil {
 		return

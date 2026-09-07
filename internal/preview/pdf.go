@@ -11,19 +11,23 @@ import (
 	"strings"
 )
 
-// pdfSupersample is the resolution multiplier applied to the PDF page on
-// rasterization. The page is rendered larger than the on-screen pixel size and
-// the terminal scales it down, which keeps text and vector detail crisp.
-// Rendering directly at the display size would force the terminal to upscale,
-// producing a blurry preview.
+/*
+pdfSupersample is the resolution multiplier applied to the PDF page on
+rasterization. The page is rendered larger than the on-screen pixel size and
+the terminal scales it down, which keeps text and vector detail crisp.
+Rendering directly at the display size would force the terminal to upscale,
+producing a blurry preview.
+*/
 const pdfSupersample = 2
 
-// renderPDF renders the first page of a PDF to a PNG preview. Rendering is
-// delegated to the external pdftocairo tool at a supersampled resolution of the
-// display target size. The rendered page (and its metadata) is cached on disk
-// keyed by the source file identity and target size, so revisiting a PDF — or
-// rendering the same size again — skips the (relatively expensive)
-// rasterization pass entirely.
+/*
+renderPDF renders the first page of a PDF to a PNG preview. Rendering is
+delegated to the external pdftocairo tool at a supersampled resolution of the
+display target size. The rendered page (and its metadata) is cached on disk
+keyed by the source file identity and target size, so revisiting a PDF — or
+rendering the same size again — skips the (relatively expensive)
+rasterization pass entirely.
+*/
 func (s *Service) renderPDF(ctx context.Context, path string, cellWidth int) (*PDFPreview, error) {
 	if s.tools.PDFInfo == "" || s.tools.PDFToCairo == "" {
 		return nil, fmt.Errorf("PDF preview: %w", ToolUnavailable("pdftocairo/pdfinfo"))
@@ -100,9 +104,11 @@ func (s *Service) decodeMeta(data []byte) ([]Field, error) {
 	return fields, nil
 }
 
-// pdfMetadata runs pdfinfo to gather PDF metadata. This is cheap relative to the
-// page rasterization, and its result is stored in the page cache so it is not
-// re-run on a cache hit.
+/*
+pdfMetadata runs pdfinfo to gather PDF metadata. This is cheap relative to the
+page rasterization, and its result is stored in the page cache so it is not
+re-run on a cache hit.
+*/
 func (s *Service) pdfMetadata(ctx context.Context, path string) ([]Field, error) {
 	metadataOutput, err := runCommand(ctx, 256<<10, s.tools.PDFInfo, path)
 	if err != nil {
@@ -123,6 +129,11 @@ func parsePDFInfo(output string) []Field {
 	return fields
 }
 
+/*
+readPNG reads a PNG file from disk and returns its contents as an Image. It
+enforces maximum size and dimension limits to avoid loading excessively large
+images into memory.
+*/
 func readPNG(path string, maximumBytes int64, maximumDimension int) (Image, error) {
 	file, err := os.Open(path)
 	if err != nil {

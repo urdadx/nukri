@@ -24,11 +24,7 @@ func RenderList(width, height int, s Styles, data Data) string {
 	rowStyle := lipgloss.NewStyle().Foreground(s.PanelFG).Background(s.PanelBG)
 	selectedStyle := rowStyle.Foreground(s.SelectedFG).Background(s.SelectedBG).Bold(true)
 	metadataStyle := rowStyle.Foreground(s.SidebarFG)
-	nameColumn := 1
-	for _, item := range data.Entries {
-		nameColumn = max(nameColumn, lipgloss.Width(item.Entry.Name))
-	}
-	nameColumn = min(nameColumn+6, max(1, width-27))
+	nameColumn := max(1, width-27)
 	for i := start; i < end; i++ {
 		item := data.Entries[i]
 		entry := item.Entry
@@ -43,7 +39,7 @@ func RenderList(width, height int, s Styles, data Data) string {
 					detail = fmt.Sprintf("%d items", *item.ItemCount)
 				}
 			}
-			metadata = fmt.Sprintf("%-10s %9s", detail, formatModified(entry.Modified))
+			metadata = fmt.Sprintf("%10s %9s", detail, formatModified(entry.Modified))
 		}
 		name := truncate(entry.Name, max(1, nameWidth))
 		prefix := "  "

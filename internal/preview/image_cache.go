@@ -13,8 +13,7 @@ import (
 
 // imageCache persists downscaled, PNG-encoded image previews on disk so that
 // revisiting a file (or re-rendering at the same display size) does not repeat
-// the expensive decode + downscale + encode pass. It mirrors how terminal file
-// managers render images to a cached size rather than re-decoding the source.
+// the expensive decode + downscale + encode pass.
 type imageCache struct {
 	dir   string
 	limit int

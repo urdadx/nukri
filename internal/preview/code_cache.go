@@ -11,11 +11,14 @@ import (
 	"time"
 )
 
-// codeCache persists fully-highlighted source on disk so revisiting a file (or
-// re-rendering at a different pane size or scroll window) does not re-run the
-// syntax highlighter. It is keyed by a hash of the source text plus the language
-// and style, so any two identical highlight requests share a single entry
-// regardless of where the file lives.
+/*
+codeCache persists fully-highlighted source on disk so revisiting a file (or
+re-rendering at a different pane size or scroll window) does not re-run the
+syntax highlighter. It is keyed by a hash of the source text plus the language
+and style, so any two identical highlight requests share a single entry
+regardless of where the file lives.
+*/
+
 type codeCache struct {
 	dir   string
 	limit int
@@ -26,9 +29,11 @@ const (
 	codeCacheVersion      = "v1"
 )
 
-// codeCacheService is the shared, process-wide code highlight cache. Code
-// highlighting is a pure function of (source, language, style), so one shared
-// disk cache serves every preview service instance.
+/*
+codeCacheService is the shared, process-wide code highlight cache. Code
+highlighting is a pure function of (source, language, style), so one shared
+disk cache serves every preview service instance.
+*/
 var codeCacheService = newCodeCache("")
 
 func newCodeCache(dir string) *codeCache {
@@ -38,9 +43,11 @@ func newCodeCache(dir string) *codeCache {
 	return &codeCache{dir: dir, limit: codeCacheDefaultLimit}
 }
 
-// key returns the disk identity for a highlight request. The source is
-// content-addressed so the same rendered file is reused across pane sizes and
-// sessions.
+/*
+key returns the disk identity for a highlight request. The source is
+content-addressed so the same rendered file is reused across pane sizes and
+sessions.
+*/
 func (c *codeCache) key(source, language, style string) string {
 	sum := sha256.Sum256([]byte(source))
 	return fmt.Sprintf("%s|%s|%s|%s", hex.EncodeToString(sum[:]), language, style, codeCacheVersion)
@@ -76,6 +83,10 @@ func (c *codeCache) path(key string) string {
 	return filepath.Join(c.dir, fmt.Sprintf("code-%016x.hl", h.Sum64()))
 }
 
+/*
+evictIfNeeded removes the oldest entries from the cache until the total
+number of entries is below the limit. It is called after a new entry is added.
+*/
 func (c *codeCache) evictIfNeeded() {
 	entries, err := os.ReadDir(c.dir)
 	if err != nil {

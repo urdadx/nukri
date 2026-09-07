@@ -117,6 +117,7 @@ func BuildView(value Preview, options ViewOptions) (View, error) {
 	}
 }
 
+// metadataVisualView returns a view with a metadata table and an optional visual image. The visual is nil when the preview has no image.
 func metadataVisualView(title, detail string, fields []Field, visual *Image) View {
 	return View{
 		Title: title, Detail: detail, Lines: fieldLines(fields), Visual: visual,

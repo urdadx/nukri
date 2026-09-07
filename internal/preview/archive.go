@@ -73,6 +73,7 @@ func parseSevenZipListing(output string, maximumEntries int) Archive {
 	archive := Archive{}
 	entry := ArchiveEntry{}
 	hasEntry := false
+	// why do we need to flush? because the 7z output is a series of key-value pairs, and an empty line indicates the end of an entry. So we need to flush the current entry when we encounter an empty line, or when we reach the maximum number of entries.
 	flush := func() bool {
 		if !hasEntry || entry.Path == "" {
 			entry = ArchiveEntry{}

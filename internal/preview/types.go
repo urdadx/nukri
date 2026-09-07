@@ -91,8 +91,8 @@ type MarkdownPreview struct {
 }
 
 type TextPreview struct {
-	Title   string
-	Text    string
+	Title        string
+	Text         string
 	CodeLanguage string
 }
 
@@ -331,6 +331,7 @@ type Capabilities struct {
 	ISO       bool
 }
 
+// this function removes control characters from a string, which can be useful for sanitizing file names or other text that may contain non-printable characters.
 func safeText(value string) string {
 	return strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) {
