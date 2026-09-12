@@ -10,6 +10,7 @@ require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
 	github.com/charmbracelet/x/ansi v0.10.2
+	github.com/charmbracelet/x/term v0.2.1
 	github.com/gen2brain/avif v0.6.0
 	github.com/mathieu-keller/epub-parser/v2 v2.0.18
 	github.com/mattn/go-runewidth v0.0.17
@@ -36,7 +37,6 @@ require (
 	github.com/benoitkugler/textprocessing v0.0.6 // indirect
 	github.com/charmbracelet/colorprofile v0.2.3-0.20250311203215-f60798e515dc // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.13 // indirect
-	github.com/charmbracelet/x/term v0.2.1 // indirect
 	github.com/dlclark/regexp2/v2 v2.2.1 // indirect
 	github.com/ebitengine/purego v0.10.1 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect

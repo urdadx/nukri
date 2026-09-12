@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/urdadx/nukri/internal/kittydnd"
 	"github.com/urdadx/nukri/internal/preview"
 	"github.com/urdadx/nukri/internal/theme"
 	"github.com/urdadx/nukri/internal/ui/browser"
@@ -25,6 +27,10 @@ type Model struct {
 	prefetchSeq    int
 	lastClickPath  string
 	lastClickAt    time.Time
+	dragCandidate  string
+	dragPayload    []byte
+	dragActive     bool
+	dragOutput     io.Writer
 }
 
 const doubleClickWindow = 500 * time.Millisecond
@@ -37,6 +43,11 @@ type historyEntry struct {
 func New(t theme.Theme) Model {
 	svc := preview.NewService()
 	return Model{width: 120, height: 32, styles: NewStyles(t), preview: svc, previewPool: NewPreviewPool(svc, 2), visualState: &browser.VisualState{}, data: browser.Data{Selected: -1, PreviewSelected: -1}}
+}
+
+func (m Model) WithDragOutput(output io.Writer) Model {
+	m.dragOutput = output
+	return m
 }
 
 func (Model) Init() tea.Cmd { return loadFilesystem }
@@ -91,8 +102,12 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				return m.navigateTo(path, "", true)
 			}
 			if index := m.entryIndexAt(message.X, message.Y); index >= 0 {
+				m.dragCandidate = m.data.Entries[index].Entry.Path
 				return m.clickEntry(index, time.Now())
 			}
+		}
+		if message.Button == tea.MouseButtonLeft && message.Action == tea.MouseActionRelease {
+			m.dragCandidate = ""
 		}
 		if m.mouseOverEntries(message.X, message.Y) {
 			switch message.Button {
@@ -112,6 +127,8 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
+	case kittydnd.Event:
+		return m.handleDragEvent(message)
 	case tea.KeyMsg:
 		switch message.String() {
 		case "q", "ctrl+c":
@@ -203,8 +220,49 @@ func (m Model) clickEntry(index int, clickedAt time.Time) (tea.Model, tea.Cmd) {
 	if !doubleClick {
 		return m.moveSelection(index - m.data.Selected)
 	}
+	m.dragCandidate = ""
 	m.lastClickPath, m.lastClickAt = "", time.Time{}
 	return m.enterSelected()
+}
+
+func (m Model) handleDragEvent(event kittydnd.Event) (tea.Model, tea.Cmd) {
+	if m.dragOutput == nil {
+		return m, nil
+	}
+	switch event.Kind {
+	case kittydnd.DragOffer:
+		if m.dragActive {
+			return m, nil
+		}
+		path := m.dragCandidate
+		if path == "" {
+			if index := m.entryIndexAt(event.X, event.Y); index >= 0 {
+				path = m.data.Entries[index].Entry.Path
+			}
+		}
+		payload, sequence := kittydnd.StartSequence([]string{path}, m.dragLabel(path))
+		_, _ = io.WriteString(m.dragOutput, sequence)
+		if len(payload) > 0 {
+			m.dragPayload = payload
+			m.dragActive = true
+		}
+	case kittydnd.DragDataRequested:
+		_, _ = io.WriteString(m.dragOutput, kittydnd.DataSequence(event.MIME, m.dragPayload))
+	case kittydnd.DragEnded, kittydnd.DragError:
+		m.dragCandidate = ""
+		m.dragPayload = nil
+		m.dragActive = false
+	}
+	return m, nil
+}
+
+func (m Model) dragLabel(path string) string {
+	for _, item := range m.data.Entries {
+		if item.Entry.Path == path {
+			return item.Icon + " " + item.Entry.Name
+		}
+	}
+	return ""
 }
 
 func (m Model) goParent() (tea.Model, tea.Cmd) {
