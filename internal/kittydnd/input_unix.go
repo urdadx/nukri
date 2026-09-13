@@ -15,6 +15,7 @@ type Input struct {
 	tty    *os.File
 	reader *io.PipeReader
 	events chan Event
+	parser Parser
 }
 
 func OpenInput() (*Input, error) {
@@ -74,7 +75,7 @@ func (i *Input) flush(buffer []byte, writer io.Writer) []byte {
 		if end < 0 {
 			return buffer
 		}
-		if event, ok := parseEvent(buffer[:end]); ok {
+		if event, ok := i.parser.Parse(buffer[:end]); ok {
 			i.events <- event
 		}
 		buffer = buffer[end:]

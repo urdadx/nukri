@@ -6,18 +6,33 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
 const (
-	uriListMIME = "text/uri-list"
-	chunkSize   = 4096
+	uriListMIME  = "text/uri-list"
+	chunkSize    = 4096
+	maxDropBytes = 16 << 20
+)
+
+type Operation uint8
+
+const (
+	Copy Operation = iota + 1
+	Move
+	Either
 )
 
 type EventKind uint8
 
 const (
-	DragOffer EventKind = iota
+	DropOffer EventKind = iota
+	DropLeave
+	DropData
+	DropDataError
+	DropUnsupported
+	DragOffer
 	DragDataRequested
 	DragEnded
 	DragError
@@ -25,19 +40,40 @@ const (
 )
 
 type Event struct {
-	Kind EventKind
-	X    int
-	Y    int
-	MIME int
+	Kind               EventKind
+	X, Y               int
+	MIME               int
+	Operation          Operation
+	Final              bool
+	Paths              []string
+	UnsupportedSchemes []string
+	Error              string
 }
 
 func EnableSequence(machineID string) string {
-	return fmt.Sprintf("\x1b]72;t=o:x=1;%s\x1b\\", machineID)
+	return fmt.Sprintf("\x1b]72;t=a;%s\x1b\\\x1b]72;t=o:x=1;%s\x1b\\", uriListMIME, machineID)
 }
 
-func DisableSequence() string { return "\x1b]72;t=o:x=2\x1b\\" }
+func DisableSequence() string { return "\x1b]72;t=A\x1b\\\x1b]72;t=o:x=2\x1b\\" }
+func CancelSequence() string  { return "\x1b]72;t=E:y=-1\x1b\\" }
 
-func CancelSequence() string { return "\x1b]72;t=E:y=-1\x1b\\" }
+func AcceptDropSequence(operation Operation) string {
+	if operation == Either {
+		operation = Move
+	}
+	return fmt.Sprintf("\x1b]72;t=m:o=%d;%s\x1b\\", operation, uriListMIME)
+}
+
+func RejectDropSequence() string { return "\x1b]72;t=m:o=0\x1b\\" }
+func RequestDropDataSequence(mime int) string {
+	return fmt.Sprintf("\x1b]72;t=r:x=%d\x1b\\", mime)
+}
+func FinishDropSequence(operation Operation) string {
+	if operation != Copy && operation != Move {
+		return "\x1b]72;t=r:o=0\x1b\\"
+	}
+	return fmt.Sprintf("\x1b]72;t=r:o=%d\x1b\\", operation)
+}
 
 func StartSequence(paths []string, label string) ([]byte, string) {
 	payload := URIListPayload(paths)
@@ -105,35 +141,118 @@ func payloadSequence(metadata string, data []byte, finish bool) string {
 	return result.String()
 }
 
-func parseEvent(sequence []byte) (Event, bool) {
+type Parser struct {
+	dropFields fields
+	dropData   []byte
+	dropActive bool
+}
+
+type fields struct {
+	typeCode  byte
+	x, y      int
+	operation Operation
+	more      *bool
+}
+
+func (p *Parser) Parse(sequence []byte) (Event, bool) {
 	body := strings.TrimSuffix(strings.TrimSuffix(string(sequence), "\x1b\\"), "\a")
 	body = strings.TrimPrefix(body, "\x1b]72;")
 	metadata, payload, _ := strings.Cut(body, ";")
-	fields := strings.Split(metadata, ":")
-	values := make(map[byte]int)
-	var eventType byte
-	for _, field := range fields {
+	parsed := parseFields(metadata)
+	if len(payload) > maxDropBytes {
+		p.reset()
+		return Event{Kind: DropDataError, Error: "drop data is too large"}, true
+	}
+	if p.dropActive {
+		if len(p.dropData)+len(payload) > maxDropBytes {
+			p.reset()
+			return Event{Kind: DropDataError, Error: "drop data is too large"}, true
+		}
+		p.dropData = append(p.dropData, payload...)
+		if parsed.more != nil && *parsed.more {
+			return Event{}, false
+		}
+		fields, data := p.dropFields, p.dropData
+		p.reset()
+		return dropDataEvent(fields.x, data)
+	}
+	if parsed.typeCode == 'r' && (parsed.more != nil && *parsed.more || parsed.more == nil && payload != "") {
+		p.dropActive, p.dropFields = true, parsed
+		p.dropData = append(p.dropData, payload...)
+		return Event{}, false
+	}
+	return eventFromParts(parsed, payload)
+}
+
+func (p *Parser) reset() {
+	p.dropFields, p.dropData, p.dropActive = fields{}, nil, false
+}
+
+func parseFields(metadata string) fields {
+	result := fields{x: -1, y: -1}
+	for _, field := range strings.Split(metadata, ":") {
 		key, value, found := strings.Cut(field, "=")
 		if !found || len(key) != 1 {
 			continue
 		}
-		var parsed int
-		if _, err := fmt.Sscanf(value, "%d", &parsed); err == nil {
-			values[key[0]] = parsed
-		}
 		if key == "t" && len(value) == 1 {
-			eventType = value[0]
+			result.typeCode = value[0]
+			continue
+		}
+		parsed, err := strconv.Atoi(value)
+		if err != nil {
+			continue
+		}
+		switch key {
+		case "x":
+			result.x = parsed
+		case "y":
+			result.y = parsed
+		case "o":
+			result.operation = Operation(parsed)
+		case "m":
+			more := parsed != 0
+			result.more = &more
 		}
 	}
-	switch eventType {
+	return result
+}
+
+func eventFromParts(fields fields, payload string) (Event, bool) {
+	switch fields.typeCode {
+	case 'm', 'M':
+		if fields.typeCode == 'm' && fields.x == -1 && fields.y == -1 {
+			return Event{Kind: DropLeave}, true
+		}
+		mime := 0
+		for index, offered := range strings.Fields(payload) {
+			if offered == uriListMIME {
+				mime = index + 1
+				break
+			}
+		}
+		if mime == 0 || fields.operation < Copy || fields.operation > Either {
+			return Event{Kind: DropUnsupported, Final: fields.typeCode == 'M'}, true
+		}
+		return Event{Kind: DropOffer, MIME: mime, Operation: fields.operation, Final: fields.typeCode == 'M'}, true
+	case 'r':
+		if payload == "" && fields.more != nil && !*fields.more {
+			return Event{}, false
+		}
+		return dropDataEvent(fields.x, []byte(payload))
+	case 'R':
+		return Event{Kind: DropDataError, MIME: fields.x, Error: payload}, true
 	case 'o':
-		return Event{Kind: DragOffer, X: values['x'], Y: values['y']}, true
+		if fields.x < 0 || fields.y < 0 {
+			return Event{}, false
+		}
+		return Event{Kind: DragOffer, X: fields.x, Y: fields.y}, true
 	case 'e':
-		switch values['x'] {
+		switch fields.x {
 		case 4:
 			return Event{Kind: DragEnded}, true
 		case 5:
-			return Event{Kind: DragDataRequested, MIME: values['y']}, true
+			return Event{Kind: DragDataRequested, MIME: fields.y}, true
 		default:
 			return Event{Kind: DragOther}, true
 		}
@@ -141,8 +260,53 @@ func parseEvent(sequence []byte) (Event, bool) {
 		if payload == "OK" {
 			return Event{Kind: DragOther}, true
 		}
-		return Event{Kind: DragError}, true
+		return Event{Kind: DragError, Error: payload}, true
 	default:
 		return Event{}, false
 	}
+}
+
+func dropDataEvent(mime int, encoded []byte) (Event, bool) {
+	data, err := base64.StdEncoding.DecodeString(string(encoded))
+	if err != nil {
+		data, err = base64.RawStdEncoding.DecodeString(string(encoded))
+	}
+	if err != nil {
+		return Event{Kind: DropDataError, MIME: mime, Error: "invalid drop data"}, true
+	}
+	paths, unsupported := parseURIList(string(data))
+	return Event{Kind: DropData, MIME: mime, Paths: paths, UnsupportedSchemes: unsupported}, true
+}
+
+func parseURIList(data string) ([]string, []string) {
+	var paths, unsupported []string
+	seenPaths, seenSchemes := map[string]bool{}, map[string]bool{}
+	for _, line := range strings.Split(data, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		u, err := url.Parse(line)
+		if err != nil || !strings.EqualFold(u.Scheme, "file") || u.Host != "" && !strings.EqualFold(u.Host, "localhost") {
+			scheme := "invalid"
+			if err == nil && u.Scheme != "" {
+				scheme = strings.ToLower(u.Scheme)
+			}
+			if !seenSchemes[scheme] {
+				unsupported = append(unsupported, scheme)
+				seenSchemes[scheme] = true
+			}
+			continue
+		}
+		path, err := url.PathUnescape(u.EscapedPath())
+		if err != nil || strings.ContainsRune(path, 0) || !filepath.IsAbs(path) {
+			continue
+		}
+		path = filepath.Clean(filepath.FromSlash(path))
+		if !seenPaths[path] {
+			paths = append(paths, path)
+			seenPaths[path] = true
+		}
+	}
+	return paths, unsupported
 }

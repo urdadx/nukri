@@ -31,6 +31,9 @@ type Model struct {
 	dragPayload    []byte
 	dragActive     bool
 	dragOutput     io.Writer
+	dropOperation  kittydnd.Operation
+	dropMIME       int
+	status         string
 }
 
 const doubleClickWindow = 500 * time.Millisecond
@@ -96,6 +99,11 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case prefetchMsg:
 		m.submitPrefetch(message)
+	case dropMsg:
+		m.status = message.statusText()
+		if message.destination == m.data.CWD {
+			return m, loadDirectory(message.destination, message.selectedPath)
+		}
 	case tea.MouseMsg:
 		if message.Button == tea.MouseButtonLeft && message.Action == tea.MouseActionPress {
 			if path := m.sidebarPathAt(message.X, message.Y); path != "" {
@@ -128,7 +136,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case kittydnd.Event:
-		return m.handleDragEvent(message)
+		return m.handleDndEvent(message)
 	case tea.KeyMsg:
 		switch message.String() {
 		case "q", "ctrl+c":
@@ -225,11 +233,78 @@ func (m Model) clickEntry(index int, clickedAt time.Time) (tea.Model, tea.Cmd) {
 	return m.enterSelected()
 }
 
-func (m Model) handleDragEvent(event kittydnd.Event) (tea.Model, tea.Cmd) {
+func (m Model) handleDndEvent(event kittydnd.Event) (tea.Model, tea.Cmd) {
 	if m.dragOutput == nil {
 		return m, nil
 	}
 	switch event.Kind {
+	case kittydnd.DropOffer:
+		if m.dragActive {
+			m.dropOperation, m.dropMIME = 0, 0
+			if event.Final {
+				_, _ = io.WriteString(m.dragOutput, kittydnd.FinishDropSequence(0)+kittydnd.CancelSequence())
+				m.dragCandidate = ""
+				m.dragPayload, m.dragActive = nil, false
+			} else {
+				_, _ = io.WriteString(m.dragOutput, kittydnd.RejectDropSequence())
+			}
+			return m, nil
+		}
+		operation := event.Operation
+		if operation == kittydnd.Either {
+			operation = kittydnd.Move
+		}
+		m.dropOperation, m.dropMIME = operation, event.MIME
+		if event.Final {
+			_, _ = io.WriteString(m.dragOutput, kittydnd.RequestDropDataSequence(event.MIME))
+		} else {
+			_, _ = io.WriteString(m.dragOutput, kittydnd.AcceptDropSequence(operation))
+		}
+	case kittydnd.DropLeave:
+		m.dropOperation, m.dropMIME = 0, 0
+	case kittydnd.DropUnsupported:
+		sequence := kittydnd.RejectDropSequence()
+		if event.Final {
+			sequence = kittydnd.FinishDropSequence(0)
+			if m.dragActive {
+				sequence += kittydnd.CancelSequence()
+				m.dragCandidate = ""
+				m.dragPayload, m.dragActive = nil, false
+			}
+		}
+		_, _ = io.WriteString(m.dragOutput, sequence)
+	case kittydnd.DropData:
+		if m.dragActive {
+			_, _ = io.WriteString(m.dragOutput, kittydnd.FinishDropSequence(0)+kittydnd.CancelSequence())
+			m.dragCandidate = ""
+			m.dragPayload, m.dragActive = nil, false
+			m.dropOperation, m.dropMIME = 0, 0
+			return m, nil
+		}
+		if m.dropOperation == 0 || event.MIME != m.dropMIME {
+			_, _ = io.WriteString(m.dragOutput, kittydnd.FinishDropSequence(0))
+			m.status = "Drop was not negotiated"
+			return m, nil
+		}
+		if len(event.UnsupportedSchemes) > 0 || len(event.Paths) == 0 {
+			_, _ = io.WriteString(m.dragOutput, kittydnd.FinishDropSequence(0))
+			if len(event.UnsupportedSchemes) > 0 {
+				m.status = "Unsupported drop URI scheme: " + event.UnsupportedSchemes[0]
+			} else {
+				m.status = "Drop contains no local files"
+			}
+			m.dropOperation, m.dropMIME = 0, 0
+			return m, nil
+		}
+		operation := m.dropOperation
+		m.dropOperation, m.dropMIME = 0, 0
+		_, _ = io.WriteString(m.dragOutput, kittydnd.FinishDropSequence(operation))
+		m.status = "Dropping files..."
+		return m, applyDrop(m.data.CWD, event.Paths, operation)
+	case kittydnd.DropDataError:
+		_, _ = io.WriteString(m.dragOutput, kittydnd.FinishDropSequence(0))
+		m.dropOperation, m.dropMIME = 0, 0
+		m.status = "Drop failed: " + event.Error
 	case kittydnd.DragOffer:
 		if m.dragActive {
 			return m, nil
@@ -512,6 +587,6 @@ func (m Model) View() string {
 		SidebarSelectedFG: lipgloss.Color(t.SidebarItemSelectedFG), SidebarSelectedBG: lipgloss.Color(t.SidebarItemSelectedBG), Cursor: lipgloss.Color(t.Cursor),
 	}
 	body := browser.Render(bodyWidth, bodyHeight, m.visualState, os.Stdout, browserStyles, m.data)
-	view := lipgloss.JoinVertical(lipgloss.Left, body, renderFooter(m.width, m.styles, m.data))
+	view := lipgloss.JoinVertical(lipgloss.Left, body, renderFooter(m.width, m.styles, m.data, m.status))
 	return m.styles.Root.Width(m.width).Height(m.height).MaxWidth(m.width).MaxHeight(m.height).Render(view)
 }
