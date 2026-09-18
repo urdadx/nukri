@@ -16,24 +16,34 @@ import (
 )
 
 type Model struct {
-	width, height  int
-	styles         Styles
-	data           browser.Data
-	preview        *preview.Service
-	previewPool    *PreviewPool
-	visualState    *browser.VisualState
-	backHistory    []historyEntry
-	forwardHistory []historyEntry
-	prefetchSeq    int
-	lastClickPath  string
-	lastClickAt    time.Time
-	dragCandidate  string
-	dragPayload    []byte
-	dragActive     bool
-	dragOutput     io.Writer
-	dropOperation  kittydnd.Operation
-	dropMIME       int
-	status         string
+	width, height    int
+	styles           Styles
+	data             browser.Data
+	preview          *preview.Service
+	previewPool      *PreviewPool
+	searchPool       *SearchPool
+	visualState      *browser.VisualState
+	backHistory      []historyEntry
+	forwardHistory   []historyEntry
+	prefetchSeq      int
+	lastClickPath    string
+	lastClickAt      time.Time
+	dragCandidate    string
+	dragPayload      []byte
+	dragActive       bool
+	dragOutput       io.Writer
+	dropOperation    kittydnd.Operation
+	dropMIME         int
+	status           string
+	searchOpen       bool
+	searchQuery      string
+	searchSelected   int
+	searchToken      uint64
+	searchCandidates []searchCandidate
+	searchMatches    []int
+	searchLoading    bool
+	searchScanned    int
+	searchError      string
 }
 
 const doubleClickWindow = 500 * time.Millisecond
@@ -45,7 +55,7 @@ type historyEntry struct {
 
 func New(t theme.Theme) Model {
 	svc := preview.NewService()
-	return Model{width: 120, height: 32, styles: NewStyles(t), preview: svc, previewPool: NewPreviewPool(svc, 2), visualState: &browser.VisualState{}, data: browser.Data{Selected: -1, PreviewSelected: -1}}
+	return Model{width: 120, height: 32, styles: NewStyles(t), preview: svc, previewPool: NewPreviewPool(svc, 2), searchPool: NewSearchPool(), visualState: &browser.VisualState{}, data: browser.Data{Selected: -1, PreviewSelected: -1}}
 }
 
 func (m Model) WithDragOutput(output io.Writer) Model {
@@ -99,12 +109,17 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case prefetchMsg:
 		m.submitPrefetch(message)
+	case searchMsg:
+		return m.handleSearchEvent(message)
 	case dropMsg:
 		m.status = message.statusText()
 		if message.destination == m.data.CWD {
 			return m, loadDirectory(message.destination, message.selectedPath)
 		}
 	case tea.MouseMsg:
+		if m.searchOpen {
+			return m.handleSearchMouse(message)
+		}
 		if message.Button == tea.MouseButtonLeft && message.Action == tea.MouseActionPress {
 			if path := m.sidebarPathAt(message.X, message.Y); path != "" {
 				return m.navigateTo(path, "", true)
@@ -138,9 +153,14 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	case kittydnd.Event:
 		return m.handleDndEvent(message)
 	case tea.KeyMsg:
+		if m.searchOpen {
+			return m.handleSearchKey(message)
+		}
 		switch message.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
+		case "f":
+			return m.openSearch()
 		case "down", "j":
 			return m.moveSelection(1)
 		case "up", "k":
@@ -575,6 +595,10 @@ func (m *Model) clampPreviewOffset() {
 func (m Model) View() string {
 	if m.width < 24 || m.height < 10 {
 		return m.styles.Root.Width(m.width).Height(m.height).Align(lipgloss.Center, lipgloss.Center).Render("Terminal too small")
+	}
+	if m.searchOpen {
+		m.visualState.Clear()
+		return m.renderSearch()
 	}
 	bodyHeight := m.height - 1
 	bodyWidth := m.width
