@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"container/heap"
 	"fmt"
 	"sort"
 	"strings"
@@ -37,6 +38,8 @@ func (m Model) openSearch() (tea.Model, tea.Cmd) {
 	m.searchSelected = 0
 	m.searchCandidates = nil
 	m.searchMatches = nil
+	m.searchFilterPool = nil
+	m.searchFilterKey = ""
 	m.searchLoading = true
 	m.searchScanned = 0
 	m.searchError = ""
@@ -71,44 +74,33 @@ func (m Model) handleSearchEvent(message searchMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) refreshSearchMatches() {
-	m.searchMatches = nil
-	m.extendSearchMatches(0)
+	query := strings.ToLower(strings.TrimSpace(m.searchQuery))
+	pool := m.searchFilterPool
+	if m.searchFilterKey == "" || !strings.HasPrefix(query, m.searchFilterKey) {
+		pool = nil
+	}
+	m.searchMatches, m.searchFilterPool = rankSearchCandidates(m.searchCandidates, pool, query, query != "")
+	m.searchFilterKey = query
+	m.clampSearchSelection()
 }
 
 func (m *Model) extendSearchMatches(firstNew int) {
 	query := strings.ToLower(strings.TrimSpace(m.searchQuery))
-	type ranked struct {
-		index int
-		score int
-	}
-	values := make([]ranked, 0, len(m.searchMatches)+len(m.searchCandidates)-firstNew)
-	for _, index := range m.searchMatches {
-		score, ok := fuzzySearchScore(query, m.searchCandidates[index])
-		if ok {
-			values = append(values, ranked{index: index, score: score})
-		}
-	}
+	newPool := make([]int, 0, len(m.searchCandidates)-firstNew)
 	for index := firstNew; index < len(m.searchCandidates); index++ {
-		candidate := m.searchCandidates[index]
-		score, ok := fuzzySearchScore(query, candidate)
-		if !ok {
-			continue
-		}
-		values = append(values, ranked{index: index, score: score})
+		newPool = append(newPool, index)
 	}
-	sort.SliceStable(values, func(i, j int) bool {
-		if values[i].score != values[j].score {
-			return values[i].score > values[j].score
-		}
-		return len(m.searchCandidates[values[i].index].relative) < len(m.searchCandidates[values[j].index].relative)
-	})
-	if len(values) > searchMatchLimit {
-		values = values[:searchMatchLimit]
+	newMatches, filtered := rankSearchCandidates(m.searchCandidates, newPool, query, query != "")
+	if query != "" {
+		m.searchFilterPool = append(m.searchFilterPool, filtered...)
 	}
-	m.searchMatches = make([]int, len(values))
-	for index, value := range values {
-		m.searchMatches[index] = value.index
-	}
+	candidates := append(append([]int(nil), m.searchMatches...), newMatches...)
+	m.searchMatches, _ = rankSearchCandidates(m.searchCandidates, candidates, query, false)
+	m.searchFilterKey = query
+	m.clampSearchSelection()
+}
+
+func (m *Model) clampSearchSelection() {
 	if len(m.searchMatches) == 0 {
 		m.searchSelected = 0
 	} else {
@@ -116,20 +108,100 @@ func (m *Model) extendSearchMatches(firstNew int) {
 	}
 }
 
+type rankedSearchCandidate struct {
+	index, score int
+}
+
+type searchCandidateHeap struct {
+	candidates []searchCandidate
+	values     []rankedSearchCandidate
+}
+
+func (h searchCandidateHeap) Len() int { return len(h.values) }
+func (h searchCandidateHeap) Less(i, j int) bool {
+	return betterSearchCandidate(h.candidates, h.values[j], h.values[i])
+}
+func (h searchCandidateHeap) Swap(i, j int) { h.values[i], h.values[j] = h.values[j], h.values[i] }
+func (h *searchCandidateHeap) Push(value any) {
+	h.values = append(h.values, value.(rankedSearchCandidate))
+}
+func (h *searchCandidateHeap) Pop() any {
+	last := len(h.values) - 1
+	value := h.values[last]
+	h.values = h.values[:last]
+	return value
+}
+
+func rankSearchCandidates(candidates []searchCandidate, pool []int, query string, collectFiltered bool) ([]int, []int) {
+	var filtered []int
+	if collectFiltered {
+		filtered = make([]int, 0, len(pool))
+	}
+	top := &searchCandidateHeap{candidates: candidates, values: make([]rankedSearchCandidate, 0, searchMatchLimit)}
+	visit := func(index int) {
+		candidate := candidates[index]
+		score, ok := fuzzySearchScore(query, candidate)
+		if !ok {
+			return
+		}
+		if collectFiltered {
+			filtered = append(filtered, index)
+		}
+		value := rankedSearchCandidate{index: index, score: score}
+		if top.Len() < searchMatchLimit {
+			heap.Push(top, value)
+		} else if betterSearchCandidate(candidates, value, top.values[0]) {
+			heap.Pop(top)
+			heap.Push(top, value)
+		}
+	}
+	if pool == nil {
+		if collectFiltered {
+			filtered = make([]int, 0, len(candidates))
+		}
+		for index := range candidates {
+			visit(index)
+		}
+	} else {
+		for _, index := range pool {
+			visit(index)
+		}
+	}
+	sort.Slice(top.values, func(i, j int) bool {
+		return betterSearchCandidate(candidates, top.values[i], top.values[j])
+	})
+	matches := make([]int, len(top.values))
+	for index, value := range top.values {
+		matches[index] = value.index
+	}
+	return matches, filtered
+}
+
+func betterSearchCandidate(candidates []searchCandidate, left, right rankedSearchCandidate) bool {
+	if left.score != right.score {
+		return left.score > right.score
+	}
+	leftPath := candidates[left.index].relative
+	rightPath := candidates[right.index].relative
+	if len(leftPath) != len(rightPath) {
+		return len(leftPath) < len(rightPath)
+	}
+	return leftPath < rightPath
+}
+
 func fuzzySearchScore(query string, candidate searchCandidate) (int, bool) {
 	if query == "" {
 		return 0, true
 	}
-	queryRunes := []rune(query)
-	text := []rune(candidate.relativeKey)
 	score := 0
 	position := 0
 	streak := 0
-	for _, needle := range queryRunes {
+	for queryIndex := 0; queryIndex < len(query); queryIndex++ {
+		needle := query[queryIndex]
 		found := -1
-		for index, value := range text[position:] {
-			if value == needle {
-				found = position + index
+		for index := position; index < len(candidate.relativeKey); index++ {
+			if candidate.relativeKey[index] == needle {
+				found = index
 				break
 			}
 		}
@@ -143,7 +215,7 @@ func fuzzySearchScore(query string, candidate searchCandidate) (int, bool) {
 			streak = 0
 			score -= found - position
 		}
-		if found == 0 || strings.ContainsRune("/-_ .", text[found-1]) {
+		if found == 0 || strings.ContainsRune("/-_ .", rune(candidate.relativeKey[found-1])) {
 			score += 12
 		}
 		position = found + 1

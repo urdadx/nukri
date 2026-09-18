@@ -1,6 +1,7 @@
 package test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,7 +22,7 @@ func searchTheme() theme.Theme {
 	}
 }
 
-func openAndLoadSearch(t *testing.T, model ui.Model) ui.Model {
+func openAndLoadSearch(t testing.TB, model ui.Model) ui.Model {
 	t.Helper()
 	searching, command := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")})
 	if command == nil {
@@ -101,5 +102,25 @@ func TestSearchFindsNestedEntries(t *testing.T) {
 	view := filtered.(ui.Model).View()
 	if !strings.Contains(view, filepath.Join("one", "two", "needle.txt")) {
 		t.Fatalf("recursive search did not show the nested file")
+	}
+}
+
+func BenchmarkSearchTypingLargeIndex(b *testing.B) {
+	root := b.TempDir()
+	for index := 0; index < 10_000; index++ {
+		name := filepath.Join(root, fmt.Sprintf("candidate-%05d.txt", index))
+		if err := os.WriteFile(name, nil, 0o600); err != nil {
+			b.Fatal(err)
+		}
+	}
+	b.Chdir(root)
+	model := ui.New(searchTheme())
+	loaded, _ := model.Update(model.Init()())
+	searching := openAndLoadSearch(b, loaded.(ui.Model))
+	b.ResetTimer()
+	for range b.N {
+		updated, _ := searching.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+		backspaced, _ := updated.(ui.Model).Update(tea.KeyMsg{Type: tea.KeyBackspace})
+		searching = backspaced.(ui.Model)
 	}
 }

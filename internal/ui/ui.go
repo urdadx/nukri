@@ -41,6 +41,8 @@ type Model struct {
 	searchToken      uint64
 	searchCandidates []searchCandidate
 	searchMatches    []int
+	searchFilterPool []int
+	searchFilterKey  string
 	searchLoading    bool
 	searchScanned    int
 	searchError      string
