@@ -9,13 +9,13 @@ import (
 	"testing"
 
 	"github.com/urdadx/nukri/internal/preview"
-	"github.com/urdadx/nukri/internal/preview/terminalimage"
+	"github.com/urdadx/nukri/internal/preview/image_protocols"
 )
 
 func TestSixelPlaceAndDelete(t *testing.T) {
 	var output bytes.Buffer
-	renderer := terminalimage.NewSixelWithSupport(&output, true)
-	placed, err := renderer.Place(sixelTestImage(t), terminalimage.Placement{
+	renderer := image_protocols.NewSixelWithSupport(&output, true)
+	placed, err := renderer.Place(sixelTestImage(t), image_protocols.Placement{
 		X: 3, Y: 2, Columns: 8, Rows: 4,
 	})
 	if err != nil {
@@ -43,15 +43,15 @@ func TestSixelDetectionAndRendererSelection(t *testing.T) {
 	t.Setenv("KITTY_WINDOW_ID", "")
 	t.Setenv("TERM_PROGRAM", "WezTerm")
 	t.Setenv("TERM", "xterm-256color")
-	if !terminalimage.IsSixelTerminal() {
+	if !image_protocols.IsSixelTerminal() {
 		t.Fatal("WezTerm should enable Sixel detection")
 	}
-	if _, ok := terminalimage.NewRenderer(&bytes.Buffer{}).(*terminalimage.Sixel); !ok {
+	if _, ok := image_protocols.NewRenderer(&bytes.Buffer{}).(*image_protocols.Sixel); !ok {
 		t.Fatal("renderer selection should choose Sixel")
 	}
 
 	t.Setenv("KITTY_WINDOW_ID", "1")
-	if _, ok := terminalimage.NewRenderer(&bytes.Buffer{}).(*terminalimage.Kitty); !ok {
+	if _, ok := image_protocols.NewRenderer(&bytes.Buffer{}).(*image_protocols.Kitty); !ok {
 		t.Fatal("renderer selection should prefer Kitty")
 	}
 }

@@ -6,7 +6,7 @@ import (
 	"strconv"
 
 	"github.com/urdadx/nukri/internal/preview"
-	"github.com/urdadx/nukri/internal/preview/terminalimage"
+	"github.com/urdadx/nukri/internal/preview/image_protocols"
 )
 
 // VisualState caches the terminal image renderer and the last transmitted image
@@ -14,8 +14,8 @@ import (
 // Reuse of the same renderer instance also keeps the Kitty image ID stable, so a
 // retransmit overwrites the previous placement instead of allocating a new slot.
 type VisualState struct {
-	renderer    terminalimage.ImageRenderer
-	last        terminalimage.RenderedImage
+	renderer    image_protocols.ImageRenderer
+	last        image_protocols.RenderedImage
 	fingerprint string
 	x, y        int
 	columns     int
@@ -35,7 +35,7 @@ func (s *VisualState) renderVisual(writer io.Writer, image *preview.Image, x, y,
 		return
 	}
 	if s.renderer == nil {
-		s.renderer = terminalimage.NewRenderer(writer)
+		s.renderer = image_protocols.NewRenderer(writer)
 		if !s.renderer.Supported() {
 			s.placed = false
 			return
@@ -44,7 +44,7 @@ func (s *VisualState) renderVisual(writer io.Writer, image *preview.Image, x, y,
 	if s.last.ImageID != 0 {
 		_ = s.renderer.Delete(s.last)
 	}
-	placed, err := s.renderer.Place(*image, terminalimage.Placement{X: x, Y: y, Columns: columns, Rows: rows})
+	placed, err := s.renderer.Place(*image, image_protocols.Placement{X: x, Y: y, Columns: columns, Rows: rows})
 	if err != nil {
 		s.placed = false
 		return
@@ -60,7 +60,7 @@ func (s *VisualState) Clear() {
 	if s.renderer != nil && s.last.ImageID != 0 {
 		_ = s.renderer.Delete(s.last)
 	}
-	s.last = terminalimage.RenderedImage{}
+	s.last = image_protocols.RenderedImage{}
 	s.fingerprint = ""
 	s.placed = false
 }

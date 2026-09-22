@@ -156,6 +156,9 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleDndEvent(message)
 	case tea.KeyMsg:
 		if m.searchOpen {
+			if message.Type == tea.KeyEsc {
+				return m.closeSearch(), nil
+			}
 			return m.handleSearchKey(message)
 		}
 		switch message.String() {
@@ -598,10 +601,6 @@ func (m Model) View() string {
 	if m.width < 24 || m.height < 10 {
 		return m.styles.Root.Width(m.width).Height(m.height).Align(lipgloss.Center, lipgloss.Center).Render("Terminal too small")
 	}
-	if m.searchOpen {
-		m.visualState.Clear()
-		return m.renderSearch()
-	}
 	bodyHeight := m.height - 1
 	bodyWidth := m.width
 	t := m.styles.Theme
@@ -614,5 +613,10 @@ func (m Model) View() string {
 	}
 	body := browser.Render(bodyWidth, bodyHeight, m.visualState, os.Stdout, browserStyles, m.data)
 	view := lipgloss.JoinVertical(lipgloss.Left, body, renderFooter(m.width, m.styles, m.data, m.status))
-	return m.styles.Root.Width(m.width).Height(m.height).MaxWidth(m.width).MaxHeight(m.height).Render(view)
+	view = m.styles.Root.Width(m.width).Height(m.height).MaxWidth(m.width).MaxHeight(m.height).Render(view)
+	if m.searchOpen {
+		m.visualState.Clear()
+		return m.renderSearch(view)
+	}
+	return view
 }

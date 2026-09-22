@@ -7,14 +7,14 @@ import (
 	"testing"
 
 	"github.com/urdadx/nukri/internal/preview"
-	"github.com/urdadx/nukri/internal/preview/terminalimage"
+	"github.com/urdadx/nukri/internal/preview/image_protocols"
 )
 
 func TestKittyPlaceChunksAndPositionsPNG(t *testing.T) {
 	var output bytes.Buffer
-	renderer := terminalimage.NewKittyWithSupport(&output, true)
+	renderer := image_protocols.NewKittyWithSupport(&output, true)
 	image := preview.Image{MediaType: "image/png", Data: bytes.Repeat([]byte{0xab}, 4_000), Width: 100, Height: 50}
-	placed, err := renderer.Place(image, terminalimage.Placement{X: 4, Y: 2, Columns: 20, Rows: 10, ZIndex: -1})
+	placed, err := renderer.Place(image, image_protocols.Placement{X: 4, Y: 2, Columns: 20, Rows: 10, ZIndex: -1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,10 +40,10 @@ func TestKittyPlaceChunksAndPositionsPNG(t *testing.T) {
 
 func TestKittyDeleteLifecycle(t *testing.T) {
 	var output bytes.Buffer
-	renderer := terminalimage.NewKittyWithSupport(&output, true)
+	renderer := image_protocols.NewKittyWithSupport(&output, true)
 	placed, err := renderer.Place(
 		preview.Image{MediaType: "image/png", Data: []byte("png")},
-		terminalimage.Placement{Columns: 1, Rows: 1},
+		image_protocols.Placement{Columns: 1, Rows: 1},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -66,19 +66,19 @@ func TestKittyDeleteLifecycle(t *testing.T) {
 }
 
 func TestKittyValidation(t *testing.T) {
-	renderer := terminalimage.NewKittyWithSupport(&bytes.Buffer{}, false)
-	_, err := renderer.Place(preview.Image{MediaType: "image/png", Data: []byte("png")}, terminalimage.Placement{Columns: 1, Rows: 1})
-	if !errors.Is(err, terminalimage.ErrUnsupportedTerminal) {
+	renderer := image_protocols.NewKittyWithSupport(&bytes.Buffer{}, false)
+	_, err := renderer.Place(preview.Image{MediaType: "image/png", Data: []byte("png")}, image_protocols.Placement{Columns: 1, Rows: 1})
+	if !errors.Is(err, image_protocols.ErrUnsupportedTerminal) {
 		t.Fatalf("error = %v, want unsupported terminal", err)
 	}
 
-	renderer = terminalimage.NewKittyWithSupport(&bytes.Buffer{}, true)
-	_, err = renderer.Place(preview.Image{MediaType: "image/jpeg", Data: []byte("jpg")}, terminalimage.Placement{Columns: 1, Rows: 1})
-	if !errors.Is(err, terminalimage.ErrInvalidImage) {
+	renderer = image_protocols.NewKittyWithSupport(&bytes.Buffer{}, true)
+	_, err = renderer.Place(preview.Image{MediaType: "image/jpeg", Data: []byte("jpg")}, image_protocols.Placement{Columns: 1, Rows: 1})
+	if !errors.Is(err, image_protocols.ErrInvalidImage) {
 		t.Fatalf("error = %v, want invalid image", err)
 	}
-	_, err = renderer.Place(preview.Image{MediaType: "image/png", Data: []byte("png")}, terminalimage.Placement{})
-	if !errors.Is(err, terminalimage.ErrInvalidPlacement) {
+	_, err = renderer.Place(preview.Image{MediaType: "image/png", Data: []byte("png")}, image_protocols.Placement{})
+	if !errors.Is(err, image_protocols.ErrInvalidPlacement) {
 		t.Fatalf("error = %v, want invalid placement", err)
 	}
 }
@@ -86,12 +86,12 @@ func TestKittyValidation(t *testing.T) {
 func TestIsKittyTerminal(t *testing.T) {
 	t.Setenv("KITTY_WINDOW_ID", "1")
 	t.Setenv("TERM", "xterm-256color")
-	if !terminalimage.IsKittyTerminal() {
+	if !image_protocols.IsKittyTerminal() {
 		t.Fatal("KITTY_WINDOW_ID should identify Kitty")
 	}
 	t.Setenv("KITTY_WINDOW_ID", "")
 	t.Setenv("TERM", "xterm-kitty")
-	if !terminalimage.IsKittyTerminal() {
+	if !image_protocols.IsKittyTerminal() {
 		t.Fatal("TERM=xterm-kitty should identify Kitty")
 	}
 }

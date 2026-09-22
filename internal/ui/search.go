@@ -3,11 +3,13 @@ package ui
 import (
 	"container/heap"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/urdadx/nukri/internal/core"
 )
 
@@ -230,7 +232,7 @@ func fuzzySearchScore(query string, candidate searchCandidate) (int, bool) {
 
 func (m Model) handleSearchKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch message.String() {
-	case "esc", "ctrl+c":
+	case "ctrl+c":
 		return m.closeSearch(), nil
 	case "enter":
 		return m.activateSearchResult()
@@ -270,7 +272,12 @@ func (m Model) activateSearchResult() (tea.Model, tea.Cmd) {
 	if candidate.directory {
 		return m.navigateTo(candidate.path, "", true)
 	}
-	return m, openFile(candidate.path)
+	parent := filepath.Dir(candidate.path)
+	if parent != m.data.CWD {
+		return m.navigateTo(parent, candidate.path, true)
+	}
+	index := entryIndexByPath(m.data.Entries, candidate.path)
+	return m.moveSelection(index - m.data.Selected)
 }
 
 func (m Model) handleSearchMouse(message tea.MouseMsg) (tea.Model, tea.Cmd) {
@@ -278,7 +285,7 @@ func (m Model) handleSearchMouse(message tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	width, height := m.searchDialogSize()
-	left, top := (m.width-width)/2, (m.height-height)/2
+	left, top := m.searchDialogPosition(width, height)
 	row := message.Y - top - 3
 	if message.X <= left || message.X >= left+width-1 || row < 0 {
 		return m, nil
@@ -293,9 +300,13 @@ func (m Model) handleSearchMouse(message tea.MouseMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) searchDialogSize() (int, int) {
-	width := min(max(36, m.width*2/3), max(1, m.width-4))
-	height := min(14, max(6, m.height-4))
+	width := min(max(40, m.width*3/4), max(1, m.width-4))
+	height := min(max(10, m.height*2/3), max(6, m.height-5))
 	return width, height
+}
+
+func (m Model) searchDialogPosition(width, height int) (int, int) {
+	return max(0, (m.width-width)/2), max(0, (m.height-height)/2)
 }
 
 func searchWindowStart(selected, count, visible int) int {
@@ -305,11 +316,10 @@ func searchWindowStart(selected, count, visible int) int {
 	return min(max(0, selected-visible+1), count-visible)
 }
 
-func (m Model) renderSearch() string {
+func (m Model) renderSearch(base string) string {
 	width, height := m.searchDialogSize()
 	innerWidth := max(1, width-4)
 	t := m.styles.Theme
-	background := lipgloss.Color(t.FullScreenBG)
 	modal := lipgloss.NewStyle().Foreground(lipgloss.Color(t.ModalFG)).Background(lipgloss.Color(t.ModalBG))
 	muted := modal.Foreground(lipgloss.Color(t.SidebarDivider))
 	selected := modal.Foreground(lipgloss.Color(t.FilePanelItemSelectedFG)).Background(lipgloss.Color(t.FilePanelItemSelectedBG)).Bold(true)
@@ -366,5 +376,20 @@ func (m Model) renderSearch() string {
 	dialog := modal.Width(width-2).Height(height-2).Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(t.ModalBorderActive)).BorderBackground(lipgloss.Color(t.ModalBG)).
 		Padding(0, 1).Render(strings.Join(content, "\n"))
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, dialog, lipgloss.WithWhitespaceBackground(background))
+	left, top := m.searchDialogPosition(lipgloss.Width(dialog), lipgloss.Height(dialog))
+	return overlaySearch(base, dialog, left, top)
+}
+
+func overlaySearch(base, overlay string, left, top int) string {
+	baseLines := strings.Split(base, "\n")
+	overlayLines := strings.Split(overlay, "\n")
+	for row, overlayLine := range overlayLines {
+		index := top + row
+		if index < 0 || index >= len(baseLines) {
+			continue
+		}
+		right := left + lipgloss.Width(overlayLine)
+		baseLines[index] = ansi.Cut(baseLines[index], 0, left) + overlayLine + ansi.Cut(baseLines[index], right, lipgloss.Width(baseLines[index]))
+	}
+	return strings.Join(baseLines, "\n")
 }

@@ -11,14 +11,14 @@ import (
 	"github.com/urdadx/nukri/internal/core"
 	"github.com/urdadx/nukri/internal/file_info"
 	"github.com/urdadx/nukri/internal/preview"
-	"github.com/urdadx/nukri/internal/preview/terminalimage"
+	"github.com/urdadx/nukri/internal/preview/image_protocols"
 )
 
 func TestManualKittyImagePreview(t *testing.T) {
 	if os.Getenv("NUKRI_KITTY_PREVIEW") != "1" {
 		t.Skip("set NUKRI_KITTY_PREVIEW=1 to display the sample image")
 	}
-	if !terminalimage.IsKittyTerminal() {
+	if !image_protocols.IsKittyTerminal() {
 		t.Skip("manual image preview requires a Kitty terminal")
 	}
 
@@ -39,7 +39,7 @@ func TestManualKittyImagePreview(t *testing.T) {
 	}
 	defer tty.Close()
 
-	renderer := terminalimage.NewKitty(tty)
+	renderer := image_protocols.NewKitty(tty)
 	columns := 50
 	rows := max(1, min(20, video.Frame.Height*columns/(max(video.Frame.Width, 1)*2)))
 
@@ -52,7 +52,7 @@ func TestManualKittyImagePreview(t *testing.T) {
 		_, _ = fmt.Fprint(tty, "\x1b[?1049l")
 	}()
 
-	placed, err := renderer.Place(video.Frame, terminalimage.Placement{
+	placed, err := renderer.Place(video.Frame, image_protocols.Placement{
 		X: 2, Y: 1, Columns: columns, Rows: rows,
 	})
 	if err != nil {

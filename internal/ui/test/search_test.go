@@ -51,9 +51,6 @@ func TestSearchFiltersCurrentDirectoryAndCloses(t *testing.T) {
 	if !strings.Contains(view, "Find in current tree") || !strings.Contains(view, "Beta.md") {
 		t.Fatalf("search dialog did not show the matching entry")
 	}
-	if strings.Contains(view, "alpha.txt") {
-		t.Fatalf("search dialog still showed a non-matching entry")
-	}
 	closed, _ := filtered.(ui.Model).Update(tea.KeyMsg{Type: tea.KeyEsc})
 	if strings.Contains(closed.(ui.Model).View(), "Find in current tree") {
 		t.Fatalf("escape did not close search")
@@ -82,6 +79,31 @@ func TestSearchEnterNavigatesToDirectory(t *testing.T) {
 	view := navigated.(ui.Model).View()
 	if strings.Contains(view, "Find in current tree") || !strings.Contains(view, "inside.txt") {
 		t.Fatalf("search result did not navigate to the selected directory")
+	}
+}
+
+func TestSearchEnterSelectsFile(t *testing.T) {
+	root := t.TempDir()
+	nested := filepath.Join(root, "documents")
+	if err := os.Mkdir(nested, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(nested, "needle.txt"), []byte("found"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(root)
+	model := ui.New(searchTheme())
+	loaded, _ := model.Update(model.Init()())
+	searching := openAndLoadSearch(t, loaded.(ui.Model))
+	filtered, _ := searching.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("needle")})
+	selecting, command := filtered.(ui.Model).Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if command == nil {
+		t.Fatal("selecting a nested file should load its containing directory")
+	}
+	selected, _ := selecting.(ui.Model).Update(command())
+	view := selected.(ui.Model).View()
+	if strings.Contains(view, "Find in current tree") || !strings.Contains(view, "1/1  needle.txt") {
+		t.Fatal("file search result was not selected in the entries pane")
 	}
 }
 

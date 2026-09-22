@@ -64,6 +64,11 @@ func (i *Input) flush(buffer []byte, writer io.Writer) []byte {
 		start := indexBytes(buffer, []byte("\x1b]72;"))
 		if start < 0 {
 			keep := partialPrefixLength(buffer, []byte("\x1b]72;"))
+			// A lone escape is a complete keyboard input. Only retain partial
+			// prefixes once the OSC introducer has also arrived.
+			if keep == 1 {
+				keep = 0
+			}
 			_, _ = writer.Write(buffer[:len(buffer)-keep])
 			return buffer[len(buffer)-keep:]
 		}

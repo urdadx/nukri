@@ -1,4 +1,4 @@
-package terminalimage
+package image_protocols
 
 import (
 	"encoding/base64"
