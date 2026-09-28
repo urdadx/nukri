@@ -149,7 +149,7 @@ func (s *Service) Render(ctx context.Context, request Request) (Preview, error) 
 		return s.renderAudio(ctx, path)
 	}
 	if request.Facts.BuiltinClass == core.FileClassVideo {
-		return s.renderVideo(ctx, path)
+		return s.renderVideo(ctx, path, request.Width)
 	}
 	if request.Facts.BuiltinClass == core.FileClassArchive {
 		return s.listArchive(ctx, path)

@@ -43,6 +43,13 @@ type View struct {
 }
 
 func BuildView(value Preview, options ViewOptions) (View, error) {
+	return BuildViewContext(context.Background(), value, options)
+}
+
+func BuildViewContext(ctx context.Context, value Preview, options ViewOptions) (View, error) {
+	if err := ctx.Err(); err != nil {
+		return View{}, err
+	}
 	width := options.Width
 	if width <= 0 {
 		width = DefaultCSVTableWidth
@@ -66,7 +73,7 @@ func BuildView(value Preview, options ViewOptions) (View, error) {
 		return View{Title: "Markdown", Lines: strings.Split(strings.TrimSuffix(highlighted, "\n"), "\n"), Scroll: VerticalScroll}, nil
 	case *TextPreview:
 		if value.CodeLanguage != "" {
-			if highlighted, total, err := highlightCached(context.Background(), value.CodeLanguage, value.Text, options.SyntaxStyle, 0, options.CodeWindow); err == nil && len(highlighted) > 0 {
+			if highlighted, total, err := highlightCached(ctx, value.CodeLanguage, value.Text, options.SyntaxStyle, 0, options.CodeWindow); err == nil && len(highlighted) > 0 {
 				return View{Title: value.Title, Lines: highlighted, TotalLines: total, Scroll: VerticalScroll}, nil
 			}
 		}

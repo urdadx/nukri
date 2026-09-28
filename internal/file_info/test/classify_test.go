@@ -32,6 +32,35 @@ func TestInspectPathSniffsImageSignature(t *testing.T) {
 	}
 }
 
+func TestInspectEntryFastDoesNotReadExtensionlessContent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "image")
+	if err := os.WriteFile(path, []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	facts := InspectEntryFast(&core.Entry{Name: "image", Path: path, Kind: core.File})
+	if facts.BuiltinClass == core.FileClassImage {
+		t.Fatalf("BuiltinClass = %v, want fast name-only classification", facts.BuiltinClass)
+	}
+}
+
+func TestInspectEntryPerformsFullContentInspection(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "image")
+	if err := os.WriteFile(path, []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	facts := InspectEntry(&core.Entry{Name: "image", Path: path, Kind: core.File})
+	if facts.BuiltinClass != core.FileClassImage {
+		t.Fatalf("BuiltinClass = %v, want full image classification", facts.BuiltinClass)
+	}
+}
+
+func TestInspectPathPreservesExactFilenameClassification(t *testing.T) {
+	facts := inspectTemporaryFile(t, "Makefile", []byte("#!/usr/bin/env python3\nprint('build')\n"))
+	if facts.Preview.CodeSyntax == nil || *facts.Preview.CodeSyntax != "make" {
+		t.Fatalf("facts = %#v, want Makefile classification", facts)
+	}
+}
+
 func TestInspectPathUsesConfigModeline(t *testing.T) {
 	facts := inspectTemporaryFile(t, "app.conf", []byte("# -*- mode: ini -*-\n[server]\nport=8080\n"))
 	if facts.BuiltinClass != core.FileClassConfig || facts.Preview.CodeSyntax == nil || *facts.Preview.CodeSyntax != "ini" {

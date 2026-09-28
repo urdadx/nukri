@@ -1,12 +1,21 @@
 package test
 
 import (
+	"context"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/urdadx/nukri/internal/preview"
 )
+
+func TestBuildViewContextHonorsCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := preview.BuildViewContext(ctx, codePreview(), preview.ViewOptions{}); err != context.Canceled {
+		t.Fatalf("BuildViewContext error = %v, want context.Canceled", err)
+	}
+}
 
 // codeSource builds a large Go source (5000 lines) to exercise incremental
 // leading-window rendering without needing real tooling.

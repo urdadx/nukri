@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/urdadx/nukri/internal/core"
+	fileinfo "github.com/urdadx/nukri/internal/file_info"
 	"github.com/urdadx/nukri/internal/ui"
 	"github.com/urdadx/nukri/internal/ui/browser"
 )
@@ -82,6 +83,28 @@ func TestPrefetchNeighborsEmptyResult(t *testing.T) {
 	})
 	if got := ui.PrefetchNeighbors(entries, 0, 2); len(got) != 0 {
 		t.Fatalf("expected no neighbors for a single file, got %v", prefetchNames(got))
+	}
+}
+
+func TestIsExpensivePreview(t *testing.T) {
+	pdf := fileinfo.Pdf
+	tests := []struct {
+		name  string
+		facts fileinfo.FileFacts
+		want  bool
+	}{
+		{name: "video", facts: fileinfo.FileFacts{BuiltinClass: core.FileClassVideo}, want: true},
+		{name: "audio", facts: fileinfo.FileFacts{BuiltinClass: core.FileClassAudio}, want: true},
+		{name: "document", facts: fileinfo.FileFacts{Preview: fileinfo.PreviewSpec{DocumentFormat: &pdf}}, want: true},
+		{name: "code", facts: fileinfo.FileFacts{BuiltinClass: core.FileClassCode}, want: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			entry := browser.Entry{Facts: test.facts}
+			if got := ui.IsExpensivePreview(entry); got != test.want {
+				t.Fatalf("IsExpensivePreview() = %v, want %v", got, test.want)
+			}
+		})
 	}
 }
 

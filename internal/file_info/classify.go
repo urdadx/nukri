@@ -50,16 +50,22 @@ func InspectPath(path string, kind core.EntryKind) FileFacts {
 	return inspectPathWithName(path, "", false, kind)
 }
 
+func InspectEntry(entry *core.Entry) FileFacts {
+	return inspectPathWithName(entry.Path, entry.Name, true, entry.Kind)
+}
+
 func InspectEntryFast(entry *core.Entry) FileFacts {
 	return inspectPathWithNameFast(entry.Path, entry.Name, true, entry.Kind)
 }
 
 func inspectPathWithName(path, displayName string, hasDisplayName bool, kind core.EntryKind) FileFacts {
-	_, name, ext, facts := inspectPathWithNameBase(path, displayName, hasDisplayName, kind)
+	name, ext, facts, canSniffContent := inspectPathWithNameBase(path, displayName, hasDisplayName, kind)
 	switch ext {
 	case "":
-		if sniffed, ok := sniffExtensionlessFileType(path); ok {
-			facts = sniffed
+		if canSniffContent {
+			if sniffed, ok := sniffExtensionlessFileType(path); ok {
+				facts = sniffed
+			}
 		}
 	case "conf", "cfg":
 		if sniffed, ok := sniffConfigFileType(path); ok {
@@ -70,13 +76,16 @@ func inspectPathWithName(path, displayName string, hasDisplayName bool, kind cor
 }
 
 func inspectPathWithNameFast(path, displayName string, hasDisplayName bool, kind core.EntryKind) FileFacts {
-	_, name, ext, facts := inspectPathWithNameBase(path, displayName, hasDisplayName, kind)
-	return SniffBrowserLicenseFileType(path, name, ext, facts)
+	name, _, facts, _ := inspectPathWithNameBase(path, displayName, hasDisplayName, kind)
+	if isDefinitiveLicenseName(name) && canSniffLicenseContent(facts) {
+		return licenseFileFacts(LicenseDetection{}, facts)
+	}
+	return facts
 }
 
-func inspectPathWithNameBase(path, displayName string, hasDisplayName bool, kind core.EntryKind) (string, string, string, FileFacts) {
+func inspectPathWithNameBase(path, displayName string, hasDisplayName bool, kind core.EntryKind) (string, string, FileFacts, bool) {
 	if kind == core.Directory {
-		return "", "", "", FileFacts{BuiltinClass: core.FileClassDirectory, Preview: PlainTextPreview()}
+		return "", "", FileFacts{BuiltinClass: core.FileClassDirectory, Preview: PlainTextPreview()}, false
 	}
 	nameForType := displayName
 	if !hasDisplayName {
@@ -87,14 +96,14 @@ func inspectPathWithNameBase(path, displayName string, hasDisplayName bool, kind
 	}
 	name := normalizeKey(nameForType)
 	if facts, ok := inspectExactName(name); ok {
-		return nameForType, name, "", facts
+		return name, "", facts, false
 	}
 	if facts, ok := inspectArchiveName(name); ok {
-		return nameForType, name, "", facts
+		return name, "", facts, false
 	}
 
 	ext := pathExtension(nameForType)
-	return nameForType, name, ext, inspectExtension(ext)
+	return name, ext, inspectExtension(ext), ext == ""
 }
 
 func pathExtension(path string) string {

@@ -25,10 +25,11 @@ gone idle. Its sequence number lets the model drop requests that were
 superseded by a newer selection.
 */
 type prefetchMsg struct {
-	seq     int
-	width   int
-	syntax  string
-	entries []browser.Entry
+	seq        int
+	width      int
+	syntax     string
+	codeWindow int
+	entries    []browser.Entry
 }
 
 /*
@@ -57,7 +58,7 @@ the neighboring *files* to the pool at low priority. The neighbors must not
 already be cached (Submit short-circuits those). The returned model carries
 the bumped sequence so the Update handler can discard stale ticks.
 */
-func schedulePrefetch(m Model, entries []browser.Entry, selected, width int, syntax string) (Model, tea.Cmd) {
+func schedulePrefetch(m Model, entries []browser.Entry, selected, width, codeWindow int, syntax string) (Model, tea.Cmd) {
 	m.prefetchSeq++
 	seq := m.prefetchSeq
 
@@ -67,22 +68,33 @@ func schedulePrefetch(m Model, entries []browser.Entry, selected, width int, syn
 	}
 
 	cmd := tea.Tick(prefetchDebounce, func(time.Time) tea.Msg {
-		return prefetchMsg{seq: seq, width: width, syntax: syntax, entries: neighbors}
+		return prefetchMsg{seq: seq, width: width, syntax: syntax, codeWindow: codeWindow, entries: neighbors}
 	})
 	return m, cmd
 }
 
 /*
 submitPrefetch enqueues the prefetched neighbors at low priority. It never
-cancels the high-priority selection render. Work that is already cached or
-already queued is a no-op inside Submit. Prefetch warms the full highlight
-(codeWindow 0) so that a later selection renders from the disk cache instantly.
+cancels the high-priority selection render. Cheap previews use the same bounded
+code window as foreground work, and at most one expensive neighbor is queued.
 */
 func (m *Model) submitPrefetch(msg prefetchMsg) {
 	if msg.seq != m.prefetchSeq {
 		return
 	}
+	expensiveSubmitted := false
 	for _, entry := range msg.entries {
-		m.previewPool.Submit(entry, msg.width, msg.syntax, 0, false)
+		if IsExpensivePreview(entry) {
+			if expensiveSubmitted {
+				continue
+			}
+			expensiveSubmitted = true
+		}
+		m.previewPool.Submit(entry, msg.width, msg.syntax, msg.codeWindow, false)
 	}
+}
+
+func IsExpensivePreview(entry browser.Entry) bool {
+	class := entry.Facts.BuiltinClass
+	return class == core.FileClassVideo || class == core.FileClassAudio || entry.Facts.Preview.DocumentFormat != nil
 }

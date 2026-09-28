@@ -10,7 +10,6 @@ import (
 	"github.com/urdadx/nukri/internal/core"
 )
 
-const FastLicenseSniffByteLimit = 4 * 1024
 const LicenseSniffByteLimit = 64 * 1024
 const LicenseMarkerLineLimit = 12
 const LicensePreambleLineLimit = 8
@@ -600,39 +599,6 @@ func SniffLicenseFileType(path string, name string, ext string, baseFacts FileFa
 	}
 
 	detection, detected := detectLicenseDocuments(text)
-	if detected {
-		return licenseFileFacts(detection, baseFacts)
-	}
-	if isDefinitiveLicenseName(name) {
-		return licenseFileFacts(LicenseDetection{}, baseFacts)
-	}
-
-	return baseFacts
-}
-
-func SniffBrowserLicenseFileType(path string, name string, ext string, baseFacts FileFacts) FileFacts {
-	canonicalCandidate := isCanonicalLicenseCandidateName(name)
-	canSniffContent := canSniffLicenseContent(baseFacts)
-	canSniffMarkers := canSniffLicenseMarkers(ext, baseFacts)
-
-	if !canonicalCandidate && !canSniffMarkers {
-		return baseFacts
-	}
-
-	if canonicalCandidate && !canSniffContent {
-		return baseFacts
-	}
-
-	prefix, error := readLicenseTextPrefix(path, FastLicenseSniffByteLimit)
-	if error != nil || prefix == "" {
-		return baseFacts
-	}
-
-	if !canonicalCandidate && !hasStrongLicenseMarkers(prefix) && !startsLikeStandaloneLicense(prefix) {
-		return baseFacts
-	}
-
-	detection, detected := detectLicenseDocuments(prefix)
 	if detected {
 		return licenseFileFacts(detection, baseFacts)
 	}

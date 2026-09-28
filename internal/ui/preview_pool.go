@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 
 	tea "github.com/charmbracelet/bubbletea"
+	fileinfo "github.com/urdadx/nukri/internal/file_info"
 	"github.com/urdadx/nukri/internal/preview"
 	"github.com/urdadx/nukri/internal/ui/browser"
 )
@@ -26,13 +27,17 @@ attaches its own result channel; the worker fans the single result out to
 every subscriber, so concurrent identical requests all observe a value.
 */
 type previewJob struct {
-	key    string
-	req    previewRequest
-	mu     sync.Mutex
-	subs   []chan tea.Msg
-	result tea.Msg
-	closed bool
-	cancel atomic.Bool
+	key     string
+	req     previewRequest
+	ctx     context.Context
+	cancel  context.CancelFunc
+	mu      sync.Mutex
+	subs    []chan tea.Msg
+	result  tea.Msg
+	closed  bool
+	stale   atomic.Bool
+	started atomic.Bool
+	high    atomic.Bool
 }
 
 /*
@@ -85,6 +90,11 @@ func NewPreviewPool(svc *preview.Service, workers int) *PreviewPool {
 		cache:  make(map[string]tea.Msg),
 		done:   make(chan struct{}),
 	}
+	if workers > 1 {
+		p.wg.Add(1)
+		go p.foregroundWorker()
+		workers--
+	}
 	for range workers {
 		p.wg.Add(1)
 		go p.worker()
@@ -94,8 +104,25 @@ func NewPreviewPool(svc *preview.Service, workers int) *PreviewPool {
 
 // Close stops all workers. It blocks until every in-flight job has finished.
 func (p *PreviewPool) Close() {
+	p.mu.Lock()
+	for _, job := range p.active {
+		job.stop()
+	}
+	p.mu.Unlock()
 	close(p.done)
 	p.wg.Wait()
+}
+
+func (p *PreviewPool) foregroundWorker() {
+	defer p.wg.Done()
+	for {
+		select {
+		case <-p.done:
+			return
+		case job := <-p.high:
+			p.execute(job)
+		}
+	}
 }
 
 // worker is the main loop of a single preview renderer goroutine. It consumes
@@ -125,19 +152,22 @@ func (p *PreviewPool) worker() {
 // cache first, then calls the service to render the preview. It stores the result
 // in the cache and fans it out to all subscribers.
 func (p *PreviewPool) execute(job *previewJob) {
+	if !job.started.CompareAndSwap(false, true) {
+		return
+	}
 	defer p.forget(job.key)
 
 	if cached, ok := p.lookup(job.key); ok {
 		job.complete(cached)
 		return
 	}
-	if job.cancel.Load() {
+	if job.stale.Load() || job.ctx.Err() != nil {
 		job.complete(cancelledPreview(job.req.entry.Entry.Path))
 		return
 	}
 
-	msg := renderPreview(p.svc, job.req)
-	if job.cancel.Load() {
+	msg := renderPreview(job.ctx, p.svc, job.req)
+	if job.stale.Load() || job.ctx.Err() != nil {
 		job.complete(cancelledPreview(job.req.entry.Entry.Path))
 		return
 	}
@@ -184,6 +214,11 @@ func (j *previewJob) subscribe() <-chan tea.Msg {
 	return ch
 }
 
+func (j *previewJob) stop() {
+	j.stale.Store(true)
+	j.cancel()
+}
+
 /*
 Submit queues a preview render and returns a channel that yields exactly one
 message when the work finishes (or is cancelled). The channel is closed
@@ -192,6 +227,15 @@ codeWindow caps the number of leading code lines rendered (0 = whole file).
 */
 func (p *PreviewPool) Submit(entry browser.Entry, width int, syntax string, codeWindow int, high bool) <-chan tea.Msg {
 	key := previewKey(entry, width, syntax, codeWindow)
+	if high {
+		p.mu.Lock()
+		for activeKey, job := range p.active {
+			if activeKey != key {
+				job.stop()
+			}
+		}
+		p.mu.Unlock()
+	}
 	if cached, ok := p.lookup(key); ok {
 		ch := make(chan tea.Msg, 1)
 		ch <- cached
@@ -206,22 +250,20 @@ func (p *PreviewPool) Submit(entry browser.Entry, width int, syntax string, code
 
 	p.mu.Lock()
 	if existing, ok := p.active[key]; ok {
-		// Already queued/running for this exact key; subscribe to its result.
+		promote := high && !existing.high.Swap(true) && !existing.started.Load()
+		ch := existing.subscribe()
 		p.mu.Unlock()
-		return existing.subscribe()
+		if promote {
+			p.high <- existing
+		}
+		return ch
 	}
+	ctx, cancel := context.WithCancel(context.Background())
 	job = &previewJob{
-		key: key,
+		key: key, ctx: ctx, cancel: cancel,
 		req: previewRequest{entry: entry, width: width, syntax: syntax, codeWindow: codeWindow},
 	}
-	// A newer selection supersedes all other in-flight work.
-	if high {
-		for k, e := range p.active {
-			if k != key {
-				e.cancel.Store(true)
-			}
-		}
-	}
+	job.high.Store(high)
 	p.active[key] = job
 	ch = job.subscribe()
 	p.mu.Unlock()
@@ -298,8 +340,12 @@ func cancelledPreview(path string) previewMsg {
 
 // renderPreview performs the actual service.Render + BuildView work. It runs on
 // a worker goroutine, never on the UI event loop.
-func renderPreview(service *preview.Service, req previewRequest) previewMsg {
-	value, err := service.Render(context.Background(), preview.Request{Path: req.entry.Entry.Path, Facts: req.entry.Facts, Width: max(1, req.width)})
+func renderPreview(ctx context.Context, service *preview.Service, req previewRequest) previewMsg {
+	req.entry.Facts = fileinfo.InspectEntry(&req.entry.Entry)
+	if err := ctx.Err(); err != nil {
+		return cancelledPreview(req.entry.Entry.Path)
+	}
+	value, err := service.Render(ctx, preview.Request{Path: req.entry.Entry.Path, Facts: req.entry.Facts, Width: max(1, req.width)})
 	if err != nil {
 		if errors.Is(err, preview.ErrUnsupported) {
 			err = fmt.Errorf("preview is not available for this file type")
@@ -316,7 +362,7 @@ func renderPreview(service *preview.Service, req previewRequest) previewMsg {
 		msg.directory = true
 		msg.entries = directoryPreviewEntries(req.entry.Entry.Path, directory.Entries)
 	}
-	view, viewErr := preview.BuildView(value, preview.ViewOptions{
+	view, viewErr := preview.BuildViewContext(ctx, value, preview.ViewOptions{
 		Width:       max(1, req.width),
 		SyntaxStyle: req.syntax,
 		CodeWindow:  req.codeWindow,

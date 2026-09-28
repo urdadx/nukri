@@ -91,7 +91,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.data.PreviewLoading = true
 			layout := browser.ResolveLayout(m.width, max(1, m.height-1))
 			width := layout.PreviewWidth - 4
-			m, prefetch := schedulePrefetch(m, message.entries, m.data.Selected, width, m.styles.Theme.CodeSyntaxHighlight)
+			m, prefetch := schedulePrefetch(m, message.entries, m.data.Selected, width, m.initialCodeWindow(), m.styles.Theme.CodeSyntaxHighlight)
 			return m, tea.Batch(loadPreview(m.previewPool, message.entries[m.data.Selected], width, m.initialCodeWindow(), m.styles.Theme.CodeSyntaxHighlight), prefetch)
 		}
 	case previewMsg:
@@ -510,7 +510,7 @@ func (m Model) moveSelection(delta int) (tea.Model, tea.Cmd) {
 	m.data.PreviewLoading = true
 	layout := browser.ResolveLayout(m.width, max(1, m.height-1))
 	width := layout.PreviewWidth - 4
-	m, prefetch := schedulePrefetch(m, m.data.Entries, next, width, m.styles.Theme.CodeSyntaxHighlight)
+	m, prefetch := schedulePrefetch(m, m.data.Entries, next, width, m.initialCodeWindow(), m.styles.Theme.CodeSyntaxHighlight)
 	return m, tea.Batch(loadPreview(m.previewPool, m.data.Entries[next], width, m.initialCodeWindow(), m.styles.Theme.CodeSyntaxHighlight), prefetch)
 }
 

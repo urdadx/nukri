@@ -376,7 +376,7 @@ func TestRenderVideo(t *testing.T) {
 	facts := fileinfo.InspectPath(path, core.File)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	result, err := service.Render(ctx, preview.Request{Path: path, Facts: facts})
+	result, err := service.Render(ctx, preview.Request{Path: path, Facts: facts, Width: 20})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -391,6 +391,9 @@ func TestRenderVideo(t *testing.T) {
 		t.Fatalf("video duration = %v, want about one second", video.Video.Duration)
 	}
 	assertPNGImage(t, &video.Frame)
+	if video.Frame.Width > 160 || video.Frame.Height > 160 {
+		t.Fatalf("video frame dimensions = %dx%d, want longest side <= 160", video.Frame.Width, video.Frame.Height)
+	}
 }
 
 func TestListArchive(t *testing.T) {

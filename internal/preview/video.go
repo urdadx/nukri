@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-func (s *Service) renderVideo(ctx context.Context, path string) (*VideoPreview, error) {
+func (s *Service) renderVideo(ctx context.Context, path string, cellWidth int) (*VideoPreview, error) {
 	if s.tools.FFProbe == "" || s.tools.FFmpeg == "" {
 		return nil, fmt.Errorf("video preview: %w", ToolUnavailable("ffprobe/ffmpeg"))
 	}
@@ -29,7 +29,7 @@ func (s *Service) renderVideo(ctx context.Context, path string) (*VideoPreview, 
 		return nil, fmt.Errorf("inspect video: no video stream")
 	}
 	video := videoMetadata(probe.Format, videoStream, audioStreams)
-	image, err := s.renderVideoFrame(ctx, path, video.Duration)
+	image, err := s.renderVideoFrame(ctx, path, video.Duration, s.imageTargetSize(cellWidth))
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func videoMetadata(format ffprobeFormat, stream ffprobeStream, audioStreams []ff
 	}
 }
 
-func (s *Service) renderVideoFrame(ctx context.Context, path string, duration float64) (Image, error) {
+func (s *Service) renderVideoFrame(ctx context.Context, path string, duration float64, targetSize int) (Image, error) {
 	directory, err := os.MkdirTemp("", "nukri-video-*")
 	if err != nil {
 		return Image{}, fmt.Errorf("create video preview directory: %w", err)
@@ -98,7 +98,7 @@ func (s *Service) renderVideoFrame(ctx context.Context, path string, duration fl
 	_, err = runCommand(ctx, 64<<10, s.tools.FFmpeg,
 		"-v", "error", "-nostdin", "-y", "-ss", strconv.FormatFloat(timestamp, 'f', 3, 64),
 		"-i", path, "-map", "0:v:0", "-frames:v", "1", "-an",
-		"-vf", "scale=min(1600\\,iw):min(1600\\,ih):force_original_aspect_ratio=decrease", output,
+		"-vf", fmt.Sprintf("scale=min(%d\\,iw):min(%d\\,ih):force_original_aspect_ratio=decrease", targetSize, targetSize), output,
 	)
 	if err != nil {
 		return Image{}, fmt.Errorf("render video frame: %w", err)
