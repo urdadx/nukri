@@ -8,7 +8,7 @@ import (
 	"github.com/urdadx/nukri/internal/fs/fileops"
 )
 
-func TestApplyDropCopiesRecursivelyAndAddsCollisionSuffix(t *testing.T) {
+func TestApplyTransferCopiesRecursivelyAndAddsCollisionSuffix(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "source", "folder")
 	destination := filepath.Join(root, "destination")
@@ -25,7 +25,7 @@ func TestApplyDropCopiesRecursivelyAndAddsCollisionSuffix(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result := fileops.ApplyDrop(destination, []string{source}, fileops.Copy)
+	result := fileops.ApplyTransfer(destination, []string{source}, fileops.Copy)
 	want := filepath.Join(destination, "folder_1")
 	if len(result.Errors) != 0 || len(result.Destinations) != 1 || result.Destinations[0] != want {
 		t.Fatalf("unexpected result: %+v", result)
@@ -36,7 +36,7 @@ func TestApplyDropCopiesRecursivelyAndAddsCollisionSuffix(t *testing.T) {
 	}
 }
 
-func TestApplyDropMovesFile(t *testing.T) {
+func TestApplyTransferMovesFile(t *testing.T) {
 	root := t.TempDir()
 	sourceDirectory := filepath.Join(root, "source")
 	destination := filepath.Join(root, "destination")
@@ -51,7 +51,7 @@ func TestApplyDropMovesFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result := fileops.ApplyDrop(destination, []string{source}, fileops.Move)
+	result := fileops.ApplyTransfer(destination, []string{source}, fileops.Move)
 	if len(result.Errors) != 0 || len(result.Destinations) != 1 {
 		t.Fatalf("unexpected result: %+v", result)
 	}
@@ -63,20 +63,20 @@ func TestApplyDropMovesFile(t *testing.T) {
 	}
 }
 
-func TestApplyDropRejectsDirectoryIntoItself(t *testing.T) {
+func TestApplyTransferRejectsDirectoryIntoItself(t *testing.T) {
 	source := t.TempDir()
 	destination := filepath.Join(source, "nested")
 	if err := os.Mkdir(destination, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	result := fileops.ApplyDrop(destination, []string{source}, fileops.Copy)
+	result := fileops.ApplyTransfer(destination, []string{source}, fileops.Copy)
 	if len(result.Destinations) != 0 || len(result.Errors) != 1 {
 		t.Fatalf("unexpected result: %+v", result)
 	}
 }
 
-func TestApplyDropPreservesSymlink(t *testing.T) {
+func TestApplyTransferPreservesSymlink(t *testing.T) {
 	root := t.TempDir()
 	sourceDirectory := filepath.Join(root, "source")
 	destination := filepath.Join(root, "destination")
@@ -91,11 +91,38 @@ func TestApplyDropPreservesSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result := fileops.ApplyDrop(destination, []string{link}, fileops.Copy)
+	result := fileops.ApplyTransfer(destination, []string{link}, fileops.Copy)
 	if len(result.Errors) != 0 {
 		t.Fatalf("unexpected errors: %v", result.Errors)
 	}
 	if target, err := os.Readlink(filepath.Join(destination, "link")); err != nil || target != "target" {
 		t.Fatalf("link target = %q, %v", target, err)
+	}
+}
+
+func TestApplyTransferCopiesFileBesideItself(t *testing.T) {
+	directory := t.TempDir()
+	source := filepath.Join(directory, "report.txt")
+	if err := os.WriteFile(source, []byte("content"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	result := fileops.ApplyTransfer(directory, []string{source}, fileops.Copy)
+	want := filepath.Join(directory, "report_1.txt")
+	if len(result.Errors) != 0 || len(result.Destinations) != 1 || result.Destinations[0] != want {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+}
+
+func TestApplyTransferRejectsMovingFileBesideItself(t *testing.T) {
+	directory := t.TempDir()
+	source := filepath.Join(directory, "report.txt")
+	if err := os.WriteFile(source, []byte("content"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	result := fileops.ApplyTransfer(directory, []string{source}, fileops.Move)
+	if len(result.Destinations) != 0 || len(result.Errors) != 1 {
+		t.Fatalf("unexpected result: %+v", result)
 	}
 }

@@ -22,7 +22,7 @@ type Result struct {
 	Errors       []error
 }
 
-func ApplyDrop(destination string, sources []string, operation Operation) Result {
+func ApplyTransfer(destination string, sources []string, operation Operation) Result {
 	result := Result{}
 	info, err := os.Stat(destination)
 	if err != nil || !info.IsDir() {

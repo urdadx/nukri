@@ -9,6 +9,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	appfileops "github.com/urdadx/nukri/internal/app/fileops"
+	"github.com/urdadx/nukri/internal/config/keys"
+	fsfileops "github.com/urdadx/nukri/internal/fs/fileops"
 	"github.com/urdadx/nukri/internal/kittydnd"
 	"github.com/urdadx/nukri/internal/preview"
 	"github.com/urdadx/nukri/internal/theme"
@@ -34,6 +37,7 @@ type Model struct {
 	dragOutput       io.Writer
 	dropOperation    kittydnd.Operation
 	dropMIME         int
+	clipboard        appfileops.Clipboard
 	status           string
 	searchOpen       bool
 	searchQuery      string
@@ -113,8 +117,11 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.submitPrefetch(message)
 	case searchMsg:
 		return m.handleSearchEvent(message)
-	case dropMsg:
+	case transferMsg:
 		m.status = message.statusText()
+		if message.origin == transferClipboard && message.operation == fsfileops.Move && message.completed > 0 {
+			m.clipboard.ClearIf(message.source, message.operation)
+		}
 		if message.destination == m.data.CWD {
 			return m, loadDirectory(message.destination, message.selectedPath)
 		}
@@ -161,7 +168,11 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m.handleSearchKey(message)
 		}
-		switch message.String() {
+		key := message.String()
+		if action, ok := keys.Resolve(key); ok {
+			return m.handleFileAction(action)
+		}
+		switch key {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		case "f":
