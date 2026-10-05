@@ -7,4 +7,6 @@ const (
 	ActionCut
 	ActionPaste
 	ActionCancelClipboard
+	ActionCreateArchive
+	ActionExtractArchive
 )

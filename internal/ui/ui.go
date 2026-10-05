@@ -19,37 +19,41 @@ import (
 )
 
 type Model struct {
-	width, height    int
-	styles           Styles
-	data             browser.Data
-	preview          *preview.Service
-	previewPool      *PreviewPool
-	searchPool       *SearchPool
-	visualState      *browser.VisualState
-	backHistory      []historyEntry
-	forwardHistory   []historyEntry
-	prefetchSeq      int
-	lastClickPath    string
-	lastClickAt      time.Time
-	dragCandidate    string
-	dragPayload      []byte
-	dragActive       bool
-	dragOutput       io.Writer
-	dropOperation    kittydnd.Operation
-	dropMIME         int
-	clipboard        appfileops.Clipboard
-	status           string
-	searchOpen       bool
-	searchQuery      string
-	searchSelected   int
-	searchToken      uint64
-	searchCandidates []searchCandidate
-	searchMatches    []int
-	searchFilterPool []int
-	searchFilterKey  string
-	searchLoading    bool
-	searchScanned    int
-	searchError      string
+	width, height     int
+	styles            Styles
+	data              browser.Data
+	preview           *preview.Service
+	previewPool       *PreviewPool
+	searchPool        *SearchPool
+	visualState       *browser.VisualState
+	backHistory       []historyEntry
+	forwardHistory    []historyEntry
+	prefetchSeq       int
+	lastClickPath     string
+	lastClickAt       time.Time
+	dragCandidate     string
+	dragPayload       []byte
+	dragActive        bool
+	dragOutput        io.Writer
+	dropOperation     kittydnd.Operation
+	dropMIME          int
+	clipboard         appfileops.Clipboard
+	status            string
+	searchOpen        bool
+	searchQuery       string
+	searchSelected    int
+	searchToken       uint64
+	searchCandidates  []searchCandidate
+	searchMatches     []int
+	searchFilterPool  []int
+	searchFilterKey   string
+	searchLoading     bool
+	searchScanned     int
+	searchError       string
+	archivePromptOpen bool
+	archiveName       string
+	archiveSelectAll  bool
+	archiveBusy       bool
 }
 
 const doubleClickWindow = 500 * time.Millisecond
@@ -129,7 +133,16 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if message.destination == m.data.CWD {
 			return m, loadDirectory(message.destination, message.selectedPath)
 		}
+	case archiveMsg:
+		m.archiveBusy = false
+		m.status = message.statusText()
+		if message.err == nil && filepath.Dir(message.output) == m.data.CWD {
+			return m, loadDirectory(m.data.CWD, message.output)
+		}
 	case tea.MouseMsg:
+		if m.archivePromptOpen {
+			return m, nil
+		}
 		if m.searchOpen {
 			return m.handleSearchMouse(message)
 		}
@@ -166,6 +179,9 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	case kittydnd.Event:
 		return m.handleDndEvent(message)
 	case tea.KeyMsg:
+		if m.archivePromptOpen {
+			return m.handleArchivePromptKey(message)
+		}
 		if m.searchOpen {
 			if message.Type == tea.KeyEsc {
 				return m.closeSearch(), nil
@@ -174,6 +190,12 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		key := message.String()
 		if action, ok := keys.Resolve(key); ok {
+			if action == keys.ActionCreateArchive {
+				return m.openArchivePrompt()
+			}
+			if action == keys.ActionExtractArchive {
+				return m.extractSelectedArchive()
+			}
 			return m.handleFileAction(action)
 		}
 		switch key {
@@ -636,6 +658,10 @@ func (m Model) View() string {
 	if m.searchOpen {
 		m.visualState.Clear()
 		return m.renderSearch(view)
+	}
+	if m.archivePromptOpen {
+		m.visualState.Clear()
+		return m.renderArchivePrompt(view)
 	}
 	return view
 }
