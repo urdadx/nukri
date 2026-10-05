@@ -21,6 +21,10 @@ func (c Clipboard) Empty() bool {
 	return c.Source == ""
 }
 
+func (c *Clipboard) Clear() {
+	*c = Clipboard{}
+}
+
 func (c *Clipboard) ClearIf(source string, operation fsfileops.Operation) {
 	if c.Source == source && c.Operation == operation {
 		*c = Clipboard{}

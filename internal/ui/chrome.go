@@ -9,7 +9,7 @@ import (
 	"github.com/urdadx/nukri/internal/ui/browser"
 )
 
-func renderFooter(width int, s Styles, data browser.Data, status string) string {
+func renderFooter(width int, s Styles, data browser.Data, operation, status string) string {
 	position, name := "0/0", "Loading..."
 	if data.Selected >= 0 && data.Selected < len(data.Entries) {
 		position = fmt.Sprintf("%d/%d", data.Selected+1, len(data.Entries))
@@ -17,7 +17,10 @@ func renderFooter(width int, s Styles, data browser.Data, status string) string 
 	} else if data.LoadError != "" {
 		name = "Load failed"
 	}
-	left := s.Accent.Render(" "+position+"  "+name) + s.Muted.Render(" │  main")
+	left := s.Accent.Render(" " + position + "  " + name)
+	if operation != "" {
+		left += s.Muted.Render(" │ " + operation)
+	}
 	if status == "" {
 		status = "Ready"
 	}

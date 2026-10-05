@@ -118,8 +118,12 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	case searchMsg:
 		return m.handleSearchEvent(message)
 	case transferMsg:
-		m.status = message.statusText()
-		if message.origin == transferClipboard && message.operation == fsfileops.Move && message.completed > 0 {
+		if message.origin == transferClipboard && message.err == nil {
+			m.status = ""
+		} else {
+			m.status = message.statusText()
+		}
+		if message.origin == transferClipboard && message.completed > 0 {
 			m.clipboard.ClearIf(message.source, message.operation)
 		}
 		if message.destination == m.data.CWD {
@@ -621,9 +625,13 @@ func (m Model) View() string {
 		Path: lipgloss.Color(t.FilePanelTopPath), Directory: lipgloss.Color(t.FilePanelTopDirectoryIcon), SelectedFG: lipgloss.Color(t.FilePanelItemSelectedFG), SelectedBG: lipgloss.Color(t.FilePanelItemSelectedBG), Muted: lipgloss.Color(t.SidebarDivider),
 		SidebarFG: lipgloss.Color(t.SidebarFG), SidebarBG: lipgloss.Color(t.SidebarBG), SidebarTitle: lipgloss.Color(t.FilePanelTopPath), SidebarBorder: lipgloss.Color(t.FilePanelBorder), SidebarIcon: lipgloss.Color(t.FilePanelTopDirectoryIcon),
 		SidebarSelectedFG: lipgloss.Color(t.SidebarItemSelectedFG), SidebarSelectedBG: lipgloss.Color(t.SidebarItemSelectedBG), Cursor: lipgloss.Color(t.Cursor),
+		OperationCopy: lipgloss.Color(t.Correct), OperationCut: lipgloss.Color(t.Cancel),
 	}
-	body := browser.Render(bodyWidth, bodyHeight, m.visualState, os.Stdout, browserStyles, m.data)
-	view := lipgloss.JoinVertical(lipgloss.Left, body, renderFooter(m.width, m.styles, m.data, m.status))
+	browserData := m.data
+	browserData.OperationPath = m.clipboard.Source
+	browserData.OperationCut = m.clipboard.Operation == fsfileops.Move
+	body := browser.Render(bodyWidth, bodyHeight, m.visualState, os.Stdout, browserStyles, browserData)
+	view := lipgloss.JoinVertical(lipgloss.Left, body, renderFooter(m.width, m.styles, m.data, m.clipboardStatus(), m.status))
 	view = m.styles.Root.Width(m.width).Height(m.height).MaxWidth(m.width).MaxHeight(m.height).Render(view)
 	if m.searchOpen {
 		m.visualState.Clear()

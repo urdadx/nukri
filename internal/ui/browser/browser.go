@@ -30,11 +30,14 @@ type Data struct {
 	PreviewLoading  bool
 	PreviewError    string
 	LoadError       string
+	OperationPath   string
+	OperationCut    bool
 }
 
 type Styles struct {
 	RootFG, RootBG, PanelFG, PanelBG, PanelBorder, ActiveBorder    lipgloss.Color
 	Path, Directory, SelectedFG, SelectedBG, Muted                 lipgloss.Color
+	OperationCopy, OperationCut                                    lipgloss.Color
 	SidebarFG, SidebarBG, SidebarTitle, SidebarBorder, SidebarIcon lipgloss.Color
 	SidebarSelectedFG, SidebarSelectedBG, Cursor                   lipgloss.Color
 }

@@ -16,9 +16,30 @@ func (m Model) handleFileAction(action keys.Action) (tea.Model, tea.Cmd) {
 		return m.cutSelected()
 	case keys.ActionPaste:
 		return m.pasteClipboard()
+	case keys.ActionCancelClipboard:
+		return m.cancelClipboard()
 	default:
 		return m, nil
 	}
+}
+
+func (m Model) cancelClipboard() (tea.Model, tea.Cmd) {
+	if m.clipboard.Empty() {
+		return m, nil
+	}
+	m.clipboard.Clear()
+	m.status = "Clipboard cleared"
+	return m, nil
+}
+
+func (m Model) clipboardStatus() string {
+	if m.clipboard.Empty() {
+		return ""
+	}
+	if m.clipboard.Operation == fileops.Move {
+		return "1 file cut"
+	}
+	return "1 file copied"
 }
 
 func (m Model) copySelected() (tea.Model, tea.Cmd) {
@@ -28,7 +49,7 @@ func (m Model) copySelected() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.clipboard.Copy(path)
-	m.status = "Copied " + filepath.Base(path) + " to clipboard"
+	m.status = ""
 	return m, nil
 }
 
@@ -39,7 +60,7 @@ func (m Model) cutSelected() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.clipboard.Cut(path)
-	m.status = "Cut " + filepath.Base(path) + " to clipboard"
+	m.status = ""
 	return m, nil
 }
 

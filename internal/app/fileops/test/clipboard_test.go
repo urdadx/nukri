@@ -34,3 +34,12 @@ func TestClipboardClearIfDoesNotClearNewerSelection(t *testing.T) {
 		t.Fatalf("clipboard was not cleared: %+v", clipboard)
 	}
 }
+
+func TestClipboardClear(t *testing.T) {
+	clipboard := appfileops.Clipboard{}
+	clipboard.Copy("/tmp/file")
+	clipboard.Clear()
+	if !clipboard.Empty() {
+		t.Fatalf("clipboard was not cleared: %+v", clipboard)
+	}
+}

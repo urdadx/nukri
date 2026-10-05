@@ -6,4 +6,5 @@ const (
 	ActionCopy Action = iota + 1
 	ActionCut
 	ActionPaste
+	ActionCancelClipboard
 )

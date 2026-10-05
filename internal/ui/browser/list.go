@@ -42,22 +42,39 @@ func RenderList(width, height int, s Styles, data Data) string {
 			metadata = fmt.Sprintf("%10s %9s", detail, formatModified(entry.Modified))
 		}
 		name := truncate(entry.Name, max(1, nameWidth))
+		operated := data.OperationPath != "" && entry.Path == data.OperationPath
 		prefix := "  "
+		operationColor := s.OperationCopy
+		if data.OperationCut {
+			operationColor = s.OperationCut
+		}
+		if operated {
+			prefix = "▌ "
+		}
 		nameText := fmt.Sprintf(" %-*s", max(1, nameWidth), name)
 		iconStyle := rowStyle
 		if item.IconColor != "" && item.IconColor != "NONE" {
 			iconStyle = iconStyle.Foreground(lipgloss.Color(item.IconColor))
 		}
 		if i == data.Selected {
-			row := "▌ " + item.Icon + nameText + metadata
-			row = truncate(row, width)
-			row += strings.Repeat(" ", max(0, width-lipgloss.Width(row)))
-			rows = append(rows, selectedStyle.Render(row))
+			marker := "▌ "
+			markerStyle := selectedStyle
+			if operated {
+				markerStyle = markerStyle.Foreground(operationColor)
+			}
+			content := item.Icon + nameText + metadata
+			content = truncate(content, max(0, width-lipgloss.Width(marker)))
+			content += strings.Repeat(" ", max(0, width-lipgloss.Width(marker)-lipgloss.Width(content)))
+			rows = append(rows, markerStyle.Render(marker)+selectedStyle.Render(content))
 			continue
 		}
 		used := lipgloss.Width(prefix) + lipgloss.Width(item.Icon) + lipgloss.Width(nameText) + lipgloss.Width(metadata)
 		filler := strings.Repeat(" ", max(0, width-used))
-		rows = append(rows, metadataStyle.Render(prefix)+iconStyle.Render(item.Icon)+metadataStyle.Render(nameText+metadata+filler))
+		prefixStyle := metadataStyle
+		if operated {
+			prefixStyle = rowStyle.Foreground(operationColor).Bold(true)
+		}
+		rows = append(rows, prefixStyle.Render(prefix)+iconStyle.Render(item.Icon)+metadataStyle.Render(nameText+metadata+filler))
 	}
 	return strings.Join(rows, "\n")
 }
