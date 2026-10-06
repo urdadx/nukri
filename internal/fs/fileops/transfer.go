@@ -59,6 +59,7 @@ func ApplyTransfer(destination string, sources []string, operation Operation) Re
 	return result
 }
 
+// availablePath returns a path that does not exist by appending a numeric suffix to the base name of the given path if necessary. An example scenario for the `availablePath` function is when a user is trying to copy a file named "report.txt" into a directory that already contains a file with the same name. so what happpens is that the `availablePath` function will check if "report.txt" already exists in the target directory. If it does, the function will generate a new name for the file by appending a numeric suffix to the base name, such as "report_1.txt". If "report_1.txt" also exists, it will continue to increment the suffix until it finds an available name, like "report_2.txt", and so on. This ensures that the new file can be copied without overwriting any existing files.
 func availablePath(path string) string {
 	if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
 		return path
@@ -91,6 +92,7 @@ func copyPath(source, destination string) error {
 			return err
 		}
 		entries, err := os.ReadDir(source)
+
 		if err != nil {
 			_ = os.RemoveAll(destination)
 			return err
