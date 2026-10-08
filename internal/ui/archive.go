@@ -16,8 +16,23 @@ type archiveMsg struct {
 	err       error
 }
 
+type archiveProgressMsg struct {
+	percent float64
+	stream  <-chan tea.Msg
+}
+
+func waitArchive(stream <-chan tea.Msg) tea.Cmd {
+	return func() tea.Msg {
+		return <-stream
+	}
+}
+
 func (m Model) openArchivePrompt() (tea.Model, tea.Cmd) {
-	if m.archiveBusy || m.data.Selected < 0 || m.data.Selected >= len(m.data.Entries) {
+	if m.archiveBusy {
+		m.status = "Archive operation already in progress"
+		return m, nil
+	}
+	if m.data.Selected < 0 || m.data.Selected >= len(m.data.Entries) {
 		m.status = "Nothing selected"
 		return m, nil
 	}
@@ -46,7 +61,9 @@ func (m Model) handleArchivePromptKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		destination := filepath.Join(m.data.CWD, name)
 		m.archivePromptOpen = false
 		m.archiveBusy = true
-		m.status = "Creating " + name + "..."
+		m.archiveOperation = "create"
+		m.archivePercent = 0
+		m.status = ""
 		return m, createArchive(source, destination)
 	case "backspace":
 		if m.archiveSelectAll {
@@ -71,7 +88,11 @@ func (m Model) handleArchivePromptKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) extractSelectedArchive() (tea.Model, tea.Cmd) {
-	if m.archiveBusy || m.data.Selected < 0 || m.data.Selected >= len(m.data.Entries) {
+	if m.archiveBusy {
+		m.status = "Archive operation already in progress"
+		return m, nil
+	}
+	if m.data.Selected < 0 || m.data.Selected >= len(m.data.Entries) {
 		m.status = "Nothing selected"
 		return m, nil
 	}
@@ -81,15 +102,29 @@ func (m Model) extractSelectedArchive() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.archiveBusy = true
+	m.archiveOperation = "extract"
 	m.status = "Extracting " + filepath.Base(path) + "..."
 	return m, extractArchive(path)
 }
 
 func createArchive(source, destination string) tea.Cmd {
-	return func() tea.Msg {
-		output, err := archive.Create(destination, []string{source})
-		return archiveMsg{operation: "create", output: output, err: err}
-	}
+	stream := make(chan tea.Msg, 8)
+	go func() {
+		output, err := archive.CreateWithProgress(destination, []string{source}, func(value archive.Progress) {
+			percent := 0.0
+			if value.Total > 0 {
+				percent = min(1, float64(value.Completed)/float64(value.Total))
+			}
+			message := archiveProgressMsg{percent: percent, stream: stream}
+			select {
+			case stream <- message:
+			default:
+			}
+		})
+		stream <- archiveMsg{operation: "create", output: output, err: err}
+		close(stream)
+	}()
+	return waitArchive(stream)
 }
 
 func extractArchive(source string) tea.Cmd {
@@ -97,6 +132,16 @@ func extractArchive(source string) tea.Cmd {
 		output, err := archive.Extract(source)
 		return archiveMsg{operation: "extract", output: output, err: err}
 	}
+}
+
+func (m Model) archiveStatus() string {
+	if !m.archiveBusy {
+		return ""
+	}
+	if m.archiveOperation != "create" {
+		return "Extracting archive..."
+	}
+	return fmt.Sprintf("Creating archive %s %3.0f%%", m.archiveProgress.ViewAs(m.archivePercent), m.archivePercent*100)
 }
 
 func (m Model) renderArchivePrompt(base string) string {

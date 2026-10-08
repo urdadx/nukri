@@ -11,9 +11,25 @@ import (
 	"strings"
 )
 
-// Create writes sources to destination. Symlinks and filesystem objects other
-// than regular files and directories are rejected rather than followed.
+type Progress struct {
+	Completed int64
+	Total     int64
+}
+
+type progressTracker struct {
+	progress Progress
+	next     int64
+	report   func(Progress)
+}
+
+// Create writes sources to destination. In-tree symlinks to regular files are
+// dereferenced; other symlinks and special filesystem objects are rejected.
 func Create(destination string, sources []string) (string, error) {
+	return CreateWithProgress(destination, sources, nil)
+}
+
+// CreateWithProgress writes sources to destination and reports copied bytes.
+func CreateWithProgress(destination string, sources []string, report func(Progress)) (string, error) {
 	format, err := FormatFromPath(destination)
 	if err != nil {
 		return "", err
@@ -25,6 +41,20 @@ func Create(destination string, sources []string) (string, error) {
 		return "", fmt.Errorf("destination already exists: %s", filepath.Base(destination))
 	} else if !os.IsNotExist(err) {
 		return "", fmt.Errorf("check destination: %w", err)
+	}
+	tracker := &progressTracker{report: report}
+	if report != nil {
+		err := walkSources(sources, func(_ string, _ string, info os.FileInfo) error {
+			if info.Mode().IsRegular() {
+				tracker.progress.Total += info.Size()
+			}
+			return nil
+		})
+		if err != nil {
+			return "", err
+		}
+		tracker.next = 1 << 20
+		report(tracker.progress)
 	}
 	parent := filepath.Dir(destination)
 	stage, err := os.CreateTemp(parent, ".nukri-archive-*")
@@ -42,9 +72,9 @@ func Create(destination string, sources []string) (string, error) {
 
 	switch format {
 	case ZIP:
-		err = writeZIP(stage, sources)
+		err = writeZIP(stage, sources, tracker)
 	case TAR, TARGZ:
-		err = writeTAR(stage, sources, format == TARGZ)
+		err = writeTAR(stage, sources, format == TARGZ, tracker)
 	}
 	if closeErr := stage.Close(); err == nil {
 		err = closeErr
@@ -61,6 +91,7 @@ func Create(destination string, sources []string) (string, error) {
 		return "", fmt.Errorf("publish archive: %w", err)
 	}
 	ok = true
+	tracker.finish()
 	return destination, nil
 }
 
@@ -68,18 +99,45 @@ func walkSources(sources []string, visit func(string, string, os.FileInfo) error
 	seen := make(map[string]bool)
 	for _, source := range sources {
 		source = filepath.Clean(source)
+		root, err := filepath.Abs(source)
+		if err != nil {
+			return err
+		}
 		rootName := filepath.Base(source)
-		err := filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
+		err = filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
+			archivePath := path
 			if info.Mode()&os.ModeSymlink != 0 {
-				return fmt.Errorf("refusing to archive symlink: %s", path)
+				if path == source {
+					return fmt.Errorf("refusing to archive source symlink: %s", path)
+				}
+				resolved, err := filepath.EvalSymlinks(path)
+				if err != nil {
+					return err
+				}
+				resolved, err = filepath.Abs(resolved)
+				if err != nil {
+					return err
+				}
+				relativeTarget, err := filepath.Rel(root, resolved)
+				if err != nil || relativeTarget == ".." || strings.HasPrefix(relativeTarget, ".."+string(filepath.Separator)) {
+					return fmt.Errorf("refusing to archive symlink outside source: %s", path)
+				}
+				info, err = os.Stat(resolved)
+				if err != nil {
+					return err
+				}
+				if !info.Mode().IsRegular() {
+					return fmt.Errorf("refusing to archive symlink to non-regular file: %s", path)
+				}
+				path = resolved
 			}
 			if !info.Mode().IsRegular() && !info.IsDir() {
 				return fmt.Errorf("refusing to archive special file: %s", path)
 			}
-			relative, err := filepath.Rel(source, path)
+			relative, err := filepath.Rel(source, archivePath)
 			if err != nil {
 				return err
 			}
@@ -101,9 +159,18 @@ func walkSources(sources []string, visit func(string, string, os.FileInfo) error
 	return nil
 }
 
-func writeZIP(output io.Writer, sources []string) error {
+func writeZIP(output io.Writer, sources []string, progress *progressTracker) error {
 	writer := zip.NewWriter(output)
 	err := walkSources(sources, func(path, name string, info os.FileInfo) error {
+		var file *os.File
+		if !info.IsDir() {
+			var err error
+			file, info, err = openRegular(path, info)
+			if err != nil {
+				return err
+			}
+			defer file.Close()
+		}
 		header, err := zip.FileInfoHeader(info)
 		if err != nil {
 			return err
@@ -118,7 +185,8 @@ func writeZIP(output io.Writer, sources []string) error {
 		if err != nil || info.IsDir() {
 			return err
 		}
-		return copyRegular(path, entry)
+		err = copyWithProgress(entry, file, progress)
+		return err
 	})
 	if closeErr := writer.Close(); err == nil {
 		err = closeErr
@@ -126,7 +194,7 @@ func writeZIP(output io.Writer, sources []string) error {
 	return err
 }
 
-func writeTAR(output io.Writer, sources []string, compressed bool) error {
+func writeTAR(output io.Writer, sources []string, compressed bool, progress *progressTracker) error {
 	var gzipWriter *gzip.Writer
 	if compressed {
 		gzipWriter = gzip.NewWriter(output)
@@ -134,6 +202,15 @@ func writeTAR(output io.Writer, sources []string, compressed bool) error {
 	}
 	writer := tar.NewWriter(output)
 	err := walkSources(sources, func(path, name string, info os.FileInfo) error {
+		var file *os.File
+		if !info.IsDir() {
+			var err error
+			file, info, err = openRegular(path, info)
+			if err != nil {
+				return err
+			}
+			defer file.Close()
+		}
 		header, err := tar.FileInfoHeader(info, "")
 		if err != nil {
 			return err
@@ -142,7 +219,8 @@ func writeTAR(output io.Writer, sources []string, compressed bool) error {
 		if err := writer.WriteHeader(header); err != nil || info.IsDir() {
 			return err
 		}
-		return copyRegular(path, writer)
+		err = copyWithProgress(writer, file, progress)
+		return err
 	})
 	if closeErr := writer.Close(); err == nil {
 		err = closeErr
@@ -155,12 +233,67 @@ func writeTAR(output io.Writer, sources []string, compressed bool) error {
 	return err
 }
 
-func copyRegular(path string, destination io.Writer) error {
+func copyWithProgress(destination io.Writer, source io.Reader, progress *progressTracker) error {
+	buffer := make([]byte, 256*1024)
+	for {
+		read, readErr := source.Read(buffer)
+		if read > 0 {
+			written, writeErr := destination.Write(buffer[:read])
+			progress.add(int64(written))
+			if writeErr != nil {
+				return writeErr
+			}
+			if written != read {
+				return io.ErrShortWrite
+			}
+		}
+		if readErr == io.EOF {
+			return nil
+		}
+		if readErr != nil {
+			return readErr
+		}
+	}
+}
+
+func (p *progressTracker) add(bytes int64) {
+	if p == nil || p.report == nil {
+		return
+	}
+	p.progress.Completed += bytes
+	if p.progress.Completed >= p.next {
+		p.next = p.progress.Completed + 1<<20
+		p.report(p.progress)
+	}
+}
+
+func (p *progressTracker) finish() {
+	if p == nil || p.report == nil {
+		return
+	}
+	p.progress.Completed = p.progress.Total
+	p.report(p.progress)
+}
+
+func openRegular(path string, walkedInfo os.FileInfo) (*os.File, os.FileInfo, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
-	defer file.Close()
-	_, err = io.Copy(destination, file)
-	return err
+	info, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return nil, nil, err
+	}
+	pathInfo, err := os.Lstat(path)
+	if err != nil {
+		file.Close()
+		return nil, nil, err
+	}
+	if !info.Mode().IsRegular() || !pathInfo.Mode().IsRegular() ||
+		!os.SameFile(walkedInfo, info) || !os.SameFile(info, pathInfo) {
+		file.Close()
+		return nil, nil, fmt.Errorf("source changed while archiving: %s", path)
+	}
+	return file, info, nil
 }

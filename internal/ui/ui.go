@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/charmbracelet/bubbles/progress"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	appfileops "github.com/urdadx/nukri/internal/app/fileops"
@@ -54,6 +55,9 @@ type Model struct {
 	archiveName       string
 	archiveSelectAll  bool
 	archiveBusy       bool
+	archiveOperation  string
+	archivePercent    float64
+	archiveProgress   progress.Model
 }
 
 const doubleClickWindow = 500 * time.Millisecond
@@ -65,7 +69,10 @@ type historyEntry struct {
 
 func New(t theme.Theme) Model {
 	svc := preview.NewService()
-	return Model{width: 120, height: 32, styles: NewStyles(t), preview: svc, previewPool: NewPreviewPool(svc, 2), searchPool: NewSearchPool(), visualState: &browser.VisualState{}, data: browser.Data{Selected: -1, PreviewSelected: -1}}
+	bar := progress.New(progress.WithDefaultGradient())
+	bar.Width = 12
+	bar.ShowPercentage = false
+	return Model{width: 120, height: 32, styles: NewStyles(t), preview: svc, previewPool: NewPreviewPool(svc, 2), searchPool: NewSearchPool(), visualState: &browser.VisualState{}, data: browser.Data{Selected: -1, PreviewSelected: -1}, archiveProgress: bar}
 }
 
 func (m Model) WithDragOutput(output io.Writer) Model {
@@ -135,10 +142,15 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case archiveMsg:
 		m.archiveBusy = false
+		m.archiveOperation = ""
+		m.archivePercent = 0
 		m.status = message.statusText()
 		if message.err == nil && filepath.Dir(message.output) == m.data.CWD {
 			return m, loadDirectory(m.data.CWD, message.output)
 		}
+	case archiveProgressMsg:
+		m.archivePercent = message.percent
+		return m, waitArchive(message.stream)
 	case tea.MouseMsg:
 		if m.archivePromptOpen {
 			return m, nil
@@ -653,7 +665,11 @@ func (m Model) View() string {
 	browserData.OperationPath = m.clipboard.Source
 	browserData.OperationCut = m.clipboard.Operation == fsfileops.Move
 	body := browser.Render(bodyWidth, bodyHeight, m.visualState, os.Stdout, browserStyles, browserData)
-	view := lipgloss.JoinVertical(lipgloss.Left, body, renderFooter(m.width, m.styles, m.data, m.clipboardStatus(), m.status))
+	operation := m.clipboardStatus()
+	if archiveStatus := m.archiveStatus(); archiveStatus != "" {
+		operation = archiveStatus
+	}
+	view := lipgloss.JoinVertical(lipgloss.Left, body, renderFooter(m.width, m.styles, m.data, operation, m.status))
 	view = m.styles.Root.Width(m.width).Height(m.height).MaxWidth(m.width).MaxHeight(m.height).Render(view)
 	if m.searchOpen {
 		m.visualState.Clear()

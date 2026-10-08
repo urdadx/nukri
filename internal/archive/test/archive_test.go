@@ -45,6 +45,36 @@ func TestCreateAndExtractFormats(t *testing.T) {
 	}
 }
 
+func TestCreateReportsByteProgress(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source.bin")
+	content := []byte(strings.Repeat("progress", 200_000))
+	if err := os.WriteFile(source, content, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var updates []archive.Progress
+	if _, err := archive.CreateWithProgress(filepath.Join(root, "output.zip"), []string{source}, func(progress archive.Progress) {
+		updates = append(updates, progress)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(updates) < 2 {
+		t.Fatalf("got %d progress updates, want at least initial and final", len(updates))
+	}
+	for i, update := range updates {
+		if update.Total != int64(len(content)) {
+			t.Fatalf("update %d total = %d, want %d", i, update.Total, len(content))
+		}
+		if i > 0 && update.Completed < updates[i-1].Completed {
+			t.Fatalf("progress decreased from %d to %d", updates[i-1].Completed, update.Completed)
+		}
+	}
+	last := updates[len(updates)-1]
+	if last.Completed != last.Total {
+		t.Fatalf("final progress = %d/%d", last.Completed, last.Total)
+	}
+}
+
 func TestCreateDoesNotOverwrite(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "source.txt")
@@ -79,6 +109,36 @@ func TestCreateRejectsSymlink(t *testing.T) {
 	}
 	if _, err := archive.Create(filepath.Join(root, "out.zip"), []string{link}); err == nil || !strings.Contains(err.Error(), "symlink") {
 		t.Fatalf("expected symlink rejection, got %v", err)
+	}
+}
+
+func TestCreateDereferencesInTreeFileSymlink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink permissions vary on Windows")
+	}
+	root := t.TempDir()
+	source := filepath.Join(root, "project")
+	if err := os.MkdirAll(filepath.Join(source, "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(source, "tool.js")
+	if err := os.WriteFile(target, []byte("tool"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("../tool.js", filepath.Join(source, "bin", "tool")); err != nil {
+		t.Fatal(err)
+	}
+	archivePath := filepath.Join(root, "project.zip")
+	if _, err := archive.Create(archivePath, []string{source}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	output, err := archive.Extract(archivePath)
+	if err != nil {
+		t.Fatalf("extract: %v", err)
+	}
+	content, err := os.ReadFile(filepath.Join(output, "project", "bin", "tool"))
+	if err != nil || string(content) != "tool" {
+		t.Fatalf("dereferenced content = %q, %v", content, err)
 	}
 }
 
