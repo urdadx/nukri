@@ -68,9 +68,10 @@ func linuxDeviceItemsFromMounts(mounts []LinuxMount, home string, labels map[str
 
 		// Never canonicalize mount points here. Statting an autofs trigger or dead
 		// network share can block the main event loop until the mount responds.
-		icon := icons.FixedDevice
+		set := icons.Current()
+		icon := set.FixedDevice
 		if isRemovable {
-			icon = icons.RemovableDevice
+			icon = set.RemovableDevice
 		}
 		item := core.NewSidebarItem(core.Device, linuxMountTitle(mount, labels), icon, mount.mountPoint, filepath.Clean(mount.mountPoint))
 		item.Removable = isRemovable

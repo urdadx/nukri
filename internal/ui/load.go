@@ -212,7 +212,7 @@ func iconFor(entry core.Entry) icons.Style {
 		if icon, ok := icons.Folders[entry.Name]; ok {
 			return icon
 		}
-		return icons.Folders["folder"]
+		return icons.Current().Folder
 	}
 	name := strings.ToLower(entry.Name)
 	// Some icons are keyed by full file name, such as gruntfile.js or jenkinsfile.

@@ -113,7 +113,7 @@ func resolvePlaceEntry(entry config.PlaceEntrySpec, context *PlaceResolutionCont
 	if entry.Builtin != nil {
 		return resolveBuiltinPlace(*entry.Builtin, entry.Icon, context)
 	}
-	return sidebarItem(core.Custom, entry.Title, placeIcon(entry.Path, entry.Icon, icons.CustomPlace), entry.Path), true
+	return sidebarItem(core.Custom, entry.Title, placeIcon(entry.Path, entry.Icon, icons.Current().CustomPlace), entry.Path), true
 }
 
 func resolveBuiltinPlace(place config.BuiltinPlace, icon string, context *PlaceResolutionContext) (core.SidebarItem, bool) {
@@ -124,16 +124,17 @@ func resolveBuiltinPlace(place config.BuiltinPlace, icon string, context *PlaceR
 		path      *string
 		localized bool
 	}
+	set := icons.Current()
 	data := map[config.BuiltinPlace]placeData{
-		config.Home:      {core.Home, "Home", icons.Home, &context.Home, false},
-		config.Desktop:   {core.Desktop, "Desktop", icons.Desktop, context.Desktop, true},
-		config.Documents: {core.Documents, "Documents", icons.Documents, context.Documents, true},
-		config.Downloads: {core.Downloads, "Downloads", icons.Downloads, context.Downloads, true},
-		config.Pictures:  {core.Pictures, "Pictures", icons.Pictures, context.Pictures, true},
-		config.Music:     {core.Music, "Music", icons.Music, context.Music, true},
-		config.Videos:    {core.Videos, "Videos", icons.Videos, context.Videos, true},
-		config.Root:      {core.Root, "Root", icons.Root, context.Root, false},
-		config.Trash:     {core.Trash, "Trash", icons.Trash, context.Trash, false},
+		config.Home:      {core.Home, "Home", set.Home, &context.Home, false},
+		config.Desktop:   {core.Desktop, "Desktop", set.Desktop, context.Desktop, true},
+		config.Documents: {core.Documents, "Documents", set.Documents, context.Documents, true},
+		config.Downloads: {core.Downloads, "Downloads", set.Downloads, context.Downloads, true},
+		config.Pictures:  {core.Pictures, "Pictures", set.Pictures, context.Pictures, true},
+		config.Music:     {core.Music, "Music", set.Music, context.Music, true},
+		config.Videos:    {core.Videos, "Videos", set.Videos, context.Videos, true},
+		config.Root:      {core.Root, "Root", set.Root, context.Root, false},
+		config.Trash:     {core.Trash, "Trash", set.Trash, context.Trash, false},
 	}[place]
 	if data.path == nil {
 		return core.SidebarItem{}, false
@@ -155,9 +156,9 @@ func placeIcon(path, override, defaultIcon string) string {
 		return defaultIcon
 	}
 	if target, err := os.Stat(path); err == nil && target.IsDir() {
-		return icons.LinkedPlace
+		return icons.Current().LinkedPlace
 	}
-	return icons.BrokenPlace
+	return icons.Current().BrokenPlace
 }
 
 func sidebarItem(kind core.SidebarItemKind, title, icon, path string) core.SidebarItem {

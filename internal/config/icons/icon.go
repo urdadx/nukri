@@ -11,18 +11,13 @@ type Style struct {
 	Color string
 }
 
-// Place and folder icons. InitIcon sets them for the chosen icon mode.
-var (
-	Home, Desktop, Downloads, Documents, Pictures, Videos, Music string
-	Trash, Root, CustomPlace, LinkedPlace, BrokenPlace           string
-	FixedDevice, RemovableDevice, Directory                      string
-)
-
 /*
 THESE CODE BASE ON https://github.com/acarl005/ls-go
 thanks for the great work!!
 */
 
+// Icons, Aliases and Folders are read from preview workers and must not be
+// changed at runtime. Mode-dependent icons live in Set (see Current).
 var Icons = map[string]Style{
 	"ai":           {Icon: "\ue669", Color: "#ce6f14"},     // Printable Rune : ""
 	"android":      {Icon: "\uf17b", Color: "#a7c83f"},     // Printable Rune : ""
@@ -387,7 +382,7 @@ var Folders = map[string]Style{
 	".vscode": {Icon: "\ue70c", Color: "#007acc"}, // VSCode folder - Blue // Printable Rune : ""
 	".vim":    {Icon: "\ue62b", Color: "#019833"}, // Vim folder - Green // Printable Rune : ""
 	"config":  {Icon: "\ue5fc", Color: "#ffb86c"}, // Config folder - Light orange // Printable Rune : ""
-	// Item for Generic folder, with key "folder" is initialized in InitIcon()
+	// The generic folder icon depends on the icon mode: see Set.Folder.
 	"node_modules": {Icon: "\ue5fa", Color: "#cb3837"}, // Node modules folder - Red // Printable Rune : ""
 
 }

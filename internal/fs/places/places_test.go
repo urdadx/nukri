@@ -34,14 +34,14 @@ func TestLinuxDeviceItemsFilterAndSortVisibleMounts(t *testing.T) {
 	if items[0].Title != "photos" || items[0].Path != "/home/alex/mnt/photos" || items[0].Removable {
 		t.Fatalf("unexpected fixed device: %#v", items[0])
 	}
-	if items[0].Icon != icons.FixedDevice {
-		t.Fatalf("fixed device icon = %q, want %q", items[0].Icon, icons.FixedDevice)
+	if items[0].Icon != icons.Current().FixedDevice {
+		t.Fatalf("fixed device icon = %q, want %q", items[0].Icon, icons.Current().FixedDevice)
 	}
 	if items[1].Title != "Vacation" || items[1].Path != "/run/media/alex/My USB" || !items[1].Removable {
 		t.Fatalf("unexpected removable device: %#v", items[1])
 	}
-	if items[1].Icon != icons.RemovableDevice {
-		t.Fatalf("removable device icon = %q, want %q", items[1].Icon, icons.RemovableDevice)
+	if items[1].Icon != icons.Current().RemovableDevice {
+		t.Fatalf("removable device icon = %q, want %q", items[1].Icon, icons.Current().RemovableDevice)
 	}
 }
 
@@ -127,11 +127,11 @@ func TestPlaceIconHandlesOverridesAndSymlinks(t *testing.T) {
 	if got := placeIcon(directory, "", "default"); got != "default" {
 		t.Fatalf("regular directory icon = %q, want default", got)
 	}
-	if got := placeIcon(link, "", "default"); got != icons.LinkedPlace {
-		t.Fatalf("linked directory icon = %q, want %q", got, icons.LinkedPlace)
+	if got := placeIcon(link, "", "default"); got != icons.Current().LinkedPlace {
+		t.Fatalf("linked directory icon = %q, want %q", got, icons.Current().LinkedPlace)
 	}
-	if got := placeIcon(broken, "", "default"); got != icons.BrokenPlace {
-		t.Fatalf("broken link icon = %q, want %q", got, icons.BrokenPlace)
+	if got := placeIcon(broken, "", "default"); got != icons.Current().BrokenPlace {
+		t.Fatalf("broken link icon = %q, want %q", got, icons.Current().BrokenPlace)
 	}
 }
 
