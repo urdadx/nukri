@@ -3,6 +3,7 @@ package image_protocols
 import (
 	"bytes"
 	"fmt"
+	"image"
 	"image/png"
 	"io"
 	"os"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/mattn/go-sixel"
 	"github.com/urdadx/nukri/internal/preview"
+	"golang.org/x/image/draw"
 )
 
 const (
@@ -26,6 +28,17 @@ type Sixel struct {
 	mu              sync.Mutex
 	nextID          uint32
 	placements      map[uint32]RenderedImage
+
+	// The last decoded source and its last encoding. Sixel has no stored images,
+	// so a move or redraw must re-send pixels; these keep it from re-decoding the
+	// PNG, and from re-encoding when the size is unchanged.
+	source      image.Image
+	sourceData  *byte
+	sourceSize  int
+	encoded     []byte
+	encodedFor  *byte
+	encodedCols int
+	encodedRows int
 }
 
 func NewSixel(writer io.Writer) *Sixel {
@@ -65,34 +78,98 @@ func (s *Sixel) Place(value preview.Image, placement Placement) (RenderedImage, 
 	if placement.X < 0 || placement.Y < 0 || placement.Columns <= 0 || placement.Rows <= 0 {
 		return RenderedImage{}, ErrInvalidPlacement
 	}
-	image, err := png.Decode(bytes.NewReader(value.Data))
-	if err != nil {
-		return RenderedImage{}, fmt.Errorf("decode Sixel source PNG: %w", err)
-	}
-	var encoded bytes.Buffer
-	encoder := sixel.NewEncoder(&encoded)
-	encoder.Width = placement.Columns * s.cellPixelWidth
-	encoder.Height = placement.Rows * s.cellPixelHeight
-	encoder.Colors = 256
-	encoder.Dither = true
-	encoder.Transparent = true
-	if err := encoder.Encode(image); err != nil {
-		return RenderedImage{}, fmt.Errorf("encode Sixel image: %w", err)
-	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	id := s.allocateID()
-	rendered := RenderedImage{
-		ImageID: id, PlacementID: id, X: placement.X, Y: placement.Y,
-		Columns: placement.Columns, Rows: placement.Rows,
+	if err := s.loadSource(value.Data); err != nil {
+		return RenderedImage{}, err
 	}
-	sequence := fmt.Sprintf("\x1b7\x1b[%d;%dH%s\x1b8", placement.Y+1, placement.X+1, encoded.Bytes())
+	id := s.allocateID()
+	return s.draw(RenderedImage{ImageID: id, PlacementID: id}, placement)
+}
+
+// Move redraws the last placed image at a new position or size.
+func (s *Sixel) Move(image RenderedImage, placement Placement) (RenderedImage, error) {
+	if !s.Supported() {
+		return RenderedImage{}, ErrUnsupportedTerminal
+	}
+	if placement.X < 0 || placement.Y < 0 || placement.Columns <= 0 || placement.Rows <= 0 {
+		return RenderedImage{}, ErrInvalidPlacement
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	placed, ok := s.placements[image.PlacementID]
+	if !ok || s.source == nil {
+		return RenderedImage{}, ErrInvalidImage
+	}
+	if err := s.clearPlacement(placed); err != nil {
+		return RenderedImage{}, err
+	}
+	return s.draw(image, placement)
+}
+
+func (s *Sixel) loadSource(data []byte) error {
+	if s.source != nil && s.sourceData == &data[0] && s.sourceSize == len(data) {
+		return nil
+	}
+	decoded, err := png.Decode(bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("decode Sixel source PNG: %w", err)
+	}
+	s.source, s.sourceData, s.sourceSize = decoded, &data[0], len(data)
+	s.encoded = nil
+	return nil
+}
+
+// draw writes the current source at placement, encoding it only when the cell
+// size differs from the last encoding.
+func (s *Sixel) draw(rendered RenderedImage, placement Placement) (RenderedImage, error) {
+	if s.encoded == nil || s.encodedFor != s.sourceData || s.encodedCols != placement.Columns || s.encodedRows != placement.Rows {
+		encoded, err := s.encode(placement)
+		if err != nil {
+			return RenderedImage{}, err
+		}
+		s.encoded, s.encodedFor, s.encodedCols, s.encodedRows = encoded, s.sourceData, placement.Columns, placement.Rows
+	}
+	rendered.X, rendered.Y, rendered.Columns, rendered.Rows = placement.X, placement.Y, placement.Columns, placement.Rows
+	sequence := fmt.Sprintf("\x1b7\x1b[%d;%dH%s\x1b8", placement.Y+1, placement.X+1, s.encoded)
 	if _, err := io.WriteString(s.writer, sequence); err != nil {
 		return RenderedImage{}, fmt.Errorf("place Sixel image: %w", err)
 	}
-	s.placements[id] = rendered
+	s.placements[rendered.PlacementID] = rendered
 	return rendered, nil
+}
+
+/*
+encode scales the source to fit the placement's pixel box before quantizing.
+The encoder's Width and Height only crop, so without scaling a large image would
+be cut off, and dithering would run over every source pixel.
+*/
+func (s *Sixel) encode(placement Placement) ([]byte, error) {
+	boxWidth := placement.Columns * s.cellPixelWidth
+	boxHeight := placement.Rows * s.cellPixelHeight
+	source := s.source
+	bounds := source.Bounds()
+	if bounds.Dx() > boxWidth || bounds.Dy() > boxHeight {
+		scale := min(float64(boxWidth)/float64(bounds.Dx()), float64(boxHeight)/float64(bounds.Dy()))
+		width := max(1, int(float64(bounds.Dx())*scale))
+		height := max(1, int(float64(bounds.Dy())*scale))
+		scaled := image.NewNRGBA(image.Rect(0, 0, width, height))
+		draw.ApproxBiLinear.Scale(scaled, scaled.Bounds(), source, bounds, draw.Src, nil)
+		source = scaled
+	}
+	var encoded bytes.Buffer
+	encoder := sixel.NewEncoder(&encoded)
+	// source now fits the box; its own size keeps the raster attributes exact.
+	encoder.Width = min(source.Bounds().Dx(), boxWidth)
+	encoder.Height = min(source.Bounds().Dy(), boxHeight)
+	encoder.Colors = 256
+	encoder.Dither = true
+	encoder.Transparent = true
+	if err := encoder.Encode(source); err != nil {
+		return nil, fmt.Errorf("encode Sixel image: %w", err)
+	}
+	return encoded.Bytes(), nil
 }
 
 func (s *Sixel) DeletePlacement(image RenderedImage) error {

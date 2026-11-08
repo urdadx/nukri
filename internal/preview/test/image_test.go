@@ -10,34 +10,21 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gen2brain/avif"
 	"github.com/urdadx/nukri/internal/core"
 	"github.com/urdadx/nukri/internal/file_info"
 	"github.com/urdadx/nukri/internal/preview"
 )
 
+// gradient.avif is a 320x200 AVIF; AVIF previews are decoded by ffmpeg.
 func TestRenderAVIFImagePreview(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "sample.avif")
-	img := image.NewNRGBA(image.Rect(0, 0, 320, 200))
-	for y := 0; y < 200; y++ {
-		for x := 0; x < 320; x++ {
-			img.Set(x, y, color.NRGBA{uint8(x % 255), uint8(y % 255), 128, 255})
-		}
-	}
-	file, err := os.Create(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := avif.Encode(file, img); err != nil {
-		t.Fatal(err)
-	}
-	file.Close()
-
+	service := preview.NewService()
+	requireCapability(t, service.Capabilities().AVIF, "ffmpeg")
+	path := "file_samples/gradient.avif"
 	facts := fileinfo.InspectPath(path, core.File)
 	if facts.BuiltinClass != core.FileClassImage {
 		t.Fatalf("expected AVIF to be classified as image, got %v", facts.BuiltinClass)
 	}
-	result, err := preview.NewService().Render(context.Background(), preview.Request{Path: path, Facts: facts, Width: 60})
+	result, err := service.Render(context.Background(), preview.Request{Path: path, Facts: facts, Width: 60})
 	if err != nil {
 		t.Fatalf("render AVIF: %v", err)
 	}

@@ -6,9 +6,12 @@ The file also includes utility functions to determine the appropriate icon for e
 package ui
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -29,12 +32,22 @@ type loadedMsg struct {
 	err          error
 }
 
+// itemCountsMsg carries the visible child counts for the directories listed in
+// cwd. Counting needs one directory read per subdirectory, so it runs after the
+// listing is shown instead of delaying it.
+type itemCountsMsg struct {
+	cwd    string
+	counts map[string]int
+}
+
 type previewMsg struct {
 	path      string
 	view      preview.View
 	entries   []browser.Entry
 	directory bool
 	err       error
+	// cancelled marks a render that was superseded; it carries no preview.
+	cancelled bool
 }
 
 func loadFilesystem() tea.Msg {
@@ -78,11 +91,7 @@ func loadDirectoryMessage(cwd string) tea.Msg {
 		}
 		facts := fileinfo.InspectEntryFast(&entry)
 		icon := iconFor(entry)
-		loadedEntry := browser.Entry{Entry: entry, Facts: facts, Icon: icon.Icon, IconColor: icon.Color}
-		if entry.IsDirectory() {
-			loadedEntry.ItemCount = visibleItemCount(entry.Path)
-		}
-		entries = append(entries, loadedEntry)
+		entries = append(entries, browser.Entry{Entry: entry, Facts: facts, Icon: icon.Icon, IconColor: icon.Color})
 	}
 	sort.SliceStable(entries, func(i, j int) bool {
 		if entries[i].Entry.IsDirectory() != entries[j].Entry.IsDirectory() {
@@ -100,16 +109,36 @@ func loadPreview(pool *PreviewPool, entry browser.Entry, width, codeWindow int, 
 	}
 }
 
-// extendPreview re-requests a code preview with a larger leading-line window so
-// the already-loaded lines are preserved while more are rendered. It runs at
-// high priority but carries a distinct cache key (the larger window), so it does
-// not collide with — and cheaply reuses the disk cache written by — the earlier
-// preview render.
-func extendPreview(pool *PreviewPool, entry browser.Entry, width, codeWindow int, syntaxStyle string) tea.Cmd {
-	done := pool.Submit(entry, width, syntaxStyle, codeWindow, true)
-	return func() tea.Msg {
-		return <-done
+func loadItemCounts(cwd string, entries []browser.Entry) tea.Cmd {
+	var directories []string
+	for _, entry := range entries {
+		if entry.Entry.IsDirectory() {
+			directories = append(directories, entry.Entry.Path)
+		}
 	}
+	if len(directories) == 0 {
+		return nil
+	}
+	return func() tea.Msg {
+		counts := make(map[string]int, len(directories))
+		for _, path := range directories {
+			if count := visibleItemCount(path); count != nil {
+				counts[path] = *count
+			}
+		}
+		return itemCountsMsg{cwd: cwd, counts: counts}
+	}
+}
+
+// applyItemCounts returns a copy of entries with the counts filled in.
+func applyItemCounts(entries []browser.Entry, counts map[string]int) []browser.Entry {
+	updated := slices.Clone(entries)
+	for i := range updated {
+		if count, ok := counts[updated[i].Entry.Path]; ok {
+			updated[i].ItemCount = &count
+		}
+	}
+	return updated
 }
 
 func visibleItemCount(path string) *int {
@@ -118,18 +147,23 @@ func visibleItemCount(path string) *int {
 		return nil
 	}
 	defer directory.Close()
-	names, err := directory.Readdirnames(-1)
-	if err != nil {
-		return nil
-	}
 	count := 0
-	for _, name := range names {
-		// exlude hidden files and directories from the count. example: .git, .vscode
-		if !strings.HasPrefix(name, ".") {
-			count++
+	for {
+		// Read in batches so huge directories don't allocate every name at once.
+		names, err := directory.Readdirnames(1024)
+		for _, name := range names {
+			// exclude hidden files and directories from the count. example: .git, .vscode
+			if !strings.HasPrefix(name, ".") {
+				count++
+			}
+		}
+		if errors.Is(err, io.EOF) {
+			return &count
+		}
+		if err != nil {
+			return nil
 		}
 	}
-	return &count
 }
 
 func directoryPreviewEntries(parent string, values []preview.DirectoryEntry) []browser.Entry {

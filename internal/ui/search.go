@@ -30,43 +30,49 @@ func waitSearch(stream <-chan searchEvent) tea.Cmd {
 	}
 }
 
+// searchState is the fuzzy-finder overlay.
+type searchState struct {
+	open       bool
+	query      string
+	selected   int
+	token      uint64 // identifies the current scan; stale results are dropped
+	candidates []searchCandidate
+	matches    []int // indexes into candidates, best first
+	filterPool []int // candidates matching filterKey, reused while the query grows
+	filterKey  string
+	loading    bool
+	scanned    int
+	errMessage string
+}
+
 func (m Model) openSearch() (tea.Model, tea.Cmd) {
 	if m.data.CWD == "" {
 		return m, nil
 	}
-	m.searchToken++
-	m.searchOpen = true
-	m.searchQuery = ""
-	m.searchSelected = 0
-	m.searchCandidates = nil
-	m.searchMatches = nil
-	m.searchFilterPool = nil
-	m.searchFilterKey = ""
-	m.searchLoading = true
-	m.searchScanned = 0
-	m.searchError = ""
-	stream := m.searchPool.Submit(searchRequest{token: m.searchToken, root: m.data.CWD})
+	// The token keeps counting so results from an earlier search are ignored.
+	m.search = searchState{open: true, loading: true, token: m.search.token + 1}
+	stream := m.searchPool.Submit(searchRequest{token: m.search.token, root: m.data.CWD})
 	return m, waitSearch(stream)
 }
 
 func (m Model) closeSearch() Model {
-	m.searchOpen = false
-	m.searchToken++
-	m.searchLoading = false
+	m.search.open = false
+	m.search.token++
+	m.search.loading = false
 	m.searchPool.Cancel()
 	return m
 }
 
 func (m Model) handleSearchEvent(message searchMsg) (tea.Model, tea.Cmd) {
-	if !m.searchOpen || message.event.token != m.searchToken {
+	if !m.search.open || message.event.token != m.search.token {
 		return m, nil
 	}
-	firstNew := len(m.searchCandidates)
-	m.searchCandidates = append(m.searchCandidates, message.event.candidates...)
-	m.searchScanned = message.event.scanned
-	m.searchLoading = !message.event.done
+	firstNew := len(m.search.candidates)
+	m.search.candidates = append(m.search.candidates, message.event.candidates...)
+	m.search.scanned = message.event.scanned
+	m.search.loading = !message.event.done
 	if message.event.err != nil {
-		m.searchError = message.event.err.Error()
+		m.search.errMessage = message.event.err.Error()
 	}
 	m.extendSearchMatches(firstNew)
 	if message.event.done {
@@ -76,37 +82,37 @@ func (m Model) handleSearchEvent(message searchMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) refreshSearchMatches() {
-	query := strings.ToLower(strings.TrimSpace(m.searchQuery))
-	pool := m.searchFilterPool
-	if m.searchFilterKey == "" || !strings.HasPrefix(query, m.searchFilterKey) {
+	query := strings.ToLower(strings.TrimSpace(m.search.query))
+	pool := m.search.filterPool
+	if m.search.filterKey == "" || !strings.HasPrefix(query, m.search.filterKey) {
 		pool = nil
 	}
-	m.searchMatches, m.searchFilterPool = rankSearchCandidates(m.searchCandidates, pool, query, query != "")
-	m.searchFilterKey = query
+	m.search.matches, m.search.filterPool = rankSearchCandidates(m.search.candidates, pool, query, query != "")
+	m.search.filterKey = query
 	m.clampSearchSelection()
 }
 
 func (m *Model) extendSearchMatches(firstNew int) {
-	query := strings.ToLower(strings.TrimSpace(m.searchQuery))
-	newPool := make([]int, 0, len(m.searchCandidates)-firstNew)
-	for index := firstNew; index < len(m.searchCandidates); index++ {
+	query := strings.ToLower(strings.TrimSpace(m.search.query))
+	newPool := make([]int, 0, len(m.search.candidates)-firstNew)
+	for index := firstNew; index < len(m.search.candidates); index++ {
 		newPool = append(newPool, index)
 	}
-	newMatches, filtered := rankSearchCandidates(m.searchCandidates, newPool, query, query != "")
+	newMatches, filtered := rankSearchCandidates(m.search.candidates, newPool, query, query != "")
 	if query != "" {
-		m.searchFilterPool = append(m.searchFilterPool, filtered...)
+		m.search.filterPool = append(m.search.filterPool, filtered...)
 	}
-	candidates := append(append([]int(nil), m.searchMatches...), newMatches...)
-	m.searchMatches, _ = rankSearchCandidates(m.searchCandidates, candidates, query, false)
-	m.searchFilterKey = query
+	candidates := append(append([]int(nil), m.search.matches...), newMatches...)
+	m.search.matches, _ = rankSearchCandidates(m.search.candidates, candidates, query, false)
+	m.search.filterKey = query
 	m.clampSearchSelection()
 }
 
 func (m *Model) clampSearchSelection() {
-	if len(m.searchMatches) == 0 {
-		m.searchSelected = 0
+	if len(m.search.matches) == 0 {
+		m.search.selected = 0
 	} else {
-		m.searchSelected = min(m.searchSelected, len(m.searchMatches)-1)
+		m.search.selected = min(m.search.selected, len(m.search.matches)-1)
 	}
 }
 
@@ -237,37 +243,37 @@ func (m Model) handleSearchKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		return m.activateSearchResult()
 	case "down", "ctrl+n":
-		if m.searchSelected < len(m.searchMatches)-1 {
-			m.searchSelected++
+		if m.search.selected < len(m.search.matches)-1 {
+			m.search.selected++
 		}
 		return m, nil
 	case "up", "ctrl+p":
-		if m.searchSelected > 0 {
-			m.searchSelected--
+		if m.search.selected > 0 {
+			m.search.selected--
 		}
 		return m, nil
 	case "backspace":
-		runes := []rune(m.searchQuery)
+		runes := []rune(m.search.query)
 		if len(runes) > 0 {
-			m.searchQuery = string(runes[:len(runes)-1])
-			m.searchSelected = 0
+			m.search.query = string(runes[:len(runes)-1])
+			m.search.selected = 0
 			m.refreshSearchMatches()
 		}
 		return m, nil
 	}
 	if message.Type == tea.KeyRunes {
-		m.searchQuery += string(message.Runes)
-		m.searchSelected = 0
+		m.search.query += string(message.Runes)
+		m.search.selected = 0
 		m.refreshSearchMatches()
 	}
 	return m, nil
 }
 
 func (m Model) activateSearchResult() (tea.Model, tea.Cmd) {
-	if m.searchSelected < 0 || m.searchSelected >= len(m.searchMatches) {
+	if m.search.selected < 0 || m.search.selected >= len(m.search.matches) {
 		return m, nil
 	}
-	candidate := m.searchCandidates[m.searchMatches[m.searchSelected]]
+	candidate := m.search.candidates[m.search.matches[m.search.selected]]
 	m = m.closeSearch()
 	if candidate.directory {
 		return m.navigateTo(candidate.path, "", true)
@@ -290,12 +296,12 @@ func (m Model) handleSearchMouse(message tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if message.X <= left || message.X >= left+width-1 || row < 0 {
 		return m, nil
 	}
-	start := searchWindowStart(m.searchSelected, len(m.searchMatches), height-5)
+	start := searchWindowStart(m.search.selected, len(m.search.matches), height-5)
 	index := start + row
-	if index < 0 || index >= len(m.searchMatches) || row >= height-5 {
+	if index < 0 || index >= len(m.search.matches) || row >= height-5 {
 		return m, nil
 	}
-	m.searchSelected = index
+	m.search.selected = index
 	return m.activateSearchResult()
 }
 
@@ -323,9 +329,9 @@ func (m Model) renderSearch(base string) string {
 	modal := lipgloss.NewStyle().Foreground(lipgloss.Color(t.ModalFG)).Background(lipgloss.Color(t.ModalBG))
 	muted := modal.Foreground(lipgloss.Color(t.SidebarDivider))
 	selected := modal.Foreground(lipgloss.Color(t.FilePanelItemSelectedFG)).Background(lipgloss.Color(t.FilePanelItemSelectedBG)).Bold(true)
-	status := fmt.Sprintf("%d indexed", len(m.searchCandidates))
-	if m.searchLoading {
-		status = fmt.Sprintf("Scanning… %d", m.searchScanned)
+	status := fmt.Sprintf("%d indexed", len(m.search.candidates))
+	if m.search.loading {
+		status = fmt.Sprintf("Scanning… %d", m.search.scanned)
 	}
 	titleText := truncate("Find in current tree", innerWidth)
 	statusWidth := min(lipgloss.Width(status), max(0, innerWidth-lipgloss.Width(titleText)-2))
@@ -336,25 +342,25 @@ func (m Model) renderSearch(base string) string {
 	content := []string{
 		modal.Width(innerWidth).Render(header),
 	}
-	if m.searchQuery == "" {
+	if m.search.query == "" {
 		content = append(content, modal.Width(innerWidth).Render("❯ "+muted.Render("type to fuzzy filter")+"█"))
 	} else {
-		content = append(content, modal.Width(innerWidth).Render("❯ "+truncate(m.searchQuery, max(1, innerWidth-3))+"█"))
+		content = append(content, modal.Width(innerWidth).Render("❯ "+truncate(m.search.query, max(1, innerWidth-3))+"█"))
 	}
 	visible := height - 5
-	start := searchWindowStart(m.searchSelected, len(m.searchMatches), visible)
-	if m.searchError != "" {
-		content = append(content, muted.Width(innerWidth).Render("  "+truncate(m.searchError, innerWidth-2)))
-	} else if len(m.searchMatches) == 0 {
+	start := searchWindowStart(m.search.selected, len(m.search.matches), visible)
+	if m.search.errMessage != "" {
+		content = append(content, muted.Width(innerWidth).Render("  "+truncate(m.search.errMessage, innerWidth-2)))
+	} else if len(m.search.matches) == 0 {
 		label := "  No matches"
-		if m.searchLoading {
+		if m.search.loading {
 			label = "  Scanning…"
 		}
 		content = append(content, muted.Width(innerWidth).Render(label))
 	} else {
-		end := min(len(m.searchMatches), start+visible)
+		end := min(len(m.search.matches), start+visible)
 		for resultIndex := start; resultIndex < end; resultIndex++ {
-			candidate := m.searchCandidates[m.searchMatches[resultIndex]]
+			candidate := m.search.candidates[m.search.matches[resultIndex]]
 			kind := core.File
 			if candidate.directory {
 				kind = core.Directory
@@ -362,7 +368,7 @@ func (m Model) renderSearch(base string) string {
 			icon := iconFor(core.Entry{Name: candidate.name, Path: candidate.path, Kind: kind})
 			prefix := "  "
 			style := modal
-			if resultIndex == m.searchSelected {
+			if resultIndex == m.search.selected {
 				prefix = "› "
 				style = selected
 			}

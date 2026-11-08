@@ -2,16 +2,61 @@ package registry
 
 import (
 	"fmt"
-	"slices"
 	"strings"
+	"sync"
 
 	"github.com/urdadx/nukri/internal/preview/code/registry/data"
 )
 
+// index maps every alias kind to its language. It is built once because lookups
+// run for every listed file.
+type index struct {
+	canonical  map[string]RegisteredLanguage
+	extensions map[string]RegisteredLanguage
+	filenames  map[string]RegisteredLanguage
+	shebangs   map[string]RegisteredLanguage
+	modelines  map[string]RegisteredLanguage
+	fences     map[string]RegisteredLanguage
+}
+
+var languageIndex = sync.OnceValue(func() index {
+	idx := index{
+		canonical:  map[string]RegisteredLanguage{},
+		extensions: map[string]RegisteredLanguage{},
+		filenames:  map[string]RegisteredLanguage{},
+		shebangs:   map[string]RegisteredLanguage{},
+		modelines:  map[string]RegisteredLanguage{},
+		fences:     map[string]RegisteredLanguage{},
+	}
+	entries := data.AllLanguages()
+	for i := range entries {
+		entry := &entries[i]
+		addFirst(idx.canonical, entry.Language, entry.Language.CanonicalID)
+		addFirst(idx.extensions, entry.Language, entry.Extensions...)
+		addFirst(idx.filenames, entry.Language, entry.ExactFilenames...)
+		addFirst(idx.shebangs, entry.Language, entry.ShebangInterpreters...)
+		addFirst(idx.modelines, entry.Language, entry.Modelines...)
+		addFirst(idx.fences, entry.Language, entry.MarkdownFences...)
+	}
+	return idx
+})
+
+// addFirst keeps the earliest registration, matching registry order.
+func addFirst(values map[string]RegisteredLanguage, language RegisteredLanguage, keys ...string) {
+	for _, key := range keys {
+		if _, exists := values[key]; !exists {
+			values[key] = language
+		}
+	}
+}
+
+func lookup(values map[string]RegisteredLanguage, value string) (RegisteredLanguage, bool) {
+	language, ok := values[normalize(value)]
+	return language, ok
+}
+
 func LanguageForExtension(value string) (RegisteredLanguage, bool) {
-	return LanguageForAlias(value, func(entry *RegistryEntry) []string {
-		return entry.Extensions
-	})
+	return lookup(languageIndex().extensions, value)
 }
 
 func LanguageForExactFilename(value string) (RegisteredLanguage, bool) {
@@ -19,71 +64,23 @@ func LanguageForExactFilename(value string) (RegisteredLanguage, bool) {
 	if isEnvName(normalized) {
 		return LanguageForCodeSyntax("dotenv")
 	}
-	data := data.AllLanguages()
-	for i := range data {
-		entry := &data[i]
-		if contains(entry.ExactFilenames, normalized) {
-			return entry.Language, true
-		}
-	}
-	return RegisteredLanguage{}, false
+	return lookup(languageIndex().filenames, normalized)
 }
 
 func LanguageForShebangInterpreter(value string) (RegisteredLanguage, bool) {
-	return LanguageForAlias(value, func(entry *RegistryEntry) []string {
-		return entry.ShebangInterpreters
-	})
+	return lookup(languageIndex().shebangs, value)
 }
 
 func LanguageForModeline(value string) (RegisteredLanguage, bool) {
-	return LanguageForAlias(value, func(entry *RegistryEntry) []string {
-		return entry.Modelines
-	})
+	return lookup(languageIndex().modelines, value)
 }
 
 func LanguageForMarkdownFence(value string) (RegisteredLanguage, bool) {
-	return LanguageForAlias(value, func(entry *RegistryEntry) []string {
-		return entry.MarkdownFences
-	})
-}
-
-func DisplayLabelForCodeSyntax(codeSyntax string) (string, bool) {
-	language, ok := LanguageForCodeSyntax(codeSyntax)
-	if !ok {
-		return "", false
-	}
-	return language.DisplayLabel, true
+	return lookup(languageIndex().fences, value)
 }
 
 func LanguageForCodeSyntax(codeSyntax string) (RegisteredLanguage, bool) {
-	normalized := normalize(codeSyntax)
-	entries := data.AllLanguages()
-	for i := range entries {
-		entry := &entries[i]
-		if entry.Language.CanonicalID == normalized {
-			return entry.Language, true
-		}
-	}
-	return RegisteredLanguage{}, false
-}
-
-func LanguageForAlias(
-	value string,
-	aliases func(*RegistryEntry) []string,
-) (RegisteredLanguage, bool) {
-	normalized := normalize(value)
-	entries := data.AllLanguages()
-	for i := range entries {
-		entry := &entries[i]
-		if contains(aliases(entry), normalized) {
-			return entry.Language, true
-		}
-	}
-	return RegisteredLanguage{}, false
-}
-
-func contains(values []string, value string) bool {
-	return slices.Contains(values, value)
+	return lookup(languageIndex().canonical, codeSyntax)
 }
 
 func normalize(values string) string {

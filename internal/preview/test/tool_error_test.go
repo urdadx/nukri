@@ -3,6 +3,7 @@ package test
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -53,5 +54,36 @@ func TestNativeZipListingWithoutTool(t *testing.T) {
 		if entry.Path == "" {
 			t.Fatalf("archive contains an entry without a path: %#v", entry)
 		}
+	}
+}
+
+// SVG and AVIF have no built-in decoder: without their tool the preview names
+// the command to install instead of rendering.
+func TestImageFormatsNameMissingTool(t *testing.T) {
+	tests := []struct {
+		sample string
+		tool   string
+	}{
+		{"diamond.svg", "rsvg-convert"},
+		{"gradient.avif", "ffmpeg"},
+	}
+	for _, test := range tests {
+		t.Run(test.sample, func(t *testing.T) {
+			data, err := os.ReadFile(filepath.Join("file_samples", test.sample))
+			if err != nil {
+				t.Fatal(err)
+			}
+			// A fresh path keeps the on-disk image cache from answering.
+			path := filepath.Join(t.TempDir(), test.sample)
+			if err := os.WriteFile(path, data, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			facts := fileinfo.InspectPath(path, core.File)
+			_, err = preview.NewServiceWithTools(preview.Tools{}).Render(context.Background(), preview.Request{Path: path, Facts: facts, Width: 40})
+			var toolErr *preview.ToolUnavailableError
+			if !errors.As(err, &toolErr) || toolErr.Tool != test.tool {
+				t.Fatalf("error = %v, want missing %s", err, test.tool)
+			}
+		})
 	}
 }

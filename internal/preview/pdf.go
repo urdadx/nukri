@@ -29,6 +29,20 @@ rendering the same size again — skips the (relatively expensive)
 rasterization pass entirely.
 */
 func (s *Service) renderPDF(ctx context.Context, path string, cellWidth int) (*PDFPreview, error) {
+	return s.renderConvertedPDF(ctx, path, cellWidth, nil)
+}
+
+// pdfConverter turns a source document into a PDF inside directory and returns
+// the PDF's path.
+type pdfConverter func(ctx context.Context, directory string) (string, error)
+
+/*
+renderConvertedPDF renders the first page of source, first converting it to a
+PDF when convert is non-nil (office documents, ebooks). The page is cached by
+the source file's identity, so a cache hit skips the conversion too — which for
+LibreOffice or ebook-convert is by far the slowest step.
+*/
+func (s *Service) renderConvertedPDF(ctx context.Context, path string, cellWidth int, convert pdfConverter) (*PDFPreview, error) {
 	if s.tools.PDFInfo == "" || s.tools.PDFToCairo == "" {
 		return nil, fmt.Errorf("PDF preview: %w", ToolUnavailable("pdftocairo/pdfinfo"))
 	}
@@ -59,20 +73,26 @@ func (s *Service) renderPDF(ctx context.Context, path string, cellWidth int) (*P
 		}, nil
 	}
 
-	metadata, err := s.pdfMetadata(ctx, path)
-	if err != nil {
-		return nil, err
-	}
-
 	directory, err := os.MkdirTemp("", "nukri-pdf-*")
 	if err != nil {
 		return nil, fmt.Errorf("create PDF preview directory: %w", err)
 	}
 	defer os.RemoveAll(directory)
+	pdfPath := path
+	if convert != nil {
+		if pdfPath, err = convert(ctx, directory); err != nil {
+			return nil, err
+		}
+	}
+
+	metadata, err := s.pdfMetadata(ctx, pdfPath)
+	if err != nil {
+		return nil, err
+	}
 	prefix := filepath.Join(directory, "page")
 	_, err = runCommand(ctx, 64<<10, s.tools.PDFToCairo,
 		"-png", "-singlefile", "-f", "1", "-l", "1",
-		"-scale-to", strconv.Itoa(renderSize), path, prefix,
+		"-scale-to", strconv.Itoa(renderSize), pdfPath, prefix,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("render PDF first page: %w", err)

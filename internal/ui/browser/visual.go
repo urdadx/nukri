@@ -1,9 +1,7 @@
 package browser
 
 import (
-	"hash/fnv"
 	"io"
-	"strconv"
 
 	"github.com/urdadx/nukri/internal/preview"
 	"github.com/urdadx/nukri/internal/preview/image_protocols"
@@ -14,13 +12,14 @@ import (
 // Reuse of the same renderer instance also keeps the Kitty image ID stable, so a
 // retransmit overwrites the previous placement instead of allocating a new slot.
 type VisualState struct {
-	renderer    image_protocols.ImageRenderer
-	last        image_protocols.RenderedImage
-	fingerprint string
-	x, y        int
-	columns     int
-	rows        int
-	placed      bool
+	renderer image_protocols.ImageRenderer
+	last     image_protocols.RenderedImage
+	data     *byte // identity of the placed image's bytes; see sameImageData
+	size     int
+	x, y     int
+	columns  int
+	rows     int
+	placed   bool
 }
 
 // renderVisual transmits the given image only when it differs from the last
@@ -30,8 +29,7 @@ func (s *VisualState) renderVisual(writer io.Writer, image *preview.Image, x, y,
 	if image == nil || writer == nil {
 		return
 	}
-	digest := imageFingerprint(image.Data)
-	if s.placed && s.fingerprint == digest && s.x == x && s.y == y && s.columns == columns && s.rows == rows {
+	if s.placed && s.sameImageData(image.Data) && s.x == x && s.y == y && s.columns == columns && s.rows == rows {
 		return
 	}
 	if s.renderer == nil {
@@ -41,16 +39,25 @@ func (s *VisualState) renderVisual(writer io.Writer, image *preview.Image, x, y,
 			return
 		}
 	}
+	placement := image_protocols.Placement{X: x, Y: y, Columns: columns, Rows: rows}
+	// Same image at a new position or size: move it instead of re-sending it.
+	if s.placed && s.sameImageData(image.Data) && s.last.ImageID != 0 {
+		if moved, err := s.renderer.Move(s.last, placement); err == nil {
+			s.last = moved
+			s.x, s.y, s.columns, s.rows = x, y, columns, rows
+			return
+		}
+	}
 	if s.last.ImageID != 0 {
 		_ = s.renderer.Delete(s.last)
 	}
-	placed, err := s.renderer.Place(*image, image_protocols.Placement{X: x, Y: y, Columns: columns, Rows: rows})
+	placed, err := s.renderer.Place(*image, placement)
 	if err != nil {
 		s.placed = false
 		return
 	}
 	s.last = placed
-	s.fingerprint = digest
+	s.data, s.size = dataIdentity(image.Data)
 	s.x, s.y, s.columns, s.rows = x, y, columns, rows
 	s.placed = true
 }
@@ -61,14 +68,23 @@ func (s *VisualState) Clear() {
 		_ = s.renderer.Delete(s.last)
 	}
 	s.last = image_protocols.RenderedImage{}
-	s.fingerprint = ""
+	s.data, s.size = nil, 0
 	s.placed = false
 }
 
-func imageFingerprint(data []byte) string {
-	h := fnv.New64a()
-	_, _ = h.Write(data)
-	return strconv.FormatUint(h.Sum64(), 16)
+// sameImageData reports whether data is the exact buffer last placed. Preview
+// results are cached and never mutated, so buffer identity stands in for
+// content: this runs every frame and must not hash megabytes of image data.
+func (s *VisualState) sameImageData(data []byte) bool {
+	pointer, size := dataIdentity(data)
+	return pointer == s.data && size == s.size
+}
+
+func dataIdentity(data []byte) (*byte, int) {
+	if len(data) == 0 {
+		return nil, 0
+	}
+	return &data[0], len(data)
 }
 
 // defaultCellAspect is the pixel height to pixel width ratio of a terminal cell

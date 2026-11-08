@@ -316,11 +316,13 @@ type Tools struct {
 	FFProbe      string
 	FFmpeg       string
 	ISOInfo      string
+	RSVGConvert  string
 }
 
 type Capabilities struct {
 	PDF       bool
 	SVG       bool
+	AVIF      bool
 	Archives  bool
 	Documents bool
 	EPUB      bool

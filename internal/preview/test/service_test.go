@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -280,6 +281,33 @@ func TestRenderTorrent(t *testing.T) {
 	}
 }
 
+// hybrid.torrent is a BEP 52 hybrid (v1 + v2) with a file tree, url-list given
+// as a single string, and announce-list tiers that repeat a URL. Expected values
+// were produced by anacrolix/torrent before it was replaced.
+func TestRenderHybridTorrent(t *testing.T) {
+	result := renderSample(t, preview.NewService(), "hybrid.torrent")
+	value, ok := result.(*preview.TorrentPreview)
+	if !ok {
+		t.Fatalf("result = %T, want *preview.TorrentPreview", result)
+	}
+	torrent := value.Torrent
+	if torrent.InfoHashV1 != "245f833d7942abc704de12d15e08ee6bb637772f" ||
+		torrent.InfoHashV2 != "7736cef83f415510c15909613fc75beb9cc1bc8341df1d2743ad7f18c38912b2" {
+		t.Fatalf("hashes = %q %q", torrent.InfoHashV1, torrent.InfoHashV2)
+	}
+	if torrent.PieceCount != 4 || torrent.TotalSize != 40_003 {
+		t.Fatalf("pieces = %d, size = %d", torrent.PieceCount, torrent.TotalSize)
+	}
+	if !slices.Equal(torrent.Trackers, []string{"http://b", "http://a", "udp://c"}) || !slices.Equal(torrent.WebSeeds, []string{"http://seed"}) {
+		t.Fatalf("trackers = %v, web seeds = %v", torrent.Trackers, torrent.WebSeeds)
+	}
+	// v2 file trees take precedence over the v1 file list and are sorted by name.
+	want := []preview.TorrentFile{{Path: "alpha/sub", Size: 3}, {Path: "zeta", Size: 40_000}}
+	if !slices.Equal(value.Files, want) {
+		t.Fatalf("files = %#v, want %#v", value.Files, want)
+	}
+}
+
 func TestRenderTorrentRejectsMalformedMetainfo(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "broken.torrent")
 	if err := os.WriteFile(path, []byte("not bencode"), 0o600); err != nil {
@@ -293,6 +321,7 @@ func TestRenderTorrentRejectsMalformedMetainfo(t *testing.T) {
 
 func TestRenderSVG(t *testing.T) {
 	service := preview.NewService()
+	requireCapability(t, service.Capabilities().SVG, "rsvg-convert")
 	result := renderSample(t, service, "diamond.svg")
 	svg, ok := result.(*preview.SVGPreview)
 	if !ok {

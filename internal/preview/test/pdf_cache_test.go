@@ -159,3 +159,49 @@ func orderedDims(a, b int) (int, int) {
 	}
 	return b, a
 }
+
+// Office previews are cached by the source document, so revisiting one skips
+// the LibreOffice conversion entirely.
+func TestOfficePreviewServesFromDiskCache(t *testing.T) {
+	service := preview.NewService()
+	requireCapability(t, service.Capabilities().Documents, "libreoffice, pdfinfo, and pdftocairo")
+	data, err := os.ReadFile(filepath.Join("file_samples", "Third Party.xlsx"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "sheet.xlsx")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	src, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts := fileinfo.InspectPath(path, core.File)
+	render := func() *preview.OfficePreview {
+		t.Helper()
+		result, err := service.Render(context.Background(), preview.Request{Path: path, Facts: facts, Width: 60})
+		if err != nil {
+			t.Fatalf("render: %v", err)
+		}
+		return result.(*preview.OfficePreview)
+	}
+	first := render()
+
+	// Same size and modification time but undecodable content: only a cache hit
+	// can still produce the page.
+	if err := os.WriteFile(path, make([]byte, src.Size()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(path, src.ModTime(), src.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	second := render()
+	if string(second.Page.Data) != string(first.Page.Data) {
+		t.Fatal("cached office page differs from the first render")
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("cached office preview took %v", elapsed)
+	}
+}

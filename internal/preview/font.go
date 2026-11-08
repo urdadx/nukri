@@ -1,18 +1,21 @@
 package preview
 
 import (
+	"bytes"
 	"context"
 	"fmt"
-	"image/color"
+	"image"
+	"image/draw"
 	"image/png"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/tdewolff/canvas"
-	"github.com/tdewolff/canvas/renderers/rasterizer"
 	fontparser "github.com/tdewolff/font"
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/opentype"
+	"golang.org/x/image/math/fixed"
 )
 
 const fontSpecimen = `ABCDEFGHIJKLMNOPQRSTUVWXYZ
@@ -53,7 +56,7 @@ func (s *Service) renderFont(ctx context.Context, path string) (*FontPreview, er
 		Glyphs:     int(sfnt.NumGlyphs()),
 		UnitsPerEm: sfnt.UnitsPerEm(),
 	}
-	specimen, err := s.renderFontSpecimen(data, familyName)
+	specimen, err := s.renderFontSpecimen(data)
 	if err != nil {
 		return nil, err
 	}
@@ -63,37 +66,92 @@ func (s *Service) renderFont(ctx context.Context, path string) (*FontPreview, er
 	return &FontPreview{Font: value, Specimen: specimen, Metadata: fontFields(value)}, nil
 }
 
-func (s *Service) renderFontSpecimen(data []byte, familyName string) (Image, error) {
-	family := canvas.NewFontFamily(familyName)
-	defer family.Destroy()
-	if err := family.LoadFont(data, 0, canvas.FontRegular); err != nil {
+// Specimen layout in pixels.
+const (
+	fontSpecimenWidth  = 800
+	fontSpecimenHeight = 340
+	fontSpecimenMargin = 40
+	fontSpecimenSize   = 34
+)
+
+func (s *Service) renderFontSpecimen(data []byte) (Image, error) {
+	// x/image reads plain SFNT only; ToSFNT unpacks WOFF, WOFF2 and EOT.
+	sfntData, err := fontparser.ToSFNT(data)
+	if err != nil {
 		return Image{}, fmt.Errorf("load font for layout: %w", err)
 	}
-	const width, height = 200.0, 120.0
-	value := canvas.New(width, height)
-	ctx := canvas.NewContext(value)
-	ctx.SetFillColor(color.White)
-	ctx.DrawPath(0, 0, canvas.Rectangle(width, height))
-	face := family.Face(24, canvas.FontRegular, color.Black)
-	text := canvas.NewTextBox(face, fontSpecimen, 180, 100, canvas.Left, canvas.Top, &canvas.TextOptions{
-		LineStretch: 0.25,
-	})
-	ctx.DrawText(10, 110, text)
-	rendered := rasterizer.Draw(value, canvas.DPMM(4), canvas.SRGBColorSpace{})
-	bounds := rendered.Bounds()
-	if bounds.Dx() > s.maxImageDimension || bounds.Dy() > s.maxImageDimension {
+	parsed, err := parseFirstFont(sfntData)
+	if err != nil {
+		return Image{}, fmt.Errorf("load font for layout: %w", err)
+	}
+	face, err := opentype.NewFace(parsed, &opentype.FaceOptions{Size: fontSpecimenSize, DPI: 72, Hinting: font.HintingFull})
+	if err != nil {
+		return Image{}, fmt.Errorf("load font for layout: %w", err)
+	}
+	defer face.Close()
+
+	if fontSpecimenWidth > s.maxImageDimension || fontSpecimenHeight > s.maxImageDimension {
 		return Image{}, ErrOutputTooLarge
 	}
+	rendered := image.NewRGBA(image.Rect(0, 0, fontSpecimenWidth, fontSpecimenHeight))
+	draw.Draw(rendered, rendered.Bounds(), image.White, image.Point{}, draw.Src)
+	drawer := &font.Drawer{Dst: rendered, Src: image.Black, Face: face}
+	metrics := face.Metrics()
+	lineHeight := metrics.Height.Mul(fixed.I(5)) / 4
+	y := fixed.I(fontSpecimenMargin) + metrics.Ascent
+	for _, line := range wrapSpecimen(drawer, fontSpecimen, fixed.I(fontSpecimenWidth-2*fontSpecimenMargin)) {
+		if (y + metrics.Descent).Ceil() > fontSpecimenHeight-fontSpecimenMargin/2 {
+			break
+		}
+		drawer.Dot = fixed.Point26_6{X: fixed.I(fontSpecimenMargin), Y: y}
+		drawer.DrawString(line)
+		y += lineHeight
+	}
+
 	output := &limitedBuffer{limit: s.maxImageBytes}
-	if err := png.Encode(output, rendered); err != nil {
+	encoder := png.Encoder{CompressionLevel: png.BestSpeed}
+	if err := encoder.Encode(output, rendered); err != nil {
 		return Image{}, fmt.Errorf("encode font specimen: %w", err)
 	}
 	return Image{
 		MediaType: "image/png",
-		Data:      append([]byte(nil), output.buffer.Bytes()...),
-		Width:     bounds.Dx(),
-		Height:    bounds.Dy(),
+		Data:      output.buffer.Bytes(),
+		Width:     fontSpecimenWidth,
+		Height:    fontSpecimenHeight,
 	}, nil
+}
+
+// parseFirstFont parses a single font, or the first font of a collection.
+func parseFirstFont(data []byte) (*opentype.Font, error) {
+	if bytes.HasPrefix(data, []byte("ttcf")) {
+		collection, err := opentype.ParseCollection(data)
+		if err != nil {
+			return nil, err
+		}
+		return collection.Font(0)
+	}
+	return opentype.Parse(data)
+}
+
+// wrapSpecimen splits text into lines that fit width, breaking at spaces.
+func wrapSpecimen(drawer *font.Drawer, text string, width fixed.Int26_6) []string {
+	var lines []string
+	for _, paragraph := range strings.Split(text, "\n") {
+		line := ""
+		for _, word := range strings.Fields(paragraph) {
+			candidate := word
+			if line != "" {
+				candidate = line + " " + word
+			}
+			if line != "" && drawer.MeasureString(candidate) > width {
+				lines = append(lines, line)
+				candidate = word
+			}
+			line = candidate
+		}
+		lines = append(lines, line)
+	}
+	return lines
 }
 
 func fontName(sfnt *fontparser.SFNT, names ...fontparser.NameID) string {

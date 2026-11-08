@@ -155,7 +155,7 @@ func (p *PreviewPool) execute(job *previewJob) {
 	if !job.started.CompareAndSwap(false, true) {
 		return
 	}
-	defer p.forget(job.key)
+	defer p.forget(job)
 
 	if cached, ok := p.lookup(job.key); ok {
 		job.complete(cached)
@@ -249,7 +249,9 @@ func (p *PreviewPool) Submit(entry browser.Entry, width int, syntax string, code
 	)
 
 	p.mu.Lock()
-	if existing, ok := p.active[key]; ok {
+	// A stale job is already cancelled and will only deliver a cancelled result,
+	// so revisiting its key (A → B → A) needs a fresh job, not a subscription.
+	if existing, ok := p.active[key]; ok && !existing.stale.Load() {
 		promote := high && !existing.high.Swap(true) && !existing.started.Load()
 		ch := existing.subscribe()
 		p.mu.Unlock()
@@ -276,9 +278,12 @@ func (p *PreviewPool) Submit(entry browser.Entry, width int, syntax string, code
 	return ch
 }
 
-func (p *PreviewPool) forget(key string) {
+// forget drops job from the active map unless a newer job has replaced it.
+func (p *PreviewPool) forget(job *previewJob) {
 	p.mu.Lock()
-	delete(p.active, key)
+	if p.active[job.key] == job {
+		delete(p.active, job.key)
+	}
 	p.mu.Unlock()
 }
 
@@ -334,8 +339,15 @@ func previewKey(entry browser.Entry, width int, syntax string, codeWindow int) s
 	return fmt.Sprintf("%s|%d|%d|%d|%s|%d", e.Path, e.Size, modified, width, syntax, codeWindow)
 }
 
+// IsCancelledPreview reports whether msg is a render that was superseded by a
+// newer selection and carries no preview.
+func IsCancelledPreview(msg tea.Msg) bool {
+	preview, ok := msg.(previewMsg)
+	return ok && preview.cancelled
+}
+
 func cancelledPreview(path string) previewMsg {
-	return previewMsg{path: path, err: nil}
+	return previewMsg{path: path, cancelled: true}
 }
 
 // renderPreview performs the actual service.Render + BuildView work. It runs on

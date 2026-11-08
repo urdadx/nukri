@@ -26,6 +26,10 @@ func (*unsupportedRenderer) Place(_ preview.Image, _ Placement) (RenderedImage, 
 	return RenderedImage{}, ErrUnsupportedTerminal
 }
 
+func (*unsupportedRenderer) Move(RenderedImage, Placement) (RenderedImage, error) {
+	return RenderedImage{}, ErrUnsupportedTerminal
+}
+
 func (*unsupportedRenderer) DeletePlacement(RenderedImage) error { return ErrUnsupportedTerminal }
 func (*unsupportedRenderer) Delete(RenderedImage) error          { return ErrUnsupportedTerminal }
 func (*unsupportedRenderer) DeleteAll() error                    { return ErrUnsupportedTerminal }

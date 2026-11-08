@@ -95,3 +95,59 @@ func TestIsKittyTerminal(t *testing.T) {
 		t.Fatal("TERM=xterm-kitty should identify Kitty")
 	}
 }
+
+type countingWriter struct {
+	bytes.Buffer
+	writes int
+}
+
+func (w *countingWriter) Write(p []byte) (int, error) {
+	w.writes++
+	return w.Buffer.Write(p)
+}
+
+func (w *countingWriter) WriteString(s string) (int, error) {
+	w.writes++
+	return w.Buffer.WriteString(s)
+}
+
+func TestKittyTransmitsInOneWrite(t *testing.T) {
+	var output countingWriter
+	renderer := image_protocols.NewKittyWithSupport(&output, true)
+	image := preview.Image{MediaType: "image/png", Data: bytes.Repeat([]byte{0xab}, 40_000)}
+	if _, err := renderer.Place(image, image_protocols.Placement{Columns: 20, Rows: 10}); err != nil {
+		t.Fatal(err)
+	}
+	// One write for the chunked image data, one for the placement.
+	if output.writes != 2 {
+		t.Fatalf("writes = %d, want 2", output.writes)
+	}
+	if chunks := strings.Count(output.String(), "\x1b_G"); chunks < 10 {
+		t.Fatalf("graphics commands = %d, want the image split into chunks", chunks)
+	}
+}
+
+func TestKittyMoveReplacesPlacementWithoutRetransmitting(t *testing.T) {
+	var output bytes.Buffer
+	renderer := image_protocols.NewKittyWithSupport(&output, true)
+	image := preview.Image{MediaType: "image/png", Data: []byte("png")}
+	placed, err := renderer.Place(image, image_protocols.Placement{X: 1, Y: 1, Columns: 10, Rows: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	moved, err := renderer.Move(placed, image_protocols.Placement{X: 2, Y: 3, Columns: 30, Rows: 15})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moved.ImageID != placed.ImageID || moved.PlacementID != placed.PlacementID || moved.Columns != 30 || moved.Y != 3 {
+		t.Fatalf("moved = %#v", moved)
+	}
+	sequence := output.String()
+	if strings.Contains(sequence, "a=t") {
+		t.Fatalf("move re-sent image data: %q", sequence)
+	}
+	if !strings.Contains(sequence, "\x1b[4;3H") || !strings.Contains(sequence, "a=p,c=30,i=1,p=2,q=2,r=15") {
+		t.Fatalf("move protocol = %q", sequence)
+	}
+}

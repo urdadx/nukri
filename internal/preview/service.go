@@ -73,6 +73,7 @@ func DiscoverTools() Tools {
 		FFProbe:      lookPath("ffprobe"),
 		FFmpeg:       lookPath("ffmpeg"),
 		ISOInfo:      lookPath("isoinfo"),
+		RSVGConvert:  lookPath("rsvg-convert"),
 	}
 }
 
@@ -88,7 +89,8 @@ func lookPath(names ...string) string {
 func (s *Service) Capabilities() Capabilities {
 	return Capabilities{
 		PDF:       s.tools.PDFInfo != "" && s.tools.PDFToCairo != "",
-		SVG:       true,
+		SVG:       s.tools.RSVGConvert != "",
+		AVIF:      s.tools.FFmpeg != "",
 		Archives:  true, // ZIP-based containers (.zip/.jar/.cbz/.apk/...) list natively
 		Documents: s.tools.LibreOffice != "" && s.tools.PDFInfo != "" && s.tools.PDFToCairo != "",
 		EPUB:      true,

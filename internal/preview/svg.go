@@ -3,63 +3,57 @@ package preview
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"image/png"
-	"io"
 	"os"
-
-	"github.com/xo/resvg"
+	"strconv"
 )
 
+// renderSVG rasterises an SVG with rsvg-convert (from librsvg).
 func (s *Service) renderSVG(ctx context.Context, path string) (*SVGPreview, error) {
-	file, err := os.Open(path)
+	if s.tools.RSVGConvert == "" {
+		return nil, fmt.Errorf("SVG preview: %w", ToolUnavailable("rsvg-convert"))
+	}
+	info, err := os.Stat(path)
 	if err != nil {
 		return nil, fmt.Errorf("open SVG: %w", err)
 	}
-	defer file.Close()
-	data, err := io.ReadAll(io.LimitReader(file, s.maxSVGBytes+1))
-	if err != nil {
-		return nil, fmt.Errorf("read SVG: %w", err)
-	}
-	if int64(len(data)) > s.maxSVGBytes {
+	if info.Size() > s.maxSVGBytes {
 		return nil, ErrOutputTooLarge
 	}
-	if err := ctx.Err(); err != nil {
+	// Render at the SVG's own size first; only oversized drawings are re-rendered
+	// to fit, so small icons are not scaled up.
+	image, err := s.rasterizeSVG(ctx, path, 0)
+	if errors.Is(err, ErrOutputTooLarge) {
+		image, err = s.rasterizeSVG(ctx, path, s.maxImageDimension)
+	}
+	if err != nil {
 		return nil, err
 	}
-	config, err := resvg.DecodeConfig(bytes.NewReader(data))
-	if err != nil {
-		return nil, fmt.Errorf("inspect SVG: %w", err)
+	return &SVGPreview{Image: image}, nil
+}
+
+// rasterizeSVG renders path to PNG, fitting it within fit pixels when fit > 0.
+func (s *Service) rasterizeSVG(ctx context.Context, path string, fit int) (Image, error) {
+	arguments := []string{"--format=png"}
+	if fit > 0 {
+		size := strconv.Itoa(fit)
+		arguments = append(arguments, "--keep-aspect-ratio", "--width="+size, "--height="+size)
 	}
-	var options []resvg.Option
+	output, err := runCommand(ctx, s.maxImageBytes, s.tools.RSVGConvert, append(arguments, path)...)
+	if err != nil {
+		if errors.Is(err, ErrOutputTooLarge) {
+			return Image{}, ErrOutputTooLarge
+		}
+		return Image{}, fmt.Errorf("render SVG: %w", err)
+	}
+	config, err := png.DecodeConfig(bytes.NewReader(output))
+	if err != nil {
+		return Image{}, fmt.Errorf("render SVG: %w", err)
+	}
 	if config.Width > s.maxImageDimension || config.Height > s.maxImageDimension {
-		options = append(options,
-			resvg.WithWidth(s.maxImageDimension),
-			resvg.WithHeight(s.maxImageDimension),
-			resvg.WithScaleMode(resvg.ScaleBestFit),
-		)
+		return Image{}, ErrOutputTooLarge
 	}
-	image, err := resvg.Render(data, options...)
-	if err != nil {
-		return nil, fmt.Errorf("render SVG: %w", err)
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	bounds := image.Bounds()
-	if bounds.Dx() > s.maxImageDimension || bounds.Dy() > s.maxImageDimension {
-		return nil, ErrOutputTooLarge
-	}
-	output := &limitedBuffer{limit: s.maxImageBytes}
-	if err := png.Encode(output, image); err != nil {
-		return nil, fmt.Errorf("encode SVG preview: %w", err)
-	}
-	return &SVGPreview{
-		Image: Image{
-			MediaType: "image/png",
-			Data:      append([]byte(nil), output.buffer.Bytes()...),
-			Width:     bounds.Dx(),
-			Height:    bounds.Dy(),
-		},
-	}, nil
+	return Image{MediaType: "image/png", Data: output, Width: config.Width, Height: config.Height}, nil
 }

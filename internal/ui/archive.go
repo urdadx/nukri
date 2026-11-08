@@ -103,7 +103,8 @@ func (m Model) extractSelectedArchive() (tea.Model, tea.Cmd) {
 	}
 	m.archiveBusy = true
 	m.archiveOperation = "extract"
-	m.status = "Extracting " + filepath.Base(path) + "..."
+	m.archivePercent = 0
+	m.status = ""
 	return m, extractArchive(path)
 }
 
@@ -128,20 +129,34 @@ func createArchive(source, destination string) tea.Cmd {
 }
 
 func extractArchive(source string) tea.Cmd {
-	return func() tea.Msg {
-		output, err := archive.Extract(source)
-		return archiveMsg{operation: "extract", output: output, err: err}
-	}
+	stream := make(chan tea.Msg, 8)
+	go func() {
+		output, err := archive.ExtractWithProgress(source, func(value archive.Progress) {
+			percent := 0.0
+			if value.Total > 0 {
+				percent = min(1, float64(value.Completed)/float64(value.Total))
+			}
+			message := archiveProgressMsg{percent: percent, stream: stream}
+			select {
+			case stream <- message:
+			default:
+			}
+		})
+		stream <- archiveMsg{operation: "extract", output: output, err: err}
+		close(stream)
+	}()
+	return waitArchive(stream)
 }
 
 func (m Model) archiveStatus() string {
 	if !m.archiveBusy {
 		return ""
 	}
-	if m.archiveOperation != "create" {
-		return "Extracting archive..."
+	verb := "Creating"
+	if m.archiveOperation == "extract" {
+		verb = "Extracting"
 	}
-	return fmt.Sprintf("Creating archive %s %3.0f%%", m.archiveProgress.ViewAs(m.archivePercent), m.archivePercent*100)
+	return fmt.Sprintf("%s archive %s %3.0f%%", verb, m.archiveProgress.ViewAs(m.archivePercent), m.archivePercent*100)
 }
 
 func (m Model) renderArchivePrompt(base string) string {

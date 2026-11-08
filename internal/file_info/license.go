@@ -422,6 +422,11 @@ func containsPhrase(normalizedText string, phrase string) bool {
 	return needle != "" && strings.Contains(normalizedText, needle)
 }
 
+func containsWords(normalizedText string, phrase string) bool {
+	needle := normalizeHighSignalText(phrase)
+	return needle != "" && strings.Contains(" "+normalizedText+" ", " "+needle+" ")
+}
+
 func startsWithPhrase(normalizedText string, phrase string) bool {
 	needle := normalizeHighSignalText(phrase)
 	return needle != "" && strings.HasPrefix(normalizedText, needle)
@@ -457,7 +462,7 @@ func detectLicenseDocuments(text string) (LicenseDetection, bool) {
 		return detection, true
 	}
 
-	if startsLikeStandaloneLicense(normalized) {
+	if startsLikeStandaloneLicense(text) {
 		return LicenseDetection{IsSpecific: false}, true
 	}
 
@@ -469,13 +474,29 @@ func detectLicenseDocuments(text string) (LicenseDetection, bool) {
 }
 
 func detectKnownLicense(normalized string) LicenseDetection {
-	if containsAll(normalized, []string{"mit", "permission", "granted", "free", "charge"}) {
+	// "mit" must be a whole word: as a substring it matches "permitted" and
+	// "submit", which made Apache and GPL texts look like MIT.
+	if containsWords(normalized, "mit license") && containsPhrase(normalized, "permission is hereby granted free of charge") {
 		return LicenseDetection{IsSpecific: true, DetailLabel: "MIT License"}
 	}
 
-	if containsAll(normalized, []string{"apache license version 2 0 january 2004",
+	// Titles are checked before body phrases: the GPL and LGPL texts quote each
+	// other, but each one's own title line is distinct.
+	for _, title := range []struct{ phrase, label string }{
+		{"gnu affero general public license version 3 19 november 2007", "GNU Affero General Public License v3.0"},
+		{"gnu lesser general public license version 3 29 june 2007", "GNU Lesser General Public License v3.0"},
+		{"gnu lesser general public license version 2.1 february 1999", "GNU Lesser General Public License v2.1"},
+		{"gnu general public license version 3 29 june 2007", "GNU General Public License v3.0"},
+		{"gnu general public license version 2 june 1991", "GNU General Public License v2.0"},
+	} {
+		if containsPhrase(normalized, title.phrase) {
+			return LicenseDetection{IsSpecific: true, DetailLabel: title.label}
+		}
+	}
+
+	if containsAll(normalized, []string{"apache license version 2.0 january 2004",
 		"terms and conditions for use reproduction and distribution",
-		"apache org licenses license 2 0"}) {
+		"apache.org licenses license-2.0"}) {
 		return LicenseDetection{IsSpecific: true, DetailLabel: "Apache License 2.0"}
 	}
 
@@ -503,9 +524,9 @@ func detectKnownLicense(normalized string) LicenseDetection {
 		return LicenseDetection{IsSpecific: true, DetailLabel: "The Unlicense"}
 	}
 
-	if containsAll(normalized, []string{"mozilla public license version 2 0",
-		"this source code form is subject to the terms of the mozilla public license v 2 0 at http www.mozilla.org/MPL/2.0/",
-		"if a copy of the mpl was not distributed with this file you can obtain one at http www.mozilla.org/MPL/2.0/"}) {
+	if containsAll(normalized, []string{"mozilla public license version 2.0",
+		"this source code form is subject to the terms of the mozilla public license v. 2.0",
+		"if a copy of the mpl was not distributed with this file you can obtain one at http mozilla.org mpl 2.0"}) {
 		return LicenseDetection{IsSpecific: true, DetailLabel: "Mozilla Public License 2.0"}
 	}
 

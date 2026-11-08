@@ -140,10 +140,35 @@ func TestPreviewKeyDistinction(t *testing.T) {
 	if ui.PreviewKey(a, 60, "", 0) == ui.PreviewKey(a, 60, "monokai", 0) {
 		t.Fatal("different syntax styles should produce different keys")
 	}
-	if ui.PreviewKey(a, 60, "", 0) != ui.PreviewKey(a, 60, "", 0) {
+	if ui.PreviewKey(a, 60, "", 0) != ui.PreviewKey(entry("a.txt", "/tmp/a.txt", "now"), 60, "", 0) {
 		t.Fatal("identical inputs must produce identical keys")
 	}
 	if ui.PreviewKey(a, 60, "", 0) == ui.PreviewKey(a, 60, "", 256) {
 		t.Fatal("different code windows should produce different keys (incremental extension)")
+	}
+}
+
+// Going A → B → A quickly must not hand the second A request the cancelled
+// result of the first one.
+func TestPreviewPoolRevisitAfterCancelGetsRealPreview(t *testing.T) {
+	pool := ui.NewPreviewPool(preview.NewService(), 2)
+	defer pool.Close()
+
+	a := poolTestEntry(t, "first file\n")
+	b := poolTestEntry(t, "second file\n")
+	for range 50 {
+		pool.Submit(a, 60, "", 0, true)
+		pool.Submit(b, 60, "", 0, true)
+		select {
+		case msg := <-pool.Submit(a, 60, "", 0, true):
+			if ui.IsCancelledPreview(msg) {
+				t.Fatal("revisited entry received a cancelled preview")
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("timed out waiting for revisited preview")
+		}
+		// Change the size so the next round misses the cache.
+		a.Entry.Size++
+		b.Entry.Size++
 	}
 }

@@ -23,7 +23,6 @@ type Model struct {
 	width, height     int
 	styles            Styles
 	data              browser.Data
-	preview           *preview.Service
 	previewPool       *PreviewPool
 	searchPool        *SearchPool
 	visualState       *browser.VisualState
@@ -32,25 +31,10 @@ type Model struct {
 	prefetchSeq       int
 	lastClickPath     string
 	lastClickAt       time.Time
-	dragCandidate     string
-	dragPayload       []byte
-	dragActive        bool
-	dragOutput        io.Writer
-	dropOperation     kittydnd.Operation
-	dropMIME          int
+	drag              dragState
 	clipboard         appfileops.Clipboard
 	status            string
-	searchOpen        bool
-	searchQuery       string
-	searchSelected    int
-	searchToken       uint64
-	searchCandidates  []searchCandidate
-	searchMatches     []int
-	searchFilterPool  []int
-	searchFilterKey   string
-	searchLoading     bool
-	searchScanned     int
-	searchError       string
+	search            searchState
 	archivePromptOpen bool
 	archiveName       string
 	archiveSelectAll  bool
@@ -72,11 +56,11 @@ func New(t theme.Theme) Model {
 	bar := progress.New(progress.WithDefaultGradient())
 	bar.Width = 12
 	bar.ShowPercentage = false
-	return Model{width: 120, height: 32, styles: NewStyles(t), preview: svc, previewPool: NewPreviewPool(svc, 2), searchPool: NewSearchPool(), visualState: &browser.VisualState{}, data: browser.Data{Selected: -1, PreviewSelected: -1}, archiveProgress: bar}
+	return Model{width: 120, height: 32, styles: NewStyles(t), previewPool: NewPreviewPool(svc, 2), searchPool: NewSearchPool(), visualState: &browser.VisualState{}, data: browser.Data{Selected: -1, PreviewSelected: -1}, archiveProgress: bar}
 }
 
 func (m Model) WithDragOutput(output io.Writer) Model {
-	m.dragOutput = output
+	m.drag.output = output
 	return m
 }
 
@@ -91,25 +75,24 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.data.CWD, m.data.Places, m.data.Entries = message.cwd, message.places, message.entries
 		m.data.LoadError = ""
 		m.data.Selected = -1
-		m.data.Preview = preview.View{}
-		m.data.PreviewEntries = nil
-		m.data.PreviewIsDir = false
-		m.data.PreviewSelected = -1
-		m.data.PreviewOffset = 0
-		m.data.PreviewError = ""
-		m.data.PreviewLoading = false
+		m.resetPreview(false)
 		if message.err != nil {
 			m.data.LoadError = message.err.Error()
 		}
 		if len(message.entries) != 0 {
 			m.data.Selected = entryIndexByPath(message.entries, message.selectedPath)
-			m.data.PreviewLoading = true
-			layout := browser.ResolveLayout(m.width, max(1, m.height-1))
-			width := layout.PreviewWidth - 4
-			m, prefetch := schedulePrefetch(m, message.entries, m.data.Selected, width, m.initialCodeWindow(), m.styles.Theme.CodeSyntaxHighlight)
-			return m, tea.Batch(loadPreview(m.previewPool, message.entries[m.data.Selected], width, m.initialCodeWindow(), m.styles.Theme.CodeSyntaxHighlight), prefetch)
+			m.resetPreview(true)
+			m, load := m.requestPreview()
+			return m, tea.Batch(load, loadItemCounts(message.cwd, message.entries))
+		}
+	case itemCountsMsg:
+		if message.cwd == m.data.CWD {
+			m.data.Entries = applyItemCounts(m.data.Entries, message.counts)
 		}
 	case previewMsg:
+		if message.cancelled {
+			return m, nil
+		}
 		if m.data.Selected >= 0 && m.data.Selected < len(m.data.Entries) && m.data.Entries[m.data.Selected].Entry.Path == message.path {
 			m.data.PreviewLoading = false
 			m.data.Preview = message.view
@@ -155,7 +138,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if m.archivePromptOpen {
 			return m, nil
 		}
-		if m.searchOpen {
+		if m.search.open {
 			return m.handleSearchMouse(message)
 		}
 		if message.Button == tea.MouseButtonLeft && message.Action == tea.MouseActionPress {
@@ -163,12 +146,12 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				return m.navigateTo(path, "", true)
 			}
 			if index := m.entryIndexAt(message.X, message.Y); index >= 0 {
-				m.dragCandidate = m.data.Entries[index].Entry.Path
+				m.drag.candidate = m.data.Entries[index].Entry.Path
 				return m.clickEntry(index, time.Now())
 			}
 		}
 		if message.Button == tea.MouseButtonLeft && message.Action == tea.MouseActionRelease {
-			m.dragCandidate = ""
+			m.drag.candidate = ""
 		}
 		if m.mouseOverEntries(message.X, message.Y) {
 			switch message.Button {
@@ -194,7 +177,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if m.archivePromptOpen {
 			return m.handleArchivePromptKey(message)
 		}
-		if m.searchOpen {
+		if m.search.open {
 			if message.Type == tea.KeyEsc {
 				return m.closeSearch(), nil
 			}
@@ -241,7 +224,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) sidebarPathAt(x, y int) string {
-	layout := browser.ResolveLayout(m.width, max(1, m.height-1))
+	layout := m.layout()
 	if layout.SidebarWidth == 0 || x < 0 || x >= layout.SidebarWidth || y < 3 || y >= m.height-1 {
 		return ""
 	}
@@ -302,116 +285,9 @@ func (m Model) clickEntry(index int, clickedAt time.Time) (tea.Model, tea.Cmd) {
 	if !doubleClick {
 		return m.moveSelection(index - m.data.Selected)
 	}
-	m.dragCandidate = ""
+	m.drag.candidate = ""
 	m.lastClickPath, m.lastClickAt = "", time.Time{}
 	return m.enterSelected()
-}
-
-func (m Model) handleDndEvent(event kittydnd.Event) (tea.Model, tea.Cmd) {
-	if m.dragOutput == nil {
-		return m, nil
-	}
-	switch event.Kind {
-	case kittydnd.DropOffer:
-		if m.dragActive {
-			m.dropOperation, m.dropMIME = 0, 0
-			if event.Final {
-				_, _ = io.WriteString(m.dragOutput, kittydnd.FinishDropSequence(0)+kittydnd.CancelSequence())
-				m.dragCandidate = ""
-				m.dragPayload, m.dragActive = nil, false
-			} else {
-				_, _ = io.WriteString(m.dragOutput, kittydnd.RejectDropSequence())
-			}
-			return m, nil
-		}
-		operation := event.Operation
-		if operation == kittydnd.Either {
-			operation = kittydnd.Move
-		}
-		m.dropOperation, m.dropMIME = operation, event.MIME
-		if event.Final {
-			_, _ = io.WriteString(m.dragOutput, kittydnd.RequestDropDataSequence(event.MIME))
-		} else {
-			_, _ = io.WriteString(m.dragOutput, kittydnd.AcceptDropSequence(operation))
-		}
-	case kittydnd.DropLeave:
-		m.dropOperation, m.dropMIME = 0, 0
-	case kittydnd.DropUnsupported:
-		sequence := kittydnd.RejectDropSequence()
-		if event.Final {
-			sequence = kittydnd.FinishDropSequence(0)
-			if m.dragActive {
-				sequence += kittydnd.CancelSequence()
-				m.dragCandidate = ""
-				m.dragPayload, m.dragActive = nil, false
-			}
-		}
-		_, _ = io.WriteString(m.dragOutput, sequence)
-	case kittydnd.DropData:
-		if m.dragActive {
-			_, _ = io.WriteString(m.dragOutput, kittydnd.FinishDropSequence(0)+kittydnd.CancelSequence())
-			m.dragCandidate = ""
-			m.dragPayload, m.dragActive = nil, false
-			m.dropOperation, m.dropMIME = 0, 0
-			return m, nil
-		}
-		if m.dropOperation == 0 || event.MIME != m.dropMIME {
-			_, _ = io.WriteString(m.dragOutput, kittydnd.FinishDropSequence(0))
-			m.status = "Drop was not negotiated"
-			return m, nil
-		}
-		if len(event.UnsupportedSchemes) > 0 || len(event.Paths) == 0 {
-			_, _ = io.WriteString(m.dragOutput, kittydnd.FinishDropSequence(0))
-			if len(event.UnsupportedSchemes) > 0 {
-				m.status = "Unsupported drop URI scheme: " + event.UnsupportedSchemes[0]
-			} else {
-				m.status = "Drop contains no local files"
-			}
-			m.dropOperation, m.dropMIME = 0, 0
-			return m, nil
-		}
-		operation := m.dropOperation
-		m.dropOperation, m.dropMIME = 0, 0
-		_, _ = io.WriteString(m.dragOutput, kittydnd.FinishDropSequence(operation))
-		m.status = "Dropping files..."
-		return m, applyDrop(m.data.CWD, event.Paths, operation)
-	case kittydnd.DropDataError:
-		_, _ = io.WriteString(m.dragOutput, kittydnd.FinishDropSequence(0))
-		m.dropOperation, m.dropMIME = 0, 0
-		m.status = "Drop failed: " + event.Error
-	case kittydnd.DragOffer:
-		if m.dragActive {
-			return m, nil
-		}
-		path := m.dragCandidate
-		if path == "" {
-			if index := m.entryIndexAt(event.X, event.Y); index >= 0 {
-				path = m.data.Entries[index].Entry.Path
-			}
-		}
-		payload, sequence := kittydnd.StartSequence([]string{path}, m.dragLabel(path))
-		_, _ = io.WriteString(m.dragOutput, sequence)
-		if len(payload) > 0 {
-			m.dragPayload = payload
-			m.dragActive = true
-		}
-	case kittydnd.DragDataRequested:
-		_, _ = io.WriteString(m.dragOutput, kittydnd.DataSequence(event.MIME, m.dragPayload))
-	case kittydnd.DragEnded, kittydnd.DragError:
-		m.dragCandidate = ""
-		m.dragPayload = nil
-		m.dragActive = false
-	}
-	return m, nil
-}
-
-func (m Model) dragLabel(path string) string {
-	for _, item := range m.data.Entries {
-		if item.Entry.Path == path {
-			return item.Icon + " " + item.Entry.Name
-		}
-	}
-	return ""
 }
 
 func (m Model) goParent() (tea.Model, tea.Cmd) {
@@ -491,18 +367,12 @@ func (m Model) navigateTo(path, selectedPath string, recordHistory bool) (tea.Mo
 	m.data.Entries = nil
 	m.data.Selected = -1
 	m.data.LoadError = ""
-	m.data.Preview = preview.View{}
-	m.data.PreviewEntries = nil
-	m.data.PreviewIsDir = false
-	m.data.PreviewSelected = -1
-	m.data.PreviewOffset = 0
-	m.data.PreviewError = ""
-	m.data.PreviewLoading = false
+	m.resetPreview(false)
 	return m, loadDirectory(path, selectedPath)
 }
 
 func (m Model) mouseOverPreview(x, y int) bool {
-	layout := browser.ResolveLayout(m.width, max(1, m.height-1))
+	layout := m.layout()
 	if layout.PreviewWidth == 0 || y < 0 || y >= m.height-1 {
 		return false
 	}
@@ -513,7 +383,7 @@ func (m Model) mouseOverPreview(x, y int) bool {
 }
 
 func (m Model) mouseOverEntries(x, y int) bool {
-	layout := browser.ResolveLayout(m.width, max(1, m.height-1))
+	layout := m.layout()
 	if x < layout.SidebarWidth || x >= layout.SidebarWidth+layout.FilesWidth || y < 0 || y >= m.height-1 {
 		return false
 	}
@@ -524,7 +394,7 @@ func (m Model) entryIndexAt(x, y int) int {
 	if !m.mouseOverEntries(x, y) || y < 3 {
 		return -1
 	}
-	layout := browser.ResolveLayout(m.width, max(1, m.height-1))
+	layout := m.layout()
 	visibleRows := max(0, layout.FilesHeight-4)
 	row := y - 3
 	if row >= visibleRows {
@@ -550,17 +420,37 @@ func (m Model) moveSelection(delta int) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.data.Selected = next
+	m.resetPreview(true)
+	return m.requestPreview()
+}
+
+// resetPreview clears the preview pane, marking it loading when a new preview
+// has been requested.
+func (m *Model) resetPreview(loading bool) {
 	m.data.Preview = preview.View{}
 	m.data.PreviewEntries = nil
 	m.data.PreviewIsDir = false
 	m.data.PreviewSelected = -1
 	m.data.PreviewOffset = 0
 	m.data.PreviewError = ""
-	m.data.PreviewLoading = true
-	layout := browser.ResolveLayout(m.width, max(1, m.height-1))
-	width := layout.PreviewWidth - 4
-	m, prefetch := schedulePrefetch(m, m.data.Entries, next, width, m.initialCodeWindow(), m.styles.Theme.CodeSyntaxHighlight)
-	return m, tea.Batch(loadPreview(m.previewPool, m.data.Entries[next], width, m.initialCodeWindow(), m.styles.Theme.CodeSyntaxHighlight), prefetch)
+	m.data.PreviewLoading = loading
+}
+
+// requestPreview loads the selected entry's preview and prefetches its
+// neighbours.
+func (m Model) requestPreview() (Model, tea.Cmd) {
+	width, window, syntax := m.previewWidth(), m.initialCodeWindow(), m.styles.Theme.CodeSyntaxHighlight
+	m, prefetch := schedulePrefetch(m, m.data.Entries, m.data.Selected, width, window, syntax)
+	return m, tea.Batch(loadPreview(m.previewPool, m.data.Entries[m.data.Selected], width, window, syntax), prefetch)
+}
+
+func (m Model) layout() browser.Layout {
+	return browser.ResolveLayout(m.width, max(1, m.height-1))
+}
+
+// previewWidth is the preview pane's content width in cells.
+func (m Model) previewWidth() int {
+	return m.layout().PreviewWidth - 4
 }
 
 // initialCodeWindow is the leading-line budget for the first render of a code
@@ -590,9 +480,7 @@ func (m Model) extendCodePreview() tea.Cmd {
 		return nil
 	}
 	window := max(len(m.data.Preview.Lines)*2, m.initialCodeWindow())
-	layout := browser.ResolveLayout(m.width, max(1, m.height-1))
-	width := layout.PreviewWidth - 4
-	return extendPreview(m.previewPool, m.data.Entries[m.data.Selected], width, window, m.styles.Theme.CodeSyntaxHighlight)
+	return loadPreview(m.previewPool, m.data.Entries[m.data.Selected], m.previewWidth(), window, m.styles.Theme.CodeSyntaxHighlight)
 }
 
 func (m *Model) scrollPreview(delta int) tea.Cmd {
@@ -613,7 +501,7 @@ func (m Model) previewWheelStep() int {
 }
 
 func (m Model) previewVisibleLines() int {
-	layout := browser.ResolveLayout(m.width, max(1, m.height-1))
+	layout := m.layout()
 	height := m.height - 1
 	if layout.Stacked {
 		height = layout.PreviewHeight
@@ -652,26 +540,17 @@ func (m Model) View() string {
 	}
 	bodyHeight := m.height - 1
 	bodyWidth := m.width
-	t := m.styles.Theme
-	browserStyles := browser.Styles{
-		RootFG: lipgloss.Color(t.FullScreenFG), RootBG: lipgloss.Color(t.FullScreenBG),
-		PanelFG: lipgloss.Color(t.FilePanelFG), PanelBG: lipgloss.Color(t.FilePanelBG), PanelBorder: lipgloss.Color(t.FilePanelBorder), ActiveBorder: lipgloss.Color(t.FilePanelBorderActive),
-		Path: lipgloss.Color(t.FilePanelTopPath), Directory: lipgloss.Color(t.FilePanelTopDirectoryIcon), SelectedFG: lipgloss.Color(t.FilePanelItemSelectedFG), SelectedBG: lipgloss.Color(t.FilePanelItemSelectedBG), Muted: lipgloss.Color(t.SidebarDivider),
-		SidebarFG: lipgloss.Color(t.SidebarFG), SidebarBG: lipgloss.Color(t.SidebarBG), SidebarTitle: lipgloss.Color(t.FilePanelTopPath), SidebarBorder: lipgloss.Color(t.FilePanelBorder), SidebarIcon: lipgloss.Color(t.FilePanelTopDirectoryIcon),
-		SidebarSelectedFG: lipgloss.Color(t.SidebarItemSelectedFG), SidebarSelectedBG: lipgloss.Color(t.SidebarItemSelectedBG), Cursor: lipgloss.Color(t.Cursor),
-		OperationCopy: lipgloss.Color(t.Correct), OperationCut: lipgloss.Color(t.Cancel),
-	}
 	browserData := m.data
 	browserData.OperationPath = m.clipboard.Source
 	browserData.OperationCut = m.clipboard.Operation == fsfileops.Move
-	body := browser.Render(bodyWidth, bodyHeight, m.visualState, os.Stdout, browserStyles, browserData)
+	body := browser.Render(bodyWidth, bodyHeight, m.visualState, os.Stdout, m.styles.Browser, browserData)
 	operation := m.clipboardStatus()
 	if archiveStatus := m.archiveStatus(); archiveStatus != "" {
 		operation = archiveStatus
 	}
 	view := lipgloss.JoinVertical(lipgloss.Left, body, renderFooter(m.width, m.styles, m.data, operation, m.status))
 	view = m.styles.Root.Width(m.width).Height(m.height).MaxWidth(m.width).MaxHeight(m.height).Render(view)
-	if m.searchOpen {
+	if m.search.open {
 		m.visualState.Clear()
 		return m.renderSearch(view)
 	}

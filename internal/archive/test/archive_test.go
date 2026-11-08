@@ -75,6 +75,40 @@ func TestCreateReportsByteProgress(t *testing.T) {
 	}
 }
 
+func TestExtractReportsByteProgress(t *testing.T) {
+	for _, suffix := range []string{".zip", ".tar", ".tar.gz"} {
+		t.Run(suffix, func(t *testing.T) {
+			root := t.TempDir()
+			source := filepath.Join(root, "source.bin")
+			if err := os.WriteFile(source, []byte(strings.Repeat("progress", 200_000)), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			archivePath := filepath.Join(root, "output"+suffix)
+			if _, err := archive.Create(archivePath, []string{source}); err != nil {
+				t.Fatal(err)
+			}
+			var updates []archive.Progress
+			if _, err := archive.ExtractWithProgress(archivePath, func(progress archive.Progress) {
+				updates = append(updates, progress)
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if len(updates) < 2 {
+				t.Fatalf("got %d progress updates, want at least initial and final", len(updates))
+			}
+			for i := 1; i < len(updates); i++ {
+				if updates[i].Completed < updates[i-1].Completed {
+					t.Fatalf("progress decreased from %d to %d", updates[i-1].Completed, updates[i].Completed)
+				}
+			}
+			last := updates[len(updates)-1]
+			if last.Total <= 0 || last.Completed != last.Total {
+				t.Fatalf("final progress = %d/%d", last.Completed, last.Total)
+			}
+		})
+	}
+}
+
 func TestCreateDoesNotOverwrite(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "source.txt")

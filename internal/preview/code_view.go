@@ -19,32 +19,6 @@ var codeHighlightService = backend.New()
 var codeNewlinePattern = regexp.MustCompile(`\r?\n`)
 
 /*
-defaultCodeWindow is the number of leading lines rendered into the initial
-View for a highlighted code file. Rendering only a window keeps the first
-paint cheap for very large sources; the UI extends the window on scroll by
-re-requesting with a larger count, which cheaply reuses the disk cache.
-*/
-const defaultCodeWindow = 256
-
-/*
-highlightCodeLines returns the source code rendered as ANSI-coloured lines,
-styled with the named Chroma style. Lines are returned plain when no lexer
-or token style applies to them.
-*/
-func highlightCodeLines(ctx context.Context, codeSyntax, source, styleName string) ([]string, error) {
-	language, ok := registry.LanguageForCodeSyntax(codeSyntax)
-	// use chroma lexer for unknown languages so we can still highlight them with the fallback lexer.
-	if !ok {
-		language = registry.Language(codeSyntax, codeSyntax, registry.Chroma, nil)
-	}
-	result, err := codeHighlightService.Highlight(ctx, backend.Request{Language: language, Source: source})
-	if err != nil {
-		return nil, fmt.Errorf("highlight %q: %w", codeSyntax, err)
-	}
-	return renderTokenLines(result.Tokens, styleName), nil
-}
-
-/*
 highlightCached returns the highlighted code for a given source, language, and style.
 It attempts to fetch the result from the on-disk cache so re-renders (pane resize, extended scroll window,
 revisit) never re-run the highlighter. It returns the rendered lines window
@@ -73,15 +47,6 @@ func highlightCached(ctx context.Context, codeSyntax, source, styleName string, 
 		codeCacheService.put(key, content)
 	}
 	return codeWindow(content, start, count), lineCount(content), nil
-}
-
-// renderTokenLines builds token output and splits it into individual lines.
-func renderTokenLines(tokens []backend.Token, styleName string) []string {
-	output := renderTokenString(tokens, styleName)
-	if output == "" {
-		return nil
-	}
-	return strings.Split(strings.TrimSuffix(output, "\n"), "\n")
 }
 
 /*

@@ -143,24 +143,25 @@ func inspectExtension(ext string) FileFacts {
 	return plain(core.FileClassFile, nil)
 }
 
+var programmingLabels = map[string]string{
+	"c": "C source file", "h": "C header", "cpp": "C++ source file", "cc": "C++ source file", "cxx": "C++ source file",
+	"hpp": "C++ header", "hh": "C++ header", "hxx": "C++ header", "mk": "Makefile", "mak": "Makefile",
+	"sh": "Shell script", "bash": "Bash script", "zsh": "Zsh script", "ksh": "KornShell script", "fish": "Fish script",
+	"bat": "Batch file", "cmd": "Batch file", "btm": "Batch file",
+	"ps1": "PowerShell script", "psm1": "PowerShell module", "psd1": "PowerShell data file",
+	"py": "Python source file", "pyi": "Python stub file", "pyw": "Python script (no console)", "pyx": "Cython source file",
+	"rs": "Rust source file", "go": "Go source file", "java": "Java source file", "php": "PHP script", "swift": "Swift source file",
+	"kt": "Kotlin source file", "kts": "Kotlin script", "cs": "C# source file", "csx": "C# script", "dart": "Dart source file",
+	"f": "Fortran source file", "for": "Fortran source file", "f90": "Fortran source file", "f95": "Fortran source file", "f03": "Fortran source file", "f08": "Fortran source file", "fpp": "Fortran preprocessor source file",
+	"cbl": "COBOL source file", "cob": "COBOL source file", "cobol": "COBOL source file", "cpy": "COBOL copybook", "zig": "Zig source file",
+	"groovy": "Groovy source file", "gvy": "Groovy source file", "gradle": "Gradle build script", "scala": "Scala source file", "sbt": "sbt build definition",
+	"pl": "Perl script", "pm": "Perl module", "pod": "Perl POD file", "t": "Perl test script", "hs": "Haskell source file", "lhs": "Literate Haskell source file",
+	"jl": "Julia source file", "r": "R script", "ex": "Elixir source file", "exs": "Elixir script", "clj": "Clojure source file", "cljs": "ClojureScript source file", "cljc": "Portable Clojure source file",
+	"edn": "EDN file", "rb": "Ruby script", "lua": "Lua script",
+}
+
 func inspectProgrammingExtension(ext string) (FileFacts, bool) {
-	labels := map[string]string{
-		"c": "C source file", "h": "C header", "cpp": "C++ source file", "cc": "C++ source file", "cxx": "C++ source file",
-		"hpp": "C++ header", "hh": "C++ header", "hxx": "C++ header", "mk": "Makefile", "mak": "Makefile",
-		"sh": "Shell script", "bash": "Bash script", "zsh": "Zsh script", "ksh": "KornShell script", "fish": "Fish script",
-		"bat": "Batch file", "cmd": "Batch file", "btm": "Batch file",
-		"ps1": "PowerShell script", "psm1": "PowerShell module", "psd1": "PowerShell data file",
-		"py": "Python source file", "pyi": "Python stub file", "pyw": "Python script (no console)", "pyx": "Cython source file",
-		"rs": "Rust source file", "go": "Go source file", "java": "Java source file", "php": "PHP script", "swift": "Swift source file",
-		"kt": "Kotlin source file", "kts": "Kotlin script", "cs": "C# source file", "csx": "C# script", "dart": "Dart source file",
-		"f": "Fortran source file", "for": "Fortran source file", "f90": "Fortran source file", "f95": "Fortran source file", "f03": "Fortran source file", "f08": "Fortran source file", "fpp": "Fortran preprocessor source file",
-		"cbl": "COBOL source file", "cob": "COBOL source file", "cobol": "COBOL source file", "cpy": "COBOL copybook", "zig": "Zig source file",
-		"groovy": "Groovy source file", "gvy": "Groovy source file", "gradle": "Gradle build script", "scala": "Scala source file", "sbt": "sbt build definition",
-		"pl": "Perl script", "pm": "Perl module", "pod": "Perl POD file", "t": "Perl test script", "hs": "Haskell source file", "lhs": "Literate Haskell source file",
-		"jl": "Julia source file", "r": "R script", "ex": "Elixir source file", "exs": "Elixir script", "clj": "Clojure source file", "cljs": "ClojureScript source file", "cljc": "Portable Clojure source file",
-		"edn": "EDN file", "rb": "Ruby script", "lua": "Lua script",
-	}
-	label, ok := labels[ext]
+	label, ok := programmingLabels[ext]
 	if !ok {
 		return FileFacts{}, false
 	}
@@ -169,6 +170,17 @@ func inspectProgrammingExtension(ext string) (FileFacts, bool) {
 		class = core.FileClassConfig
 	}
 	return codeFacts(ext, label, class), true
+}
+
+var documentFormats = map[string]struct {
+	format DocumentFormat
+	label  string
+}{
+	"doc": {Doc, "DOC document"}, "docx": {Docx, "DOCX document"}, "docm": {Docm, "DOCM document"},
+	"odt": {Odt, "ODT document"}, "ods": {Ods, "ODS spreadsheet"}, "odp": {Odp, "ODP presentation"},
+	"pptx": {Pptx, "PPTX presentation"}, "pptm": {Pptm, "PPTM presentation"}, "xls": {Xls, "XLS spreadsheet"}, "xlsx": {Xlsx, "XLSX spreadsheet"},
+	"xlsm": {Xlsm, "XLSM spreadsheet"}, "pages": {Pages, "Pages document"}, "epub": {Epub, "EPUB ebook"},
+	"mobi": {Mobi, "MOBI ebook"}, "azw3": {Azw3, "AZW3 ebook"}, "pdf": {Pdf, "PDF document"},
 }
 
 func inspectDataOrDocumentExtension(ext string) (FileFacts, bool) {
@@ -192,37 +204,28 @@ func inspectDataOrDocumentExtension(ext string) (FileFacts, bool) {
 	case "parquet":
 		return SourceOnly(core.FileClassData, stringPtr("Parquet file"), nil), true
 	}
-	formats := map[string]struct {
-		format DocumentFormat
-		label  string
-	}{
-		"doc": {Doc, "DOC document"}, "docx": {Docx, "DOCX document"}, "docm": {Docm, "DOCM document"},
-		"odt": {Odt, "ODT document"}, "ods": {Ods, "ODS spreadsheet"}, "odp": {Odp, "ODP presentation"},
-		"pptx": {Pptx, "PPTX presentation"}, "pptm": {Pptm, "PPTM presentation"}, "xls": {Xls, "XLS spreadsheet"}, "xlsx": {Xlsx, "XLSX spreadsheet"},
-		"xlsm": {Xlsm, "XLSM spreadsheet"}, "pages": {Pages, "Pages document"}, "epub": {Epub, "EPUB ebook"},
-		"mobi": {Mobi, "MOBI ebook"}, "azw3": {Azw3, "AZW3 ebook"}, "pdf": {Pdf, "PDF document"},
-	}
-	if document, ok := formats[ext]; ok {
+	if document, ok := documentFormats[ext]; ok {
 		return facts(core.FileClassDocument, document.label, DocumentPreview(document.format)), true
 	}
 	return FileFacts{}, false
 }
 
+var plainExtensions = map[string]struct {
+	class core.FileClass
+	label string
+}{
+	"mp4": {core.FileClassVideo, "MP4 video"}, "mkv": {core.FileClassVideo, "Matroska video"}, "mov": {core.FileClassVideo, "QuickTime video"}, "webm": {core.FileClassVideo, "WebM video"}, "avi": {core.FileClassVideo, "AVI video"},
+	"xcf": {core.FileClassImage, "GIMP image"}, "ico": {core.FileClassImage, "ICO image"}, "svg": {core.FileClassImage, "SVG image"}, "png": {core.FileClassImage, "PNG image"}, "jpg": {core.FileClassImage, "JPEG image"}, "jpeg": {core.FileClassImage, "JPEG image"}, "gif": {core.FileClassImage, "GIF image"}, "webp": {core.FileClassImage, "WebP image"}, "avif": {core.FileClassImage, "AVIF image"},
+	"mp3": {core.FileClassAudio, "MP3 audio"}, "wav": {core.FileClassAudio, "WAV audio"}, "flac": {core.FileClassAudio, "FLAC audio"}, "ogg": {core.FileClassAudio, "Ogg audio"}, "m4a": {core.FileClassAudio, "M4A audio"},
+	"rpm": {core.FileClassArchive, "RPM package"}, "deb": {core.FileClassArchive, "Debian package"}, "apk": {core.FileClassArchive, "Android package"}, "aab": {core.FileClassArchive, "Android App Bundle"}, "apkg": {core.FileClassArchive, "Anki package"}, "zst": {core.FileClassArchive, "Zstandard archive"}, "zest": {core.FileClassArchive, "Zest archive"}, "appimage": {core.FileClassArchive, "AppImage bundle"}, "jar": {core.FileClassArchive, "Java archive"}, "cbz": {core.FileClassArchive, "Comic ZIP archive"}, "cbr": {core.FileClassArchive, "Comic RAR archive"},
+	"hash": {core.FileClassData, "Hash file"}, "sha1": {core.FileClassData, "SHA-1 checksum"}, "sha256": {core.FileClassData, "SHA-256 checksum"}, "sha512": {core.FileClassData, "SHA-512 checksum"}, "md5": {core.FileClassData, "MD5 checksum"},
+	"srt": {core.FileClassDocument, "SubRip subtitles"}, "p12": {core.FileClassConfig, "PKCS#12 certificate"}, "pfx": {core.FileClassConfig, "PKCS#12 certificate"}, "pem": {core.FileClassConfig, "PEM certificate"}, "crt": {core.FileClassConfig, "Certificate"}, "cer": {core.FileClassConfig, "Certificate"}, "csr": {core.FileClassConfig, "Certificate signing request"}, "key": {core.FileClassConfig, "Private key"},
+	"exe": {core.FileClassFile, "Windows executable"}, "dll": {core.FileClassFile, "Windows DLL"}, "sys": {core.FileClassFile, "Windows system driver"}, "msi": {core.FileClassFile, "Windows Installer package"}, "so": {core.FileClassFile, "Shared library"}, "dylib": {core.FileClassFile, "Dynamic library"}, "o": {core.FileClassFile, "Object file"}, "a": {core.FileClassFile, "Static library"}, "lib": {core.FileClassFile, "Library file"},
+	"ttf": {core.FileClassFont, "TrueType font"}, "otf": {core.FileClassFont, "OpenType font"}, "woff": {core.FileClassFont, "WOFF font"}, "woff2": {core.FileClassFont, "WOFF2 font"},
+}
+
 func plainExtension(ext string) (core.FileClass, string, bool) {
-	values := map[string]struct {
-		class core.FileClass
-		label string
-	}{
-		"mp4": {core.FileClassVideo, "MP4 video"}, "mkv": {core.FileClassVideo, "Matroska video"}, "mov": {core.FileClassVideo, "QuickTime video"}, "webm": {core.FileClassVideo, "WebM video"}, "avi": {core.FileClassVideo, "AVI video"},
-		"xcf": {core.FileClassImage, "GIMP image"}, "ico": {core.FileClassImage, "ICO image"}, "svg": {core.FileClassImage, "SVG image"}, "png": {core.FileClassImage, "PNG image"}, "jpg": {core.FileClassImage, "JPEG image"}, "jpeg": {core.FileClassImage, "JPEG image"}, "gif": {core.FileClassImage, "GIF image"}, "webp": {core.FileClassImage, "WebP image"}, "avif": {core.FileClassImage, "AVIF image"},
-		"mp3": {core.FileClassAudio, "MP3 audio"}, "wav": {core.FileClassAudio, "WAV audio"}, "flac": {core.FileClassAudio, "FLAC audio"}, "ogg": {core.FileClassAudio, "Ogg audio"}, "m4a": {core.FileClassAudio, "M4A audio"},
-		"rpm": {core.FileClassArchive, "RPM package"}, "deb": {core.FileClassArchive, "Debian package"}, "apk": {core.FileClassArchive, "Android package"}, "aab": {core.FileClassArchive, "Android App Bundle"}, "apkg": {core.FileClassArchive, "Anki package"}, "zst": {core.FileClassArchive, "Zstandard archive"}, "zest": {core.FileClassArchive, "Zest archive"}, "appimage": {core.FileClassArchive, "AppImage bundle"}, "jar": {core.FileClassArchive, "Java archive"}, "cbz": {core.FileClassArchive, "Comic ZIP archive"}, "cbr": {core.FileClassArchive, "Comic RAR archive"},
-		"hash": {core.FileClassData, "Hash file"}, "sha1": {core.FileClassData, "SHA-1 checksum"}, "sha256": {core.FileClassData, "SHA-256 checksum"}, "sha512": {core.FileClassData, "SHA-512 checksum"}, "md5": {core.FileClassData, "MD5 checksum"},
-		"srt": {core.FileClassDocument, "SubRip subtitles"}, "p12": {core.FileClassConfig, "PKCS#12 certificate"}, "pfx": {core.FileClassConfig, "PKCS#12 certificate"}, "pem": {core.FileClassConfig, "PEM certificate"}, "crt": {core.FileClassConfig, "Certificate"}, "cer": {core.FileClassConfig, "Certificate"}, "csr": {core.FileClassConfig, "Certificate signing request"}, "key": {core.FileClassConfig, "Private key"},
-		"exe": {core.FileClassFile, "Windows executable"}, "dll": {core.FileClassFile, "Windows DLL"}, "sys": {core.FileClassFile, "Windows system driver"}, "msi": {core.FileClassFile, "Windows Installer package"}, "so": {core.FileClassFile, "Shared library"}, "dylib": {core.FileClassFile, "Dynamic library"}, "o": {core.FileClassFile, "Object file"}, "a": {core.FileClassFile, "Static library"}, "lib": {core.FileClassFile, "Library file"},
-		"ttf": {core.FileClassFont, "TrueType font"}, "otf": {core.FileClassFont, "OpenType font"}, "woff": {core.FileClassFont, "WOFF font"}, "woff2": {core.FileClassFont, "WOFF2 font"},
-	}
-	if value, ok := values[ext]; ok {
+	if value, ok := plainExtensions[ext]; ok {
 		return value.class, value.label, true
 	}
 	if ext == "txt" || ext == "rst" {

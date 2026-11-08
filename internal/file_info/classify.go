@@ -1,7 +1,7 @@
 package fileinfo
 
 /*
-This package provides functions to inspect files and directories, determine their types, and generate metadata (FileFacts) for use in the application. It includes caching mechanisms to avoid redundant inspections of unchanged files, and it selects an appropriate preview format, and caches results for unchanged files.
+This package provides functions to inspect files and directories, determine their types, and generate metadata (FileFacts) for use in the application. It also selects an appropriate preview format.
 */
 
 import (
@@ -10,8 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
-	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -22,29 +20,9 @@ import (
 const ConfigSniffByteLimit = 16 * 1024
 const ConfigSniffLineLimit = 80
 const ConfigHintLineLimit = 10
-const FileFactsCacheLimit = 4096
 const StrongIniThreshold uint8 = 4
 const StrongShellThreshold uint8 = 4
 const ScoreMargin uint8 = 2
-
-type CacheKey struct {
-	Path           string
-	DisplayName    string
-	HasDisplayName bool
-	IsDir          bool
-	Size           uint64
-	MtimeSec       int64
-	MtimeNsec      uint32
-	HasMtime       bool
-}
-
-type FactsCache struct {
-	mu    sync.Mutex // it locks access to the data while map is being read or written
-	Facts map[CacheKey]FileFacts
-	Order []CacheKey
-}
-
-var fileFactsCache = FactsCache{Facts: make(map[CacheKey]FileFacts)}
 
 func InspectPath(path string, kind core.EntryKind) FileFacts {
 	return inspectPathWithName(path, "", false, kind)
@@ -112,66 +90,6 @@ func pathExtension(path string) string {
 		return ""
 	}
 	return normalizeKey(strings.TrimPrefix(filepath.Ext(base), "."))
-}
-
-func InspectPathCached(path string, kind core.EntryKind, size uint64, modified *time.Time) FileFacts {
-	return inspectPathWithNameCached(path, "", false, kind, size, modified)
-}
-
-func InspectEntryCached(entry *core.Entry) FileFacts {
-	size := uint64(0)
-	if entry.Size > 0 {
-		size = uint64(entry.Size)
-	}
-	var modified *time.Time
-	if !entry.Modified.IsZero() {
-		modified = &entry.Modified
-	}
-	return inspectPathWithNameCached(entry.Path, entry.Name, true, entry.Kind, size, modified)
-}
-
-func inspectPathWithNameCached(path, displayName string, hasDisplayName bool, kind core.EntryKind, size uint64, modified *time.Time) FileFacts {
-	key := CacheKey{Path: path, HasDisplayName: hasDisplayName, IsDir: kind == core.Directory, Size: size}
-	if hasDisplayName {
-		key.DisplayName = displayName
-	}
-	if modified != nil && !modified.Before(time.Unix(0, 0)) {
-		key.MtimeSec = modified.Unix()
-		key.MtimeNsec = uint32(modified.Nanosecond())
-		key.HasMtime = true
-	}
-
-	if facts, ok := fileFactsCache.get(key); ok {
-		return facts
-	}
-	facts := inspectPathWithName(path, displayName, hasDisplayName, kind)
-	fileFactsCache.insert(key, facts)
-	return facts
-}
-
-func (c *FactsCache) get(key CacheKey) (FileFacts, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	facts, ok := c.Facts[key]
-	return facts, ok
-}
-
-func (c *FactsCache) insert(key CacheKey, facts FileFacts) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.Facts[key] = facts
-	for i, cached := range c.Order {
-		if cached == key {
-			c.Order = append(c.Order[:i], c.Order[i+1:]...)
-			break
-		}
-	}
-	c.Order = append(c.Order, key)
-	for len(c.Order) > FileFactsCacheLimit {
-		stale := c.Order[0]
-		c.Order = c.Order[1:]
-		delete(c.Facts, stale)
-	}
 }
 
 func normalizeKey(input string) string {

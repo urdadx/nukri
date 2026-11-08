@@ -40,6 +40,9 @@ type RenderedImage struct {
 type ImageRenderer interface {
 	Supported() bool
 	Place(preview.Image, Placement) (RenderedImage, error)
+	// Move re-positions an already placed image without re-sending its data
+	// where the protocol allows it.
+	Move(RenderedImage, Placement) (RenderedImage, error)
 	DeletePlacement(RenderedImage) error
 	Delete(RenderedImage) error
 	DeleteAll() error
@@ -96,6 +99,27 @@ func (k *Kitty) Place(image preview.Image, placement Placement) (RenderedImage, 
 	}, nil
 }
 
+// Move re-places a transmitted image. Reusing the image and placement IDs makes
+// Kitty replace the old placement in place, so no image data is re-sent.
+func (k *Kitty) Move(image RenderedImage, placement Placement) (RenderedImage, error) {
+	if !k.Supported() {
+		return RenderedImage{}, ErrUnsupportedTerminal
+	}
+	if image.ImageID == 0 || image.PlacementID == 0 {
+		return RenderedImage{}, ErrInvalidImage
+	}
+	if placement.X < 0 || placement.Y < 0 || placement.Columns <= 0 || placement.Rows <= 0 {
+		return RenderedImage{}, ErrInvalidPlacement
+	}
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	if err := k.place(image.ImageID, image.PlacementID, placement); err != nil {
+		return RenderedImage{}, err
+	}
+	image.X, image.Y, image.Columns, image.Rows = placement.X, placement.Y, placement.Columns, placement.Rows
+	return image, nil
+}
+
 func (k *Kitty) Delete(image RenderedImage) error {
 	if !k.Supported() {
 		return ErrUnsupportedTerminal
@@ -142,8 +166,13 @@ func (k *Kitty) allocateID() uint32 {
 	return id
 }
 
+// transmitPNG sends the image in protocol-sized chunks, written to the terminal
+// in a single write.
 func (k *Kitty) transmitPNG(imageID uint32, data []byte) error {
 	encoded := base64.StdEncoding.EncodeToString(data)
+	var sequence strings.Builder
+	chunks := (len(encoded) + kittyChunkSize - 1) / kittyChunkSize
+	sequence.Grow(len(encoded) + chunks*16 + 64)
 	for offset := 0; offset < len(encoded); offset += kittyChunkSize {
 		end := min(offset+kittyChunkSize, len(encoded))
 		more := end < len(encoded)
@@ -154,9 +183,10 @@ func (k *Kitty) transmitPNG(imageID uint32, data []byte) error {
 		if offset == 0 {
 			control = fmt.Sprintf("a=t,f=100,i=%d,q=2,t=d,%s", imageID, control)
 		}
-		if _, err := io.WriteString(k.writer, kittyCommand(control, encoded[offset:end])); err != nil {
-			return fmt.Errorf("transmit Kitty image: %w", err)
-		}
+		sequence.WriteString(kittyCommand(control, encoded[offset:end]))
+	}
+	if _, err := io.WriteString(k.writer, sequence.String()); err != nil {
+		return fmt.Errorf("transmit Kitty image: %w", err)
 	}
 	return nil
 }

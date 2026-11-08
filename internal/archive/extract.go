@@ -14,6 +14,11 @@ import (
 // Extract expands source into a unique sibling directory and returns its path.
 // Archive links and special entries are rejected.
 func Extract(source string) (string, error) {
+	return ExtractWithProgress(source, nil)
+}
+
+// ExtractWithProgress expands source and reports bytes read from archive data.
+func ExtractWithProgress(source string, report func(Progress)) (string, error) {
 	format, err := FormatFromPath(source)
 	if err != nil {
 		return "", err
@@ -30,10 +35,20 @@ func Extract(source string) (string, error) {
 			_ = os.RemoveAll(stage)
 		}
 	}()
+	tracker := &progressTracker{report: report}
 	if format == ZIP {
-		err = extractZIP(source, stage)
+		err = extractZIP(source, stage, tracker)
 	} else {
-		err = extractTAR(source, stage, format == TARGZ)
+		info, statErr := os.Stat(source)
+		if statErr != nil {
+			return "", statErr
+		}
+		tracker.progress.Total = info.Size()
+		tracker.next = 1 << 20
+		if report != nil {
+			report(tracker.progress)
+		}
+		err = extractTAR(source, stage, format == TARGZ, tracker)
 	}
 	if err != nil {
 		return "", err
@@ -42,6 +57,7 @@ func Extract(source string) (string, error) {
 		return "", fmt.Errorf("publish extraction: %w", err)
 	}
 	ok = true
+	tracker.finish()
 	return destination, nil
 }
 
@@ -61,12 +77,19 @@ func safeArchivePath(root, name string) (string, error) {
 	return path, nil
 }
 
-func extractZIP(source, root string) error {
+func extractZIP(source, root string, progress *progressTracker) error {
 	reader, err := zip.OpenReader(source)
 	if err != nil {
 		return err
 	}
 	defer reader.Close()
+	for _, entry := range reader.File {
+		progress.progress.Total += int64(entry.UncompressedSize64)
+	}
+	progress.next = 1 << 20
+	if progress.report != nil {
+		progress.report(progress.progress)
+	}
 	for _, entry := range reader.File {
 		mode := entry.Mode()
 		if mode&os.ModeSymlink != 0 || (!mode.IsRegular() && !mode.IsDir()) {
@@ -89,7 +112,7 @@ func extractZIP(source, root string) error {
 		if err != nil {
 			return err
 		}
-		err = writeExtractedFile(path, mode.Perm(), input)
+		err = writeExtractedFile(path, mode.Perm(), &progressReader{reader: input, progress: progress})
 		input.Close()
 		if err != nil {
 			return err
@@ -98,15 +121,15 @@ func extractZIP(source, root string) error {
 	return nil
 }
 
-func extractTAR(source, root string, compressed bool) error {
+func extractTAR(source, root string, compressed bool, progress *progressTracker) error {
 	file, err := os.Open(source)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
-	var input io.Reader = file
+	var input io.Reader = &progressReader{reader: file, progress: progress}
 	if compressed {
-		gzipReader, err := gzip.NewReader(file)
+		gzipReader, err := gzip.NewReader(input)
 		if err != nil {
 			return err
 		}
@@ -143,6 +166,17 @@ func extractTAR(source, root string, compressed bool) error {
 			return fmt.Errorf("unsupported archive entry: %s", header.Name)
 		}
 	}
+}
+
+type progressReader struct {
+	reader   io.Reader
+	progress *progressTracker
+}
+
+func (r *progressReader) Read(buffer []byte) (int, error) {
+	read, err := r.reader.Read(buffer)
+	r.progress.add(int64(read))
+	return read, err
 }
 
 func writeExtractedFile(path string, mode os.FileMode, source io.Reader) error {

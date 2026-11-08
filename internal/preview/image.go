@@ -7,10 +7,10 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	"image/png"
-	_ "image/png"
 	"os"
+	"path/filepath"
+	"strings"
 
-	_ "github.com/gen2brain/avif"
 	_ "golang.org/x/image/bmp"
 	"golang.org/x/image/draw"
 	_ "golang.org/x/image/tiff"
@@ -63,6 +63,10 @@ func (s *Service) renderImage(ctx context.Context, path string, facts fileinfo.F
 		}, nil
 	}
 
+	if strings.EqualFold(filepath.Ext(path), ".avif") {
+		return s.renderAVIF(ctx, path, cacheKey, targetSize, info.Size())
+	}
+
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("open image preview: %w", err)
@@ -100,6 +104,19 @@ func (s *Service) renderImage(ctx context.Context, path string, facts fileinfo.F
 			Height:    cacheH,
 		},
 	}, nil
+}
+
+// renderAVIF decodes AVIF with ffmpeg; Go's image packages have no AVIF decoder.
+func (s *Service) renderAVIF(ctx context.Context, path, cacheKey string, targetSize int, size int64) (*ImagePreview, error) {
+	if s.tools.FFmpeg == "" {
+		return nil, fmt.Errorf("AVIF preview: %w", ToolUnavailable("ffmpeg"))
+	}
+	preview, err := s.ffmpegStill(ctx, path, targetSize)
+	if err != nil {
+		return nil, fmt.Errorf("decode image preview: %w", err)
+	}
+	s.imageCache.Put(cacheKey, preview.Data, preview.Width, preview.Height, "avif", 0, 0, size, nil)
+	return &ImagePreview{Image: preview}, nil
 }
 
 /*

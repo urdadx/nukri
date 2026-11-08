@@ -30,25 +30,22 @@ func (s *Service) renderOfficeDocument(ctx context.Context, path string, format 
 	if s.tools.LibreOffice == "" {
 		return nil, fmt.Errorf("document preview: %w", ToolUnavailable("libreoffice"))
 	}
-	directory, err := os.MkdirTemp("", "nukri-office-*")
-	if err != nil {
-		return nil, fmt.Errorf("create document preview directory: %w", err)
-	}
-	defer os.RemoveAll(directory)
-	profile := filepath.Join(directory, "profile")
-	profileURL := (&url.URL{Scheme: "file", Path: profile}).String()
-	_, err = runCommand(ctx, s.maxToolOutput, s.tools.LibreOffice,
-		"-env:UserInstallation="+profileURL,
-		"--headless", "--convert-to", "pdf", "--outdir", directory, path,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("convert document to PDF: %w", err)
-	}
-	output := filepath.Join(directory, trimExtension(filepath.Base(path))+".pdf")
-	if _, err := os.Stat(output); err != nil {
-		return nil, fmt.Errorf("locate converted document: %w", err)
-	}
-	pdf, err := s.renderPDF(ctx, output, cellWidth)
+	pdf, err := s.renderConvertedPDF(ctx, path, cellWidth, func(ctx context.Context, directory string) (string, error) {
+		profile := filepath.Join(directory, "profile")
+		profileURL := (&url.URL{Scheme: "file", Path: profile}).String()
+		_, err := runCommand(ctx, s.maxToolOutput, s.tools.LibreOffice,
+			"-env:UserInstallation="+profileURL,
+			"--headless", "--convert-to", "pdf", "--outdir", directory, path,
+		)
+		if err != nil {
+			return "", fmt.Errorf("convert document to PDF: %w", err)
+		}
+		output := filepath.Join(directory, trimExtension(filepath.Base(path))+".pdf")
+		if _, err := os.Stat(output); err != nil {
+			return "", fmt.Errorf("locate converted document: %w", err)
+		}
+		return output, nil
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -59,16 +56,13 @@ func (s *Service) renderEbook(ctx context.Context, path string, format fileinfo.
 	if s.tools.EbookConvert == "" {
 		return nil, fmt.Errorf("ebook preview: %w", ToolUnavailable("ebook-convert"))
 	}
-	directory, err := os.MkdirTemp("", "nukri-ebook-*")
-	if err != nil {
-		return nil, fmt.Errorf("create ebook preview directory: %w", err)
-	}
-	defer os.RemoveAll(directory)
-	output := filepath.Join(directory, "book.pdf")
-	if _, err := runCommand(ctx, s.maxToolOutput, s.tools.EbookConvert, path, output); err != nil {
-		return nil, fmt.Errorf("convert ebook to PDF: %w", err)
-	}
-	pdf, err := s.renderPDF(ctx, output, cellWidth)
+	pdf, err := s.renderConvertedPDF(ctx, path, cellWidth, func(ctx context.Context, directory string) (string, error) {
+		output := filepath.Join(directory, "book.pdf")
+		if _, err := runCommand(ctx, s.maxToolOutput, s.tools.EbookConvert, path, output); err != nil {
+			return "", fmt.Errorf("convert ebook to PDF: %w", err)
+		}
+		return output, nil
+	})
 	if err != nil {
 		return nil, err
 	}

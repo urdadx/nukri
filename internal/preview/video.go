@@ -82,11 +82,6 @@ func videoMetadata(format ffprobeFormat, stream ffprobeStream, audioStreams []ff
 }
 
 func (s *Service) renderVideoFrame(ctx context.Context, path string, duration float64, targetSize int) (Image, error) {
-	directory, err := os.MkdirTemp("", "nukri-video-*")
-	if err != nil {
-		return Image{}, fmt.Errorf("create video preview directory: %w", err)
-	}
-	defer os.RemoveAll(directory)
 	timestamp := duration * 0.1
 	if timestamp > 30 {
 		timestamp = 30
@@ -94,20 +89,31 @@ func (s *Service) renderVideoFrame(ctx context.Context, path string, duration fl
 	if timestamp < 0 {
 		timestamp = 0
 	}
-	output := filepath.Join(directory, "frame.png")
-	_, err = runCommand(ctx, 64<<10, s.tools.FFmpeg,
-		"-v", "error", "-nostdin", "-y", "-ss", strconv.FormatFloat(timestamp, 'f', 3, 64),
-		"-i", path, "-map", "0:v:0", "-frames:v", "1", "-an",
-		"-vf", fmt.Sprintf("scale=min(%d\\,iw):min(%d\\,ih):force_original_aspect_ratio=decrease", targetSize, targetSize), output,
-	)
+	image, err := s.ffmpegStill(ctx, path, targetSize, "-ss", strconv.FormatFloat(timestamp, 'f', 3, 64))
 	if err != nil {
 		return Image{}, fmt.Errorf("render video frame: %w", err)
 	}
-	image, err := readPNG(output, s.maxImageBytes, s.maxImageDimension)
-	if err != nil {
-		return Image{}, fmt.Errorf("read video frame: %w", err)
-	}
 	return image, nil
+}
+
+// ffmpegStill decodes the first frame of path (after inputArguments, such as a
+// seek) into a PNG no larger than targetSize on either side.
+func (s *Service) ffmpegStill(ctx context.Context, path string, targetSize int, inputArguments ...string) (Image, error) {
+	directory, err := os.MkdirTemp("", "nukri-frame-*")
+	if err != nil {
+		return Image{}, fmt.Errorf("create frame directory: %w", err)
+	}
+	defer os.RemoveAll(directory)
+	output := filepath.Join(directory, "frame.png")
+	arguments := append([]string{"-v", "error", "-nostdin", "-y"}, inputArguments...)
+	arguments = append(arguments,
+		"-i", path, "-map", "0:v:0", "-frames:v", "1", "-an",
+		"-vf", fmt.Sprintf("scale=min(%d\\,iw):min(%d\\,ih):force_original_aspect_ratio=decrease", targetSize, targetSize), output,
+	)
+	if _, err := runCommand(ctx, 64<<10, s.tools.FFmpeg, arguments...); err != nil {
+		return Image{}, err
+	}
+	return readPNG(output, s.maxImageBytes, s.maxImageDimension)
 }
 
 func videoFields(video Video) []Field {
