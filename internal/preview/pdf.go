@@ -43,8 +43,8 @@ the source file's identity, so a cache hit skips the conversion too — which fo
 LibreOffice or ebook-convert is by far the slowest step.
 */
 func (s *Service) renderConvertedPDF(ctx context.Context, path string, cellWidth int, convert pdfConverter) (*PDFPreview, error) {
-	if s.tools.PDFInfo == "" || s.tools.PDFToCairo == "" {
-		return nil, fmt.Errorf("PDF preview: %w", ToolUnavailable("pdftocairo/pdfinfo"))
+	if !s.canRenderPDF() {
+		return nil, fmt.Errorf("PDF preview: %w", ToolUnavailable("pdftoppm/pdfinfo"))
 	}
 	info, err := os.Stat(path)
 	if err != nil {
@@ -89,17 +89,9 @@ func (s *Service) renderConvertedPDF(ctx context.Context, path string, cellWidth
 	if err != nil {
 		return nil, err
 	}
-	prefix := filepath.Join(directory, "page")
-	_, err = runCommand(ctx, 64<<10, s.tools.PDFToCairo,
-		"-png", "-singlefile", "-f", "1", "-l", "1",
-		"-scale-to", strconv.Itoa(renderSize), pdfPath, prefix,
-	)
+	image, err := s.rasterizeFirstPage(ctx, pdfPath, renderSize, directory)
 	if err != nil {
-		return nil, fmt.Errorf("render PDF first page: %w", err)
-	}
-	image, err := readPNG(prefix+".png", s.maxImageBytes, s.maxImageDimension)
-	if err != nil {
-		return nil, fmt.Errorf("read PDF first page: %w", err)
+		return nil, err
 	}
 	encodedMeta, err := json.Marshal(metadata)
 	if err != nil {
@@ -109,6 +101,48 @@ func (s *Service) renderConvertedPDF(ctx context.Context, path string, cellWidth
 		s.imageCache.Put(cacheKey, image.Data, image.Width, image.Height, "png", image.Width, image.Height, info.Size(), encodedMeta)
 	}
 	return &PDFPreview{Page: image, Metadata: metadata}, nil
+}
+
+// canRenderPDF reports whether the poppler tools needed for PDF pages exist.
+func (s *Service) canRenderPDF() bool {
+	return s.tools.PDFInfo != "" && (s.tools.PDFToPPM != "" || s.tools.PDFToCairo != "")
+}
+
+/*
+rasterizeFirstPage renders page one of pdfPath to a PNG whose longest side is
+size. pdftoppm writes raw pixels that are PNG-encoded here with fast
+compression: poppler's own PNG output compresses hard and costs several times
+the rendering itself. pdftocairo is the fallback when pdftoppm is missing.
+*/
+func (s *Service) rasterizeFirstPage(ctx context.Context, pdfPath string, size int, directory string) (Image, error) {
+	scale := strconv.Itoa(size)
+	if s.tools.PDFToPPM != "" {
+		limit := int64(s.maxImageDimension)*int64(s.maxImageDimension)*3 + 64
+		raw, err := runCommand(ctx, limit, s.tools.PDFToPPM, "-singlefile", "-f", "1", "-l", "1", "-scale-to", scale, pdfPath) // no output root: PPM on stdout
+		if err != nil {
+			return Image{}, fmt.Errorf("render PDF first page: %w", err)
+		}
+		page, err := decodePPM(raw, s.maxImageDimension)
+		if err != nil {
+			return Image{}, fmt.Errorf("render PDF first page: %w", err)
+		}
+		output := &limitedBuffer{limit: s.maxImageBytes}
+		encoder := png.Encoder{CompressionLevel: png.BestSpeed}
+		if err := encoder.Encode(output, page); err != nil {
+			return Image{}, fmt.Errorf("encode PDF first page: %w", err)
+		}
+		bounds := page.Bounds()
+		return Image{MediaType: "image/png", Data: output.buffer.Bytes(), Width: bounds.Dx(), Height: bounds.Dy()}, nil
+	}
+	prefix := filepath.Join(directory, "page")
+	if _, err := runCommand(ctx, 64<<10, s.tools.PDFToCairo, "-png", "-singlefile", "-f", "1", "-l", "1", "-scale-to", scale, pdfPath, prefix); err != nil {
+		return Image{}, fmt.Errorf("render PDF first page: %w", err)
+	}
+	image, err := readPNG(prefix+".png", s.maxImageBytes, s.maxImageDimension)
+	if err != nil {
+		return Image{}, fmt.Errorf("read PDF first page: %w", err)
+	}
+	return image, nil
 }
 
 // decodeMeta deserializes metadata previously stored via cache Put. A nil or

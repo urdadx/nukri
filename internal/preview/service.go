@@ -67,6 +67,7 @@ func DiscoverTools() Tools {
 	return Tools{
 		PDFInfo:      lookPath("pdfinfo"),
 		PDFToCairo:   lookPath("pdftocairo"),
+		PDFToPPM:     lookPath("pdftoppm"),
 		SevenZip:     lookPath("7z", "7zz"),
 		LibreOffice:  lookPath("libreoffice", "soffice"),
 		EbookConvert: lookPath("ebook-convert"),
@@ -89,13 +90,13 @@ func lookPath(names ...string) string {
 
 func (s *Service) Capabilities() Capabilities {
 	return Capabilities{
-		PDF:       s.tools.PDFInfo != "" && s.tools.PDFToCairo != "",
+		PDF:       s.canRenderPDF(),
 		SVG:       s.tools.RSVGConvert != "",
 		AVIF:      s.tools.ImageMagick != "" || s.tools.FFmpeg != "",
 		Archives:  true, // ZIP-based containers (.zip/.jar/.cbz/.apk/...) list natively
-		Documents: s.tools.LibreOffice != "" && s.tools.PDFInfo != "" && s.tools.PDFToCairo != "",
+		Documents: s.tools.LibreOffice != "" && s.canRenderPDF(),
 		EPUB:      true,
-		Ebooks:    s.tools.EbookConvert != "" && s.tools.PDFInfo != "" && s.tools.PDFToCairo != "",
+		Ebooks:    s.tools.EbookConvert != "" && s.canRenderPDF(),
 		Fonts:     true,
 		Audio:     s.tools.FFProbe != "" && s.tools.FFmpeg != "",
 		Video:     s.tools.FFProbe != "" && s.tools.FFmpeg != "",

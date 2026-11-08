@@ -2,8 +2,11 @@ package preview
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/table"
 	"github.com/mattn/go-runewidth"
 )
 
@@ -44,25 +47,8 @@ func RenderCSVTable(preview *CSVPreview, options CSVTableOptions) string {
 	columns, widths := visibleCSVColumns(allWidths, offset, width)
 
 	var table strings.Builder
-	writeCSVBorder(&table, widths, '-')
-	for rowIndex, row := range preview.Rows {
-		table.WriteString("| ")
-		for index, column := range columns {
-			if index != 0 {
-				table.WriteString(" | ")
-			}
-			value := ""
-			if column < len(row) {
-				value = row[column]
-			}
-			table.WriteString(csvTableCell(value, widths[index]))
-		}
-		table.WriteString(" |\n")
-		if rowIndex == 0 {
-			writeCSVBorder(&table, widths, '=')
-		}
-	}
-	writeCSVBorder(&table, widths, '-')
+	table.WriteString(drawCSVTable(preview.Rows, columns, widths))
+	table.WriteByte('\n')
 
 	firstColumn := offset + 1
 	lastColumn := offset + len(columns)
@@ -123,16 +109,63 @@ func visibleCSVColumns(allWidths []int, offset, terminalWidth int) ([]int, []int
 	return columns, widths
 }
 
-func writeCSVBorder(table *strings.Builder, widths []int, fill byte) {
-	table.WriteByte('+')
-	for _, width := range widths {
-		table.WriteString(strings.Repeat(string(fill), width+2))
-		table.WriteByte('+')
+// Table colors are ANSI palette indexes, so they follow the terminal theme.
+var (
+	csvBorderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	csvHeaderStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
+)
+
+// drawCSVTable draws rows (the first one as the header) restricted to columns,
+// each cell fitted to its width in widths.
+func drawCSVTable(rows [][]string, columns, widths []int) string {
+	numeric := numericColumns(rows, columns)
+	cells := make([][]string, len(rows))
+	for rowIndex, row := range rows {
+		cells[rowIndex] = make([]string, len(columns))
+		for index, column := range columns {
+			if column < len(row) {
+				cells[rowIndex][index] = runewidth.Truncate(row[column], widths[index], "…")
+			}
+		}
 	}
-	table.WriteByte('\n')
+	return table.New().
+		Border(lipgloss.RoundedBorder()).
+		BorderStyle(csvBorderStyle).
+		BorderRow(false).
+		Headers(cells[0]...).
+		Rows(cells[1:]...).
+		StyleFunc(func(row, column int) lipgloss.Style {
+			// Width includes the one-cell padding on each side.
+			style := lipgloss.NewStyle().Padding(0, 1).Width(widths[column] + 2)
+			if numeric[column] {
+				style = style.Align(lipgloss.Right)
+			}
+			if row == table.HeaderRow {
+				return style.Inherit(csvHeaderStyle)
+			}
+			return style
+		}).
+		Render()
 }
 
-func csvTableCell(value string, width int) string {
-	value = runewidth.Truncate(value, width, "...")
-	return runewidth.FillRight(value, width)
+// numericColumns reports, for each of columns, whether every non-empty body
+// cell is a number. Those columns are right-aligned so digits line up.
+func numericColumns(rows [][]string, columns []int) []bool {
+	numeric := make([]bool, len(columns))
+	for index, column := range columns {
+		seen := false
+		numeric[index] = true
+		for _, row := range rows[1:] {
+			if column >= len(row) || strings.TrimSpace(row[column]) == "" {
+				continue
+			}
+			seen = true
+			if _, err := strconv.ParseFloat(strings.ReplaceAll(strings.TrimSpace(row[column]), ",", ""), 64); err != nil {
+				numeric[index] = false
+				break
+			}
+		}
+		numeric[index] = numeric[index] && seen
+	}
+	return numeric
 }

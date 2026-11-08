@@ -314,6 +314,7 @@ type Video struct {
 type Tools struct {
 	PDFInfo      string
 	PDFToCairo   string
+	PDFToPPM     string
 	SevenZip     string
 	LibreOffice  string
 	EbookConvert string
