@@ -85,14 +85,25 @@ func (s *Service) renderConvertedPDF(ctx context.Context, path string, cellWidth
 		}
 	}
 
-	metadata, err := s.pdfMetadata(ctx, pdfPath)
-	if err != nil {
-		return nil, err
+	// pdfinfo and the page render are independent, so run them together.
+	type metadataResult struct {
+		fields []Field
+		err    error
 	}
+	metadataDone := make(chan metadataResult, 1)
+	go func() {
+		fields, err := s.pdfMetadata(ctx, pdfPath)
+		metadataDone <- metadataResult{fields, err}
+	}()
 	image, err := s.rasterizeFirstPage(ctx, pdfPath, renderSize, directory)
+	pdfInfo := <-metadataDone
 	if err != nil {
 		return nil, err
 	}
+	if pdfInfo.err != nil {
+		return nil, pdfInfo.err
+	}
+	metadata := pdfInfo.fields
 	encodedMeta, err := json.Marshal(metadata)
 	if err != nil {
 		return nil, fmt.Errorf("encode PDF metadata: %w", err)
