@@ -83,14 +83,19 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.data.Selected = entryIndexByPath(message.entries, message.selectedPath)
 			m.resetPreview(true)
 			m, load := m.requestPreview()
-			return m, tea.Batch(load, loadItemCounts(message.cwd, message.entries), places)
+			return m, tea.Batch(load, loadItemCounts(message.cwd, message.entries, false), places)
 		}
 		return m, places
 	case placesMsg:
 		m.data.Places = message.rows
 		return m, refreshPlaces()
 	case itemCountsMsg:
-		if message.cwd == m.data.CWD {
+		switch {
+		case message.preview:
+			if m.data.PreviewIsDir && m.selectedPath() == message.cwd {
+				m.data.PreviewEntries = applyItemCounts(m.data.PreviewEntries, message.counts)
+			}
+		case message.cwd == m.data.CWD:
 			m.data.Entries = applyItemCounts(m.data.Entries, message.counts)
 		}
 	case previewMsg:
@@ -109,6 +114,9 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.data.PreviewError = ""
 			if message.err != nil {
 				m.data.PreviewError = message.err.Error()
+			}
+			if message.directory {
+				return m, loadItemCounts(message.path, message.entries, true)
 			}
 		}
 	case prefetchMsg:

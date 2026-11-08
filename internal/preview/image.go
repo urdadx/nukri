@@ -58,7 +58,7 @@ func (s *Service) renderImage(ctx context.Context, path string, facts fileinfo.F
 		return &ImagePreview{
 			Image: Image{
 				MediaType: "image/png",
-				Data:      append([]byte(nil), cached.Data...),
+				Data:      cached.Data,
 				Width:     cached.Width,
 				Height:    cached.Height,
 			},
@@ -74,12 +74,25 @@ func (s *Service) renderImage(ctx context.Context, path string, facts fileinfo.F
 		return nil, fmt.Errorf("open image preview: %w", err)
 	}
 	defer file.Close()
-	config, _, err := image.DecodeConfig(file)
+	config, sourceFormat, err := image.DecodeConfig(file)
 	if err != nil {
 		return nil, fmt.Errorf("decode image preview: %w", err)
 	}
 	if config.Width <= 0 || config.Height <= 0 || int64(config.Width)*int64(config.Height) > DefaultMaxDecodePixels {
 		return nil, ErrOutputTooLarge
+	}
+	/*
+		A JPEG can be decoded straight to a fraction of its size, which Go's
+		decoder can't do; ImageMagick (libjpeg) can, and is several times faster on
+		camera photos. Go stays the fallback when it's missing or fails.
+	*/
+	if sourceFormat == "jpeg" && s.tools.ImageMagick != "" && max(config.Width, config.Height) > 2*targetSize {
+		if preview, err := s.imageMagickStill(ctx, path, targetSize, "-define", fmt.Sprintf("jpeg:size=%dx%d", 2*targetSize, 2*targetSize)); err == nil {
+			s.imageCache.Put(cacheKey, preview.Data, preview.Width, preview.Height, sourceFormat, config.Width, config.Height, info.Size(), nil)
+			return &ImagePreview{Image: preview}, nil
+		} else if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 	}
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		return nil, fmt.Errorf("decode image preview: %w", err)
@@ -98,7 +111,8 @@ func (s *Service) renderImage(ctx context.Context, path string, facts fileinfo.F
 		return nil, err
 	}
 	output := &limitedBuffer{limit: s.maxImageBytes}
-	if err := png.Encode(output, preview); err != nil {
+	encoder := png.Encoder{CompressionLevel: png.BestSpeed}
+	if err := encoder.Encode(output, preview); err != nil {
 		return nil, fmt.Errorf("encode image preview: %w", err)
 	}
 	previewBounds := preview.Bounds()
@@ -111,7 +125,7 @@ func (s *Service) renderImage(ctx context.Context, path string, facts fileinfo.F
 	return &ImagePreview{
 		Image: Image{
 			MediaType: "image/png",
-			Data:      append([]byte(nil), output.buffer.Bytes()...),
+			Data:      output.buffer.Bytes(),
 			Width:     cacheW,
 			Height:    cacheH,
 		},
@@ -142,10 +156,12 @@ func (s *Service) renderAVIF(ctx context.Context, path, cacheKey string, targetS
 }
 
 // imageMagickStill converts the first frame of path to a PNG no larger than
-// targetSize on either side.
-func (s *Service) imageMagickStill(ctx context.Context, path string, targetSize int) (Image, error) {
+// targetSize on either side. readOptions go before the input, where decoder
+// hints such as jpeg:size apply.
+func (s *Service) imageMagickStill(ctx context.Context, path string, targetSize int, readOptions ...string) (Image, error) {
 	fit := fmt.Sprintf("%dx%d>", targetSize, targetSize) // ">" only ever shrinks
-	output, err := runCommand(ctx, s.maxImageBytes, s.tools.ImageMagick, path+"[0]", "-resize", fit, "png:-")
+	arguments := append(readOptions, path+"[0]", "-resize", fit, "-define", "png:compression-level=1", "png:-")
+	output, err := runCommand(ctx, s.maxImageBytes, s.tools.ImageMagick, arguments...)
 	if err != nil {
 		return Image{}, err
 	}
@@ -179,10 +195,11 @@ func fitImage(src image.Image, width, height, maxDimension int) (image.Image, er
 	if width <= maxDimension && height <= maxDimension {
 		return src, nil
 	}
+	src = shrinkForScaling(src, maxDimension)
 	scale := float64(maxDimension) / float64(max(width, height))
 	dstWidth := max(1, int(float64(width)*scale))
 	dstHeight := max(1, int(float64(height)*scale))
 	dst := image.NewRGBA(image.Rect(0, 0, dstWidth, dstHeight))
-	draw.CatmullRom.Scale(dst, dst.Bounds(), src, src.Bounds(), draw.Over, nil)
+	draw.CatmullRom.Scale(dst, dst.Bounds(), src, src.Bounds(), draw.Src, nil)
 	return dst, nil
 }

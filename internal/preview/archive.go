@@ -2,29 +2,43 @@ package preview
 
 import (
 	"archive/zip"
+	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
 )
 
+/*
+listArchive lists an archive's entries. ZIP-based containers (.zip, .jar, .cbz,
+.apk, ...) are read with the standard library first: it reads only the central
+directory, in a few milliseconds, where running 7-Zip and parsing its text
+listing took over 100ms for a large archive. Anything else, or a ZIP the
+standard library rejects, goes to 7-Zip.
+*/
 func (s *Service) listArchive(ctx context.Context, path string) (*ArchivePreview, error) {
+	if compression, ok := tarCompression(path); ok {
+		return s.listTar(ctx, path, compression)
+	}
+	if archive, ok := parseZipListing(ctx, path, s.maxArchiveEntries); ok {
+		return &ArchivePreview{Archive: archive}, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if s.tools.SevenZip != "" {
-		output, err := runCommand(ctx, s.maxToolOutput, s.tools.SevenZip, "l", "-slt", "-ba", "--", path)
+		archive, err := s.listSevenZip(ctx, path)
 		if err == nil {
-			archive := parseSevenZipListing(string(output), s.maxArchiveEntries)
 			return &ArchivePreview{Archive: archive}, nil
 		}
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, err
 		}
-	}
-	// Fall back to the standard library for ZIP-based containers (.zip, .jar,
-	// .cbz, .apk, .aab, .apkg) so those preview without an external tool.
-	if archive, ok := parseZipListing(ctx, path, s.maxArchiveEntries); ok {
-		return &ArchivePreview{Archive: archive}, nil
 	}
 	if s.tools.SevenZip == "" {
 		return nil, fmt.Errorf("archive preview: %w", ToolUnavailable("7zz"))
@@ -50,12 +64,14 @@ func parseZipListing(ctx context.Context, path string, maximumEntries int) (Arch
 			archive.Truncated = true
 			break
 		}
+		mode := f.Mode()
 		entry := ArchiveEntry{
 			Path:       safeText(f.Name),
 			Size:       int64(f.UncompressedSize64),
 			PackedSize: int64(f.CompressedSize64),
 			Modified:   zipTimeLabel(f.Modified),
-			Directory:  f.FileInfo().IsDir(),
+			Attributes: mode.String(), // as 7-Zip shows them, e.g. -rw-r--r--
+			Directory:  mode.IsDir(),
 		}
 		archive.Entries = append(archive.Entries, entry)
 	}
@@ -69,11 +85,46 @@ func zipTimeLabel(t time.Time) string {
 	return t.Format("2006-01-02 15:04:05")
 }
 
-func parseSevenZipListing(output string, maximumEntries int) Archive {
-	archive := Archive{}
+/*
+listSevenZip runs 7-Zip's technical listing and parses it as it streams. Large
+archives produce megabytes of key = value lines; reading them as they arrive
+avoids collecting the whole listing first, and 7-Zip is stopped as soon as
+maxArchiveEntries are listed.
+*/
+func (s *Service) listSevenZip(parent context.Context, path string) (Archive, error) {
+	ctx, cancel := context.WithTimeout(parent, toolTimeout)
+	defer cancel()
+	command := exec.CommandContext(ctx, s.tools.SevenZip, "l", "-slt", "-ba", "--", path)
+	stderr := &limitedBuffer{limit: 64 << 10}
+	command.Stderr = stderr
+	output, err := command.StdoutPipe()
+	if err != nil {
+		return Archive{}, err
+	}
+	if err := command.Start(); err != nil {
+		return Archive{}, err
+	}
+	archive, complete, readErr := parseSevenZipListing(output, s.maxArchiveEntries)
+	if !complete {
+		// Stopped at the entry limit: 7-Zip may still be writing.
+		_ = command.Process.Kill()
+		_ = command.Wait()
+		return archive, readErr
+	}
+	if err := command.Wait(); err != nil {
+		if parentErr := parent.Err(); parentErr != nil {
+			return Archive{}, parentErr
+		}
+		return Archive{}, fmt.Errorf("%s failed: %w: %s", s.tools.SevenZip, err, bytes.TrimSpace(stderr.buffer.Bytes()))
+	}
+	return archive, readErr
+}
+
+// parseSevenZipListing parses 7-Zip's "key = value" listing, where a blank line
+// ends each entry. complete is false when it stopped at maximumEntries.
+func parseSevenZipListing(listing io.Reader, maximumEntries int) (archive Archive, complete bool, err error) {
 	entry := ArchiveEntry{}
 	hasEntry := false
-	// why do we need to flush? because the 7z output is a series of key-value pairs, and an empty line indicates the end of an entry. So we need to flush the current entry when we encounter an empty line, or when we reach the maximum number of entries.
 	flush := func() bool {
 		if !hasEntry || entry.Path == "" {
 			entry = ArchiveEntry{}
@@ -91,11 +142,13 @@ func parseSevenZipListing(output string, maximumEntries int) Archive {
 		return true
 	}
 
-	for line := range strings.SplitSeq(output, "\n") {
-		line = strings.TrimSuffix(line, "\r")
+	scanner := bufio.NewScanner(listing)
+	scanner.Buffer(make([]byte, 64<<10), 1<<20)
+	for scanner.Scan() {
+		line := strings.TrimSuffix(scanner.Text(), "\r")
 		if strings.TrimSpace(line) == "" {
 			if !flush() {
-				break
+				return archive, false, nil
 			}
 			continue
 		}
@@ -117,6 +170,8 @@ func parseSevenZipListing(output string, maximumEntries int) Archive {
 			entry.Attributes = safeText(value)
 		}
 	}
-	flush()
-	return archive
+	if !flush() {
+		return archive, false, nil
+	}
+	return archive, true, scanner.Err()
 }

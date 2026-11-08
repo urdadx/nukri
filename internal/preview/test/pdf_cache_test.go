@@ -242,3 +242,40 @@ func TestVideoPreviewServesFromDiskCache(t *testing.T) {
 		t.Fatal("cached video preview lost its metadata fields")
 	}
 }
+
+// A revisited audio file comes from the disk cache: no ffprobe or ffmpeg run.
+func TestAudioPreviewServesFromDiskCache(t *testing.T) {
+	service := preview.NewService()
+	requireCapability(t, service.Capabilities().Audio, "ffprobe and ffmpeg")
+	path := writeWAVSample(t)
+	src, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts := fileinfo.InspectPath(path, core.File)
+	render := func() *preview.AudioPreview {
+		t.Helper()
+		result, err := service.Render(context.Background(), preview.Request{Path: path, Facts: facts, Width: 20})
+		if err != nil {
+			t.Fatalf("render: %v", err)
+		}
+		return result.(*preview.AudioPreview)
+	}
+	first := render()
+
+	// Same size and modification time but undecodable content: only a cache hit
+	// can still produce the preview.
+	if err := os.WriteFile(path, make([]byte, src.Size()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(path, src.ModTime(), src.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	second := render()
+	if string(second.Visual.Data) != string(first.Visual.Data) || second.Audio != first.Audio {
+		t.Fatal("cached audio preview differs from the first render")
+	}
+	if second.Audio.Visual != preview.Waveform || len(second.Metadata) == 0 {
+		t.Fatalf("cached audio preview lost its details: %#v", second.Audio)
+	}
+}

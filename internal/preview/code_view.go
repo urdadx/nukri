@@ -3,8 +3,8 @@ package preview
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
+	"sync"
 
 	chroma "github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/styles"
@@ -16,15 +16,16 @@ import (
 // backend (Chroma or the built-in custom tokenizers).
 var codeHighlightService = backend.New()
 
-var codeNewlinePattern = regexp.MustCompile(`\r?\n`)
-
 /*
-highlightCached returns the highlighted code for a given source, language, and style.
-It attempts to fetch the result from the on-disk cache so re-renders (pane resize, extended scroll window,
-revisit) never re-run the highlighter. It returns the rendered lines window
-[start, start+count) and the total number of lines available. The complete
-highlighted result is written back to the cache on the first (cache-miss)
-render. When count <= 0 the whole file is returned.
+highlightCached returns the highlighted lines [start, start+count) of source and
+the total number of lines; count <= 0 means every line.
+
+A complete highlighted copy is kept in the disk cache, so revisits, resizes and
+scrolling never re-run the highlighter. On a miss only the lines up to the
+window (plus highlightLookahead) are highlighted: lexing runs top to bottom,
+so those lines come out as they would inside the whole file, and large files
+appear in a fraction of the time. The full file is then highlighted in the background to fill the
+cache.
 */
 func highlightCached(ctx context.Context, codeSyntax, source, styleName string, start, count int) ([]string, int, error) {
 	language, ok := registry.LanguageForCodeSyntax(codeSyntax)
@@ -38,15 +39,112 @@ func highlightCached(ctx context.Context, codeSyntax, source, styleName string, 
 		return codeWindow(content, start, count), lineCount(content), nil
 	}
 
-	result, err := codeHighlightService.Highlight(ctx, backend.Request{Language: language, Source: source})
+	prefix := source
+	if count > 0 {
+		prefix = firstLines(source, start+count+highlightLookahead)
+	}
+	if len(prefix) < len(source) {
+		content, err := highlightLanguage(ctx, language, prefix, styleName)
+		if err != nil {
+			return nil, 0, fmt.Errorf("highlight %q: %w", codeSyntax, err)
+		}
+		backgroundHighlights.schedule(key, func() {
+			if content, err := highlightLanguage(context.Background(), language, source, styleName); err == nil && content != "" {
+				codeCacheService.put(key, content)
+			}
+		})
+		return codeWindow(content, start, count), lineCount(source), nil
+	}
+
+	content, err := highlightLanguage(ctx, language, source, styleName)
 	if err != nil {
 		return nil, 0, fmt.Errorf("highlight %q: %w", codeSyntax, err)
 	}
-	content := renderTokenString(result.Tokens, styleName)
 	if content != "" {
 		codeCacheService.put(key, content)
 	}
 	return codeWindow(content, start, count), lineCount(content), nil
+}
+
+/*
+highlightLookahead is how many lines past the window are lexed on a cache miss.
+A construct cut off by the end of the prefix, like a block comment or a
+multi-line string, would be lexed as unterminated and colored wrongly; lexing
+further lets anything opened inside the window close first. A construct longer
+than this is only miscolored until the background highlight replaces it.
+*/
+const highlightLookahead = 200
+
+func highlightLanguage(ctx context.Context, language registry.RegisteredLanguage, source, styleName string) (string, error) {
+	result, err := codeHighlightService.Highlight(ctx, backend.Request{Language: language, Source: source})
+	if err != nil {
+		return "", err
+	}
+	return renderTokenString(result.Tokens, styleName), nil
+}
+
+// firstLines returns source up to and including its nth newline, or all of it
+// when it has fewer lines.
+func firstLines(source string, n int) string {
+	end := 0
+	for range n {
+		next := strings.IndexByte(source[end:], '\n')
+		if next < 0 {
+			return source
+		}
+		end += next + 1
+	}
+	return source[:end]
+}
+
+/*
+highlightQueue runs full-file highlights in the background, one at a time. Only
+the newest request waits: while browsing quickly, a file passed over is not
+worth highlighting, and it is redone on demand if revisited.
+*/
+type highlightQueue struct {
+	mu      sync.Mutex
+	running bool
+	pending func()
+	keys    map[string]bool // queued or running, to skip duplicates
+	pendKey string
+}
+
+var backgroundHighlights = &highlightQueue{keys: map[string]bool{}}
+
+func (q *highlightQueue) schedule(key string, job func()) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.keys[key] {
+		return
+	}
+	if q.pending != nil {
+		delete(q.keys, q.pendKey)
+	}
+	q.keys[key] = true
+	q.pending, q.pendKey = job, key
+	if !q.running {
+		q.running = true
+		go q.run()
+	}
+}
+
+func (q *highlightQueue) run() {
+	for {
+		q.mu.Lock()
+		job, key := q.pending, q.pendKey
+		q.pending, q.pendKey = nil, ""
+		if job == nil {
+			q.running = false
+			q.mu.Unlock()
+			return
+		}
+		q.mu.Unlock()
+		job()
+		q.mu.Lock()
+		delete(q.keys, key)
+		q.mu.Unlock()
+	}
 }
 
 /*
@@ -60,11 +158,28 @@ func renderTokenString(tokens []backend.Token, styleName string) string {
 	if style == nil {
 		style = styles.Fallback
 	}
+	// Formatting depends only on the token kind and emphasis, so it is built
+	// once per combination rather than once per token.
+	formats := map[tokenFormatKey]string{}
 	var output strings.Builder
 	for _, token := range tokens {
-		writeHighlightToken(&output, token, style)
+		if token.Value == "" {
+			continue
+		}
+		formatKey := tokenFormatKey{token.Kind, token.Bold, token.Italic}
+		formatting, ok := formats[formatKey]
+		if !ok {
+			formatting = styleForToken(token, style)
+			formats[formatKey] = formatting
+		}
+		writeHighlightToken(&output, token.Value, formatting)
 	}
 	return output.String()
+}
+
+type tokenFormatKey struct {
+	kind         string
+	bold, italic bool
 }
 
 /*
@@ -128,30 +243,29 @@ func lineCount(content string) int {
 	return n + 1
 }
 
-func writeHighlightToken(output *strings.Builder, token backend.Token, style *chroma.Style) {
-	if token.Value == "" {
-		return
-	}
-	formatting := styleForToken(token, style)
+// writeHighlightToken writes text wrapped in formatting, closing and reopening
+// the formatting around each line break so every line stands alone.
+func writeHighlightToken(output *strings.Builder, text, formatting string) {
 	if formatting == "" {
-		output.WriteString(token.Value)
+		output.WriteString(text)
 		return
 	}
-	text := token.Value
-	indices := codeNewlinePattern.FindAllStringIndex(text, -1)
-	afterLastNewline := 0
-	for _, match := range indices {
-		start, end := match[0], match[1]
-		output.WriteString(formatting)
-		output.WriteString(text[afterLastNewline:start])
-		output.WriteString("\x1b[0m")
-		output.WriteString(text[start:end])
-		afterLastNewline = end
-	}
-	if afterLastNewline < len(text) {
-		output.WriteString(formatting)
-		output.WriteString(text[afterLastNewline:])
-		output.WriteString("\x1b[0m")
+	for text != "" {
+		line, rest, found := strings.Cut(text, "\n")
+		lineBreak := "\n"
+		if strings.HasSuffix(line, "\r") && found {
+			line, lineBreak = line[:len(line)-1], "\r\n"
+		}
+		if line != "" {
+			output.WriteString(formatting)
+			output.WriteString(line)
+			output.WriteString("\x1b[0m")
+		}
+		if !found {
+			return
+		}
+		output.WriteString(lineBreak)
+		text = rest
 	}
 }
 

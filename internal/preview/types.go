@@ -149,9 +149,20 @@ type CSVPreview struct {
 }
 
 type CSVMetadata struct {
-	RowCount    int
-	ColumnCount int
-	Delimiter   rune
+	RowCount int
+	// RowCountAtLeast means counting stopped early on a very large file, so
+	// RowCount is a minimum.
+	RowCountAtLeast bool
+	ColumnCount     int
+	Delimiter       rune
+}
+
+// rowCountLabel formats the row count, marking a minimum with "+".
+func (m CSVMetadata) rowCountLabel() string {
+	if m.RowCountAtLeast {
+		return fmt.Sprintf("%d+", m.RowCount)
+	}
+	return fmt.Sprint(m.RowCount)
 }
 
 type TorrentPreview struct {
@@ -323,6 +334,9 @@ type Tools struct {
 	ISOInfo      string
 	RSVGConvert  string
 	ImageMagick  string
+	XZ           string
+	Zstd         string
+	Pigz         string
 }
 
 type Capabilities struct {

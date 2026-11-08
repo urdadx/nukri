@@ -66,11 +66,12 @@ func BuildViewContext(ctx context.Context, value Preview, options ViewOptions) (
 	case *EbookPreview:
 		return metadataVisualView(value.Format.DetailLabel(), "First page", value.Metadata, &value.Page), nil
 	case *MarkdownPreview:
-		highlighted, err := highlightSource(value.Text, "markdown", options.SyntaxStyle)
-		if err != nil {
-			return View{}, err
+		// Same windowed, cached highlighting as code, so long documents show
+		// their first screen quickly and revisits skip the highlighter.
+		if highlighted, total, err := highlightCached(ctx, "markdown", value.Text, options.SyntaxStyle, 0, options.CodeWindow); err == nil && len(highlighted) > 0 {
+			return View{Title: "Markdown", Lines: highlighted, TotalLines: total, Scroll: VerticalScroll}, nil
 		}
-		return View{Title: "Markdown", Lines: strings.Split(strings.TrimSuffix(highlighted, "\n"), "\n"), Scroll: VerticalScroll}, nil
+		return View{Title: "Markdown", Lines: strings.Split(value.Text, "\n"), Scroll: VerticalScroll}, nil
 	case *TextPreview:
 		if value.CodeLanguage != "" {
 			if highlighted, total, err := highlightCached(ctx, value.CodeLanguage, value.Text, options.SyntaxStyle, 0, options.CodeWindow); err == nil && len(highlighted) > 0 {
@@ -189,7 +190,7 @@ func csvView(value *CSVPreview, width, offset int) View {
 		title = "TSV"
 	}
 	horizontal := offset > 0 || value.Metadata.ColumnCount > visibleCSVColumnCount(value, width, offset)
-	detail := fmt.Sprintf("%d rows x %d columns", value.Metadata.RowCount, value.Metadata.ColumnCount)
+	detail := fmt.Sprintf("%s rows x %d columns", value.Metadata.rowCountLabel(), value.Metadata.ColumnCount)
 	return View{Title: title, Detail: detail, Lines: lines, Footer: footer, Scroll: tableScroll(horizontal)}
 }
 

@@ -138,7 +138,8 @@ func (s *Service) rasterizeFirstPage(ctx context.Context, pdfPath string, size i
 	if _, err := runCommand(ctx, 64<<10, s.tools.PDFToCairo, "-png", "-singlefile", "-f", "1", "-l", "1", "-scale-to", scale, pdfPath, prefix); err != nil {
 		return Image{}, fmt.Errorf("render PDF first page: %w", err)
 	}
-	image, err := readPNG(prefix+".png", s.maxImageBytes, s.maxImageDimension)
+	// pdftocairo can round one pixel past -scale-to (1601 for 1600).
+	image, err := readPNG(prefix+".png", s.maxImageBytes, s.maxImageDimension+1)
 	if err != nil {
 		return Image{}, fmt.Errorf("read PDF first page: %w", err)
 	}

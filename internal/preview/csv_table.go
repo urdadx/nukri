@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/mattn/go-runewidth"
 )
 
@@ -52,7 +53,7 @@ func RenderCSVTable(preview *CSVPreview, options CSVTableOptions) string {
 
 	firstColumn := offset + 1
 	lastColumn := offset + len(columns)
-	fmt.Fprintf(&table, "Columns %d-%d of %d | Rows 1-%d of %d", firstColumn, lastColumn, columnCount, len(preview.Rows), preview.Metadata.RowCount)
+	fmt.Fprintf(&table, "Columns %d-%d of %d | Rows 1-%d of %s", firstColumn, lastColumn, columnCount, len(preview.Rows), preview.Metadata.rowCountLabel())
 	if offset > 0 {
 		table.WriteString(" | more left")
 	}
@@ -72,7 +73,7 @@ func csvColumnWidths(rows [][]string, columnCount, maximum int) []int {
 			if column >= columnCount {
 				break
 			}
-			widths[column] = max(widths[column], runewidth.StringWidth(value))
+			widths[column] = max(widths[column], displayWidth(value, runewidth.StringWidth))
 		}
 	}
 	for index := range widths {
@@ -115,25 +116,29 @@ var (
 	csvHeaderStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
 )
 
-// drawCSVTable draws rows (the first one as the header) restricted to columns,
-// each cell fitted to its width in widths.
+/*
+drawCSVTable draws rows (the first one as the header) restricted to columns,
+each cell fitted to its width in widths.
+
+Lip Gloss draws the borders and header, but body rows are built here: styling
+every cell through Lip Gloss cost about 25µs a cell, over a second for a large
+archive listing. Body cells carry no styling beyond padding and alignment, so
+each row is the border character, styled once, between padded cells, exactly as
+Lip Gloss would write it.
+*/
 func drawCSVTable(rows [][]string, columns, widths []int) string {
 	numeric := numericColumns(rows, columns)
-	cells := make([][]string, len(rows))
-	for rowIndex, row := range rows {
-		cells[rowIndex] = make([]string, len(columns))
-		for index, column := range columns {
-			if column < len(row) {
-				cells[rowIndex][index] = runewidth.Truncate(row[column], widths[index], "…")
-			}
+	header := make([]string, len(columns))
+	for index, column := range columns {
+		if column < len(rows[0]) {
+			header[index] = runewidth.Truncate(rows[0][column], widths[index], "…")
 		}
 	}
-	return table.New().
+	frame := table.New().
 		Border(lipgloss.RoundedBorder()).
 		BorderStyle(csvBorderStyle).
 		BorderRow(false).
-		Headers(cells[0]...).
-		Rows(cells[1:]...).
+		Headers(header...).
 		StyleFunc(func(row, column int) lipgloss.Style {
 			// Width includes the one-cell padding on each side.
 			style := lipgloss.NewStyle().Padding(0, 1).Width(widths[column] + 2)
@@ -146,6 +151,33 @@ func drawCSVTable(rows [][]string, columns, widths []int) string {
 			return style
 		}).
 		Render()
+	// frame is the top border, header, header separator and bottom border.
+	bottom := strings.LastIndexByte(frame, '\n')
+	if bottom < 0 || len(rows) < 2 {
+		return frame
+	}
+	separator := csvBorderStyle.Render(lipgloss.RoundedBorder().Left)
+	var body strings.Builder
+	for _, row := range rows[1:] {
+		body.WriteString(separator)
+		for index, column := range columns {
+			value := ""
+			if column < len(row) {
+				value = fitCell(row[column], widths[index])
+			}
+			gap := strings.Repeat(" ", max(0, widths[index]-displayWidth(value, ansi.StringWidth)))
+			body.WriteByte(' ')
+			if numeric[index] {
+				body.WriteString(gap + value)
+			} else {
+				body.WriteString(value + gap)
+			}
+			body.WriteByte(' ')
+			body.WriteString(separator)
+		}
+		body.WriteByte('\n')
+	}
+	return frame[:bottom+1] + body.String() + frame[bottom+1:]
 }
 
 // numericColumns reports, for each of columns, whether every non-empty body
@@ -168,4 +200,30 @@ func numericColumns(rows [][]string, columns []int) []bool {
 		numeric[index] = numeric[index] && seen
 	}
 	return numeric
+}
+
+// displayWidth is the cell width of value. Plain printable ASCII, the usual case
+// for file names and data, is one cell per byte; anything else goes to measure.
+func displayWidth(value string, measure func(string) int) int {
+	if isPlainASCII(value) {
+		return len(value)
+	}
+	return measure(value)
+}
+
+func isPlainASCII(value string) bool {
+	for index := 0; index < len(value); index++ {
+		if value[index] >= 0x80 || value[index] < 0x20 {
+			return false
+		}
+	}
+	return true
+}
+
+// fitCell truncates value to width cells, marking the cut with "…".
+func fitCell(value string, width int) string {
+	if len(value) <= width && isPlainASCII(value) {
+		return value
+	}
+	return runewidth.Truncate(value, width, "…")
 }

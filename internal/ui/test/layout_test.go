@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -336,4 +337,62 @@ func runCommand(model tea.Model, cmd tea.Cmd) tea.Model {
 	}
 	model, _ = model.Update(message)
 	return model
+}
+
+// runWithin runs cmd and feeds its messages to model, following the commands
+// those updates return up to depth levels. Commands still running after a
+// short wait, such as timers, are dropped.
+func runWithin(model tea.Model, cmd tea.Cmd, depth int) tea.Model {
+	if cmd == nil || depth == 0 {
+		return model
+	}
+	done := make(chan tea.Msg, 1)
+	go func() { done <- cmd() }()
+	var message tea.Msg
+	select {
+	case message = <-done:
+	case <-time.After(time.Second):
+		return model
+	}
+	if batch, ok := message.(tea.BatchMsg); ok {
+		for _, command := range batch {
+			model = runWithin(model, command, depth)
+		}
+		return model
+	}
+	model, next := model.Update(message)
+	return runWithin(model, next, depth-1)
+}
+
+// A directory preview appears before its subfolders' item counts, which need
+// a directory read each; the counts are filled in afterwards.
+func TestDirectoryPreviewFillsItemCountsLater(t *testing.T) {
+	directory := t.TempDir()
+	inner := filepath.Join(directory, "child", "inner")
+	if err := os.MkdirAll(inner, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"a", "b", "c"} {
+		if err := os.WriteFile(filepath.Join(inner, name), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Chdir(directory)
+	// "child" is the only entry, so loading selects it and previews it. Each
+	// run needs a fresh model: a preview command delivers its result once.
+	load := func() (tea.Model, tea.Cmd) {
+		model := ui.New(searchTheme())
+		return model.Update(model.Init()())
+	}
+	loaded, loadCommand := load()
+	previewed := runWithin(loaded, loadCommand, 1)
+	view := previewed.(ui.Model).View()
+	if !strings.Contains(view, "inner") || strings.Contains(view, "3 items") {
+		t.Fatal("the preview should list the subfolder before its item count is known")
+	}
+	loaded, loadCommand = load()
+	counted := runWithin(loaded, loadCommand, 2)
+	if !strings.Contains(counted.(ui.Model).View(), "3 items") {
+		t.Fatal("the subfolder's item count was not filled in")
+	}
 }

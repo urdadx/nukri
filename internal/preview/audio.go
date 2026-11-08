@@ -1,11 +1,12 @@
 package preview
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"image/png"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -43,32 +44,104 @@ type ffprobeFormat struct {
 	Tags           map[string]string `json:"tags"`
 }
 
-func (s *Service) renderAudio(ctx context.Context, path string) (*AudioPreview, error) {
+/*
+renderAudio shows the cover art (or a waveform when there is none) plus the
+audio metadata. Decoding audio for the waveform dominates the cost, so:
+
+  - the result is cached on disk by file identity and pane size, so a revisit
+    runs no tools;
+  - ffprobe, cover extraction and the waveform run at the same time. Whether a
+    cover exists is only known after probing, so both visuals start at once and
+    the unneeded one is cancelled.
+*/
+func (s *Service) renderAudio(ctx context.Context, path string, cellWidth int) (*AudioPreview, error) {
 	if s.tools.FFProbe == "" || s.tools.FFmpeg == "" {
 		return nil, fmt.Errorf("audio preview: %w", ToolUnavailable("ffprobe/ffmpeg"))
 	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("stat audio: %w", err)
+	}
+	targetSize := s.imageTargetSize(cellWidth)
+	cacheKey := s.imageCache.Key(path, info.Size(), info.ModTime(), targetSize)
+	if cached, ok := s.cachedAudio(cacheKey); ok {
+		return cached, nil
+	}
+
+	type visualResult struct {
+		image Image
+		err   error
+	}
+	coverContext, cancelCover := context.WithCancel(ctx)
+	defer cancelCover()
+	waveContext, cancelWave := context.WithCancel(ctx)
+	defer cancelWave()
+	cover := make(chan visualResult, 1)
+	wave := make(chan visualResult, 1)
+	go func() {
+		image, err := s.ffmpegStill(coverContext, path, targetSize, false)
+		cover <- visualResult{image, err}
+	}()
+	go func() {
+		image, err := s.renderWaveform(waveContext, path, targetSize)
+		wave <- visualResult{image, err}
+	}()
+
+	audio, hasCover, err := s.probeAudio(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	var visual visualResult
+	audio.Visual = Waveform
+	if hasCover {
+		if visual = <-cover; visual.err == nil {
+			audio.Visual = Cover
+			cancelWave()
+		}
+	} else {
+		cancelCover()
+	}
+	if audio.Visual == Waveform {
+		if visual = <-wave; visual.err != nil {
+			return nil, fmt.Errorf("render audio waveform: %w", visual.err)
+		}
+	}
+	if encoded, err := json.Marshal(audio); err == nil {
+		s.imageCache.Put(cacheKey, visual.image.Data, visual.image.Width, visual.image.Height, "audio", 0, 0, info.Size(), encoded)
+	}
+	return &AudioPreview{Audio: audio, Visual: visual.image, Metadata: audioFields(audio)}, nil
+}
+
+func (s *Service) cachedAudio(cacheKey string) (*AudioPreview, bool) {
+	cached, ok := s.imageCache.Get(cacheKey)
+	if !ok {
+		return nil, false
+	}
+	var audio Audio
+	if err := json.Unmarshal(cached.Metadata, &audio); err != nil {
+		return nil, false
+	}
+	visual := Image{MediaType: "image/png", Data: cached.Data, Width: cached.Width, Height: cached.Height}
+	return &AudioPreview{Audio: audio, Visual: visual, Metadata: audioFields(audio)}, true
+}
+
+// probeAudio reads the metadata and whether the file embeds cover art.
+func (s *Service) probeAudio(ctx context.Context, path string) (Audio, bool, error) {
 	output, err := runCommand(ctx, 1<<20, s.tools.FFProbe,
 		"-v", "error", "-show_format", "-show_streams", "-of", "json", path,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("inspect audio: %w", err)
+		return Audio{}, false, fmt.Errorf("inspect audio: %w", err)
 	}
 	var probe ffprobeResult
 	if err := json.Unmarshal(output, &probe); err != nil {
-		return nil, fmt.Errorf("decode audio metadata: %w", err)
+		return Audio{}, false, fmt.Errorf("decode audio metadata: %w", err)
 	}
 	audioStream, hasCover, ok := selectAudioStreams(probe.Streams)
 	if !ok {
-		return nil, fmt.Errorf("inspect audio: no audio stream")
+		return Audio{}, false, fmt.Errorf("inspect audio: no audio stream")
 	}
-	audio := audioMetadata(probe.Format, audioStream)
-	image, visual, err := s.renderAudioVisual(ctx, path, hasCover)
-	if err != nil {
-		return nil, err
-	}
-	audio.Visual = visual
-	fields := audioFields(audio)
-	return &AudioPreview{Audio: audio, Visual: image, Metadata: fields}, nil
+	return audioMetadata(probe.Format, audioStream), hasCover, nil
 }
 
 func selectAudioStreams(streams []ffprobeStream) (ffprobeStream, bool, bool) {
@@ -120,38 +193,29 @@ func audioMetadata(format ffprobeFormat, stream ffprobeStream) Audio {
 	}
 }
 
-func (s *Service) renderAudioVisual(ctx context.Context, path string, hasCover bool) (Image, PreviewVisualKind, error) {
-	directory, err := os.MkdirTemp("", "nukri-audio-*")
-	if err != nil {
-		return Image{}, Waveform, fmt.Errorf("create audio preview directory: %w", err)
-	}
-	defer os.RemoveAll(directory)
-	if hasCover {
-		cover := filepath.Join(directory, "cover.png")
-		_, commandErr := runCommand(ctx, 64<<10, s.tools.FFmpeg,
-			"-v", "error", "-nostdin", "-y", "-i", path,
-			"-map", "0:v:0", "-frames:v", "1",
-			"-vf", "scale=min(1600\\,iw):min(1600\\,ih):force_original_aspect_ratio=decrease", cover,
-		)
-		if commandErr == nil {
-			if image, readErr := readPNG(cover, s.maxImageBytes, s.maxImageDimension); readErr == nil {
-				return image, Cover, nil
-			}
-		}
-	}
-	waveform := filepath.Join(directory, "waveform.png")
-	_, err = runCommand(ctx, 64<<10, s.tools.FFmpeg,
-		"-v", "error", "-nostdin", "-y", "-t", "300", "-i", path,
-		"-filter_complex", "showwavespic=s=1200x300:colors=0x1CB0F6", "-frames:v", "1", waveform,
+// waveformSeconds caps how much audio the waveform decodes. Decoding is the
+// slow part of an audio preview and grows with length, so the waveform shows
+// the opening minute rather than the whole track.
+const waveformSeconds = 60
+
+// renderWaveform draws the opening waveformSeconds of path at pane size: a
+// strip as wide as targetSize and a quarter as tall.
+func (s *Service) renderWaveform(ctx context.Context, path string, targetSize int) (Image, error) {
+	width := max(targetSize, 64)
+	height := max(width/4, 16)
+	output, err := runCommand(ctx, s.maxImageBytes, s.tools.FFmpeg,
+		"-v", "error", "-nostdin", "-t", strconv.Itoa(waveformSeconds), "-i", path,
+		"-filter_complex", fmt.Sprintf("showwavespic=s=%dx%d:colors=0x1CB0F6", width, height),
+		"-frames:v", "1", "-f", "image2pipe", "-c:v", "png", "-compression_level", "1", "-",
 	)
 	if err != nil {
-		return Image{}, Waveform, fmt.Errorf("render audio waveform: %w", err)
+		return Image{}, err
 	}
-	image, err := readPNG(waveform, s.maxImageBytes, s.maxImageDimension)
+	config, err := png.DecodeConfig(bytes.NewReader(output))
 	if err != nil {
-		return Image{}, Waveform, fmt.Errorf("read audio waveform: %w", err)
+		return Image{}, fmt.Errorf("no waveform drawn: %w", err)
 	}
-	return image, Waveform, nil
+	return Image{MediaType: "image/png", Data: output, Width: config.Width, Height: config.Height}, nil
 }
 
 func audioFields(audio Audio) []Field {

@@ -3,7 +3,6 @@ package preview
 import (
 	"errors"
 	"fmt"
-	"strconv"
 )
 
 /*
@@ -39,11 +38,11 @@ func bencodeEnd(data []byte, pos, depth int) (int, error) {
 		if colon < 0 {
 			return 0, fmt.Errorf("%w: unterminated string length", errBencode)
 		}
-		length, err := strconv.Atoi(string(data[pos:colon]))
-		if err != nil || length < 0 || length > len(data)-colon-1 {
+		length, ok := parseDigits(data[pos:colon])
+		if !ok || length < 0 || length > int64(len(data)-colon-1) {
 			return 0, fmt.Errorf("%w: bad string length", errBencode)
 		}
-		return colon + 1 + length, nil
+		return colon + 1 + int(length), nil
 	case c == 'l' || c == 'd':
 		pos++
 		for index := 0; ; index++ {
@@ -81,23 +80,40 @@ func indexByteFrom(data []byte, from int, b byte) int {
 }
 
 func parseBencodeInt(digits []byte) (int64, error) {
-	value, err := strconv.ParseInt(string(digits), 10, 64)
-	if err != nil {
+	value, ok := parseDigits(digits)
+	if !ok {
 		return 0, fmt.Errorf("%w: bad integer %q", errBencode, digits)
 	}
 	return value, nil
 }
 
-// bencodeValidate checks that data holds exactly one well-formed value.
-func bencodeValidate(data []byte) error {
-	end, err := bencodeEnd(data, 0, 0)
-	if err != nil {
-		return err
+// parseDigits parses an optionally negative decimal integer without the string
+// conversion strconv needs, which allocated for every number in a torrent.
+func parseDigits(digits []byte) (int64, bool) {
+	negative := len(digits) > 0 && digits[0] == '-'
+	if negative {
+		digits = digits[1:]
 	}
-	if end != len(data) {
-		return fmt.Errorf("%w: trailing data", errBencode)
+	if len(digits) == 0 || len(digits) > 19 {
+		return 0, false
 	}
-	return nil
+	var value uint64
+	for _, digit := range digits {
+		if digit < '0' || digit > '9' {
+			return 0, false
+		}
+		value = value*10 + uint64(digit-'0')
+	}
+	if negative {
+		if value > 1<<63 {
+			return 0, false
+		}
+		return -int64(value), true
+	}
+	if value > 1<<63-1 {
+		return 0, false
+	}
+	return int64(value), true
 }
 
 // The decoders below expect raw to be one complete, validated value.
@@ -122,7 +138,7 @@ func bencodeList(raw []byte) ([][]byte, error) {
 		return nil, fmt.Errorf("%w: expected list", errBencode)
 	}
 	items := [][]byte{}
-	for pos := 1; raw[pos] != 'e'; {
+	for pos := 1; pos < len(raw) && raw[pos] != 'e'; {
 		end, err := bencodeEnd(raw, pos, 0)
 		if err != nil {
 			return nil, err
@@ -133,25 +149,60 @@ func bencodeList(raw []byte) ([][]byte, error) {
 	return items, nil
 }
 
-// bencodeDict returns the dictionary's values by key, plus its keys in order.
-func bencodeDict(raw []byte) (map[string][]byte, []string, error) {
+// bencodeEachEntry calls visit for each key and value of a dictionary, in
+// order, without building a map.
+func bencodeEachEntry(raw []byte, visit func(key, value []byte) error) error {
 	if len(raw) == 0 || raw[0] != 'd' {
-		return nil, nil, fmt.Errorf("%w: expected dictionary", errBencode)
+		return fmt.Errorf("%w: expected dictionary", errBencode)
 	}
-	values := map[string][]byte{}
-	var keys []string
-	for pos := 1; raw[pos] != 'e'; {
+	for pos := 1; pos < len(raw) && raw[pos] != 'e'; {
 		keyEnd, err := bencodeEnd(raw, pos, 0)
 		if err != nil {
-			return nil, nil, err
+			return err
 		}
-		key, err := bencodeString(raw[pos:keyEnd])
-		if err != nil {
-			return nil, nil, err
+		if raw[pos] < '0' || raw[pos] > '9' {
+			return fmt.Errorf("%w: expected string", errBencode)
 		}
 		valueEnd, err := bencodeEnd(raw, keyEnd, 0)
 		if err != nil {
-			return nil, nil, err
+			return err
+		}
+		colon := indexByteFrom(raw, pos, ':')
+		if err := visit(raw[colon+1:keyEnd], raw[keyEnd:valueEnd]); err != nil {
+			return err
+		}
+		pos = valueEnd
+	}
+	return nil
+}
+
+// bencodeDict returns the dictionary's values by key, plus its keys in order.
+func bencodeDict(raw []byte) (map[string][]byte, []string, error) {
+	values, keys, _, err := bencodeDictEnd(raw)
+	return values, keys, err
+}
+
+// bencodeDictEnd is bencodeDict that also returns the index just past the
+// dictionary. It checks bounds itself, so raw need not be validated first.
+func bencodeDictEnd(raw []byte) (map[string][]byte, []string, int, error) {
+	if len(raw) == 0 || raw[0] != 'd' {
+		return nil, nil, 0, fmt.Errorf("%w: expected dictionary", errBencode)
+	}
+	values := map[string][]byte{}
+	var keys []string
+	pos := 1
+	for pos < len(raw) && raw[pos] != 'e' {
+		keyEnd, err := bencodeEnd(raw, pos, 0)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		key, err := bencodeString(raw[pos:keyEnd])
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		valueEnd, err := bencodeEnd(raw, keyEnd, 0)
+		if err != nil {
+			return nil, nil, 0, err
 		}
 		if _, seen := values[key]; !seen {
 			keys = append(keys, key)
@@ -159,7 +210,10 @@ func bencodeDict(raw []byte) (map[string][]byte, []string, error) {
 		values[key] = raw[keyEnd:valueEnd]
 		pos = valueEnd
 	}
-	return values, keys, nil
+	if pos >= len(raw) {
+		return nil, nil, 0, fmt.Errorf("%w: unterminated dictionary", errBencode)
+	}
+	return values, keys, pos + 1, nil
 }
 
 func bencodeStrings(raw []byte) ([]string, error) {

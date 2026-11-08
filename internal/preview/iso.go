@@ -22,7 +22,7 @@ func (s *Service) renderISO(ctx context.Context, path string) (*ISOPreview, erro
 		metadata = append(metadata, Field{Name: "File size", Value: formatByteSize(info.FileSize)})
 	}
 
-	listing, err := s.listISO(ctx, path)
+	listing, err := s.listISO(ctx, path, info)
 	if err != nil {
 		return nil, err
 	}
@@ -30,9 +30,22 @@ func (s *Service) renderISO(ctx context.Context, path string) (*ISOPreview, erro
 	return &ISOPreview{ISO: info, Entries: entries, Metadata: metadata, Truncated: truncated}, nil
 }
 
-func (s *Service) listISO(ctx context.Context, path string) (string, error) {
+/*
+listISO lists the image's files using the naming extension it carries. Asking
+for Rock Ridge names on a disc without them doesn't fail: isoinfo prints a
+"**BAD RRVERSION" line per directory into the listing. So the descriptor picks
+the extension, and the others are only fallbacks.
+*/
+func (s *Service) listISO(ctx context.Context, path string, info ISO) (string, error) {
+	extensions := []string{"", "-R", "-J"}
+	switch {
+	case info.RockRidge:
+		extensions = []string{"-R", "-J", ""}
+	case info.Joliet:
+		extensions = []string{"-J", "-R", ""}
+	}
 	var lastErr error
-	for _, extension := range []string{"-R", "-J", ""} {
+	for _, extension := range extensions {
 		arguments := []string{"-f", "-i", path}
 		if extension != "" {
 			arguments = append([]string{extension}, arguments...)
@@ -52,8 +65,10 @@ func parseISODescriptor(output string) (ISO, []Field) {
 	for line := range strings.SplitSeq(output, "\n") {
 		line = strings.TrimSpace(strings.TrimSuffix(line, "\r"))
 		lower := strings.ToLower(line)
-		info.RockRidge = info.RockRidge || strings.Contains(lower, "rock ridge")
-		info.Joliet = info.Joliet || strings.Contains(lower, "joliet")
+		// isoinfo reports absence too ("NO Rock Ridge present").
+		present := !strings.HasPrefix(lower, "no ")
+		info.RockRidge = info.RockRidge || present && strings.Contains(lower, "rock ridge")
+		info.Joliet = info.Joliet || present && strings.Contains(lower, "joliet")
 		info.Bootable = info.Bootable || strings.Contains(lower, "el torito")
 		name, value, ok := strings.Cut(line, ":")
 		if !ok {
@@ -100,7 +115,8 @@ func parseISOListing(output string, maximum int) ([]ISOEntry, bool) {
 	truncated := false
 	for line := range strings.SplitSeq(output, "\n") {
 		line = safeText(strings.TrimSpace(strings.TrimSuffix(line, "\r")))
-		if line == "" || line == "/" {
+		// Real paths start with "/"; isoinfo writes warnings ("**...") inline.
+		if line == "" || line == "/" || strings.HasPrefix(line, "**") {
 			continue
 		}
 		if len(entries) >= maximum {

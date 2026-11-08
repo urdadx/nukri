@@ -80,8 +80,8 @@ func parseEPUBMetadata(reader *zip.Reader) (EPUB, error) {
 	if err := decodeEPUBXML(reader, "META-INF/container.xml", &container); err != nil {
 		return EPUB{}, err
 	}
-	var document epubPackage
-	if err := decodeEPUBXML(reader, container.Rootfile.Path, &document); err != nil {
+	document, err := decodeEPUBPackage(reader, container.Rootfile.Path)
+	if err != nil {
 		return EPUB{}, err
 	}
 	metadata := document.Metadata
@@ -106,19 +106,60 @@ func parseEPUBMetadata(reader *zip.Reader) (EPUB, error) {
 	return result, nil
 }
 
-func decodeEPUBXML(reader *zip.Reader, name string, target any) error {
-	for _, entry := range reader.File {
-		if entry.Name != name {
+/*
+decodeEPUBPackage reads the package document's unique-identifier attribute and
+its metadata, then stops. The manifest and spine that follow list every file in
+the book, and decoding them was most of the cost of a large EPUB's preview.
+*/
+func decodeEPUBPackage(reader *zip.Reader, name string) (epubPackage, error) {
+	var document epubPackage
+	file, err := openEPUBEntry(reader, name)
+	if err != nil {
+		return document, err
+	}
+	defer file.Close()
+	decoder := xml.NewDecoder(io.LimitReader(file, DefaultMaxEPUBEntryBytes+1))
+	for {
+		token, err := decoder.Token()
+		if err == io.EOF {
+			return document, nil // no metadata element: an empty preview
+		}
+		if err != nil {
+			return document, err
+		}
+		start, ok := token.(xml.StartElement)
+		if !ok {
 			continue
 		}
-		file, err := entry.Open()
-		if err != nil {
-			return err
+		switch start.Name.Local {
+		case "package":
+			for _, attribute := range start.Attr {
+				if attribute.Name.Local == "unique-identifier" {
+					document.UniqueIdentifier = attribute.Value
+				}
+			}
+		case "metadata":
+			return document, decoder.DecodeElement(&document.Metadata, &start)
 		}
-		defer file.Close()
-		return xml.NewDecoder(io.LimitReader(file, DefaultMaxEPUBEntryBytes+1)).Decode(target)
 	}
-	return fmt.Errorf("EPUB entry %q does not exist", name)
+}
+
+func openEPUBEntry(reader *zip.Reader, name string) (io.ReadCloser, error) {
+	for _, entry := range reader.File {
+		if entry.Name == name {
+			return entry.Open()
+		}
+	}
+	return nil, fmt.Errorf("EPUB entry %q does not exist", name)
+}
+
+func decodeEPUBXML(reader *zip.Reader, name string, target any) error {
+	file, err := openEPUBEntry(reader, name)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return xml.NewDecoder(io.LimitReader(file, DefaultMaxEPUBEntryBytes+1)).Decode(target)
 }
 
 func nonemptyValues(values []string) []string {

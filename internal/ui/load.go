@@ -57,8 +57,9 @@ func refreshPlaces() tea.Cmd {
 // cwd. Counting needs one directory read per subdirectory, so it runs after the
 // listing is shown instead of delaying it.
 type itemCountsMsg struct {
-	cwd    string
-	counts map[string]int
+	cwd     string // the directory whose subdirectories were counted
+	counts  map[string]int
+	preview bool // counts for the preview pane rather than the file list
 }
 
 type previewMsg struct {
@@ -130,7 +131,7 @@ func loadPreview(pool *PreviewPool, entry browser.Entry, width, codeWindow int, 
 	}
 }
 
-func loadItemCounts(cwd string, entries []browser.Entry) tea.Cmd {
+func loadItemCounts(cwd string, entries []browser.Entry, forPreview bool) tea.Cmd {
 	var directories []string
 	for _, entry := range entries {
 		if entry.Entry.IsDirectory() {
@@ -147,7 +148,7 @@ func loadItemCounts(cwd string, entries []browser.Entry) tea.Cmd {
 				counts[path] = *count
 			}
 		}
-		return itemCountsMsg{cwd: cwd, counts: counts}
+		return itemCountsMsg{cwd: cwd, counts: counts, preview: forPreview}
 	}
 }
 
@@ -199,11 +200,9 @@ func directoryPreviewEntries(parent string, values []preview.DirectoryEntry) []b
 		}
 		entry := core.Entry{Name: value.Name, Path: filepath.Join(parent, value.Name), Kind: kind, Size: value.Size}
 		icon := iconFor(entry)
-		previewEntry := browser.Entry{Entry: entry, Icon: icon.Icon, IconColor: icon.Color}
-		if entry.IsDirectory() {
-			previewEntry.ItemCount = visibleItemCount(entry.Path)
-		}
-		entries = append(entries, previewEntry)
+		// Item counts are filled in later (loadItemCounts): each needs its own
+		// directory read, which would hold up the preview.
+		entries = append(entries, browser.Entry{Entry: entry, Icon: icon.Icon, IconColor: icon.Color})
 	}
 	return entries
 }

@@ -413,8 +413,10 @@ func renderPreview(ctx context.Context, service *preview.Service, req previewReq
 	}
 	msg := previewMsg{path: req.entry.Entry.Path}
 	if directory, ok := value.(*preview.DirectoryPreview); ok {
+		// The pane draws directories from these entries, not from a View.
 		msg.directory = true
 		msg.entries = directoryPreviewEntries(req.entry.Entry.Path, directory.Entries)
+		return msg
 	}
 	view, viewErr := preview.BuildViewContext(ctx, value, preview.ViewOptions{
 		Width:       max(1, req.width),

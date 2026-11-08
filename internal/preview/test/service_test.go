@@ -1,7 +1,10 @@
 package test
 
 import (
+	"archive/tar"
 	"archive/zip"
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -676,4 +679,242 @@ func writeISOSample(t *testing.T) string {
 		t.Fatalf("create ISO sample: %v: %s", err, commandOutput)
 	}
 	return output
+}
+
+// The package document is read only up to its metadata. The identifier the
+// package names as unique must still win over others, and the manifest after
+// the metadata must not matter.
+func TestParseEPUBStopsAfterMetadata(t *testing.T) {
+	var manifest strings.Builder
+	for i := range 2000 {
+		fmt.Fprintf(&manifest, `<item id="c%d" href="c%d.xhtml" media-type="application/xhtml+xml"/>`, i, i)
+	}
+	opf := `<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" unique-identifier="main" version="3.0">` +
+		`<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="other">isbn-other</dc:identifier>` +
+		`<dc:identifier id="main">urn:uuid:main</dc:identifier><dc:title>Streamed</dc:title><dc:language>en</dc:language></metadata>` +
+		`<manifest>` + manifest.String() + `</manifest><spine/></package>`
+	path := filepath.Join(t.TempDir(), "streamed.epub")
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := zip.NewWriter(file)
+	for name, content := range map[string]string{
+		"mimetype": "application/epub+zip",
+		"META-INF/container.xml": `<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">` +
+			`<rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>`,
+		"OEBPS/content.opf": opf,
+	} {
+		entry, err := writer.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := entry.Write([]byte(content)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	file.Close()
+
+	result, err := preview.NewService().Render(context.Background(), preview.Request{Path: path, Facts: fileinfo.InspectPath(path, core.File)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	book := result.(*preview.EPUBPreview).Book
+	if book.Identifier != "urn:uuid:main" || len(book.Titles) != 1 || book.Titles[0] != "Streamed" {
+		t.Fatalf("book = %#v", book)
+	}
+}
+
+// Only the displayed rows are parsed; the rest are counted by a scan that must
+// agree with a full parse: quoted line breaks, delimiters and doubled quotes
+// stay inside their field, blank lines are skipped, and ragged rows widen the
+// column count.
+func TestRenderCSVCountsRowsPastThePreview(t *testing.T) {
+	var source strings.Builder
+	source.WriteString("id,text,n\r\n")
+	fields := []string{`"line one` + "\n" + `line two, with comma"`, `"say ""hi"", then` + "\r\n" + `more"`, "plain", `"a,b,c"`, `""`}
+	for i := range 400 {
+		fmt.Fprintf(&source, "%d,%s,%d%s\r\n", i, fields[i%len(fields)], i, strings.Repeat(",extra", i%4))
+		if i%50 == 0 {
+			source.WriteString("\r\n")
+		}
+	}
+	source.WriteString(`400,"no trailing newline",400`)
+	path := filepath.Join(t.TempDir(), "tricky.csv")
+	if err := os.WriteFile(path, []byte(source.String()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result, err := preview.NewService().Render(context.Background(), preview.Request{Path: path, Facts: fileinfo.InspectPath(path, core.File)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	value := result.(*preview.CSVPreview)
+	// Header plus 401 records; the widest rows have 3 extra fields.
+	if value.Metadata.RowCount != 402 || value.Metadata.ColumnCount != 6 || value.Metadata.RowCountAtLeast {
+		t.Fatalf("metadata = %#v, want 402 rows and 6 columns", value.Metadata)
+	}
+	if len(value.Rows) != 100 || !value.RowsTruncated {
+		t.Fatalf("shown %d rows (truncated %v), want the first 100", len(value.Rows), value.RowsTruncated)
+	}
+}
+
+// The parser decodes without a separate validation pass, so every prefix of a
+// valid torrent, and data trailing one, must fail cleanly instead of panicking.
+func TestRenderTorrentRejectsTruncatedMetainfo(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("file_samples", "hybrid.torrent"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := preview.NewService()
+	directory := t.TempDir()
+	render := func(content []byte) error {
+		path := filepath.Join(directory, "cut.torrent")
+		if err := os.WriteFile(path, content, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_, err := service.Render(context.Background(), preview.Request{Path: path, Facts: fileinfo.InspectPath(path, core.File)})
+		return err
+	}
+	for length := range len(data) {
+		if render(data[:length]) == nil {
+			t.Fatalf("torrent cut to %d of %d bytes was accepted", length, len(data))
+		}
+	}
+	if render(append(append([]byte(nil), data...), "trailing"...)) == nil {
+		t.Fatal("data after the metainfo dictionary was accepted")
+	}
+	if err := render(data); err != nil {
+		t.Fatalf("the whole torrent failed: %v", err)
+	}
+}
+
+// The descriptor decides which file names to list: Rock Ridge, Joliet, or plain
+// ISO 9660. Asking a disc for names it lacks puts isoinfo warnings into the
+// listing, and "NO Joliet present" must not count as Joliet.
+func TestRenderISOUsesTheDiscsNameExtension(t *testing.T) {
+	genisoimage, err := exec.LookPath("genisoimage")
+	if err != nil {
+		t.Skip("ISO fixture creation requires genisoimage")
+	}
+	service := preview.NewService()
+	requireCapability(t, service.Capabilities().ISO, "isoinfo")
+	source := filepath.Join(t.TempDir(), "source")
+	if err := os.MkdirAll(filepath.Join(source, "Sub Folder"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "Sub Folder", "Mixed Case Name.txt"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name              string
+		flags             []string
+		rockRidge, joliet bool
+		want              string // a listed path
+	}{
+		{"plain", nil, false, false, "/SUB_FOLD/MIXED_CA.TXT;1"},
+		{"joliet", []string{"-J"}, false, true, "/Sub Folder/Mixed Case Name.txt"},
+		{"rock ridge", []string{"-R"}, true, false, "/Sub Folder/Mixed Case Name.txt"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			output := filepath.Join(t.TempDir(), "disc.iso")
+			arguments := append(append([]string{"-quiet"}, test.flags...), "-o", output, source)
+			if out, err := exec.Command(genisoimage, arguments...).CombinedOutput(); err != nil {
+				t.Fatalf("create ISO: %v: %s", err, out)
+			}
+			result, err := service.Render(context.Background(), preview.Request{Path: output, Facts: fileinfo.InspectPath(output, core.File)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			iso := result.(*preview.ISOPreview)
+			if iso.ISO.RockRidge != test.rockRidge || iso.ISO.Joliet != test.joliet {
+				t.Fatalf("rock ridge = %v, joliet = %v; want %v, %v", iso.ISO.RockRidge, iso.ISO.Joliet, test.rockRidge, test.joliet)
+			}
+			found := false
+			for _, entry := range iso.Entries {
+				if strings.HasPrefix(entry.Path, "**") {
+					t.Fatalf("listing contains an isoinfo warning: %q", entry.Path)
+				}
+				found = found || entry.Path == test.want
+			}
+			if !found {
+				t.Fatalf("entries = %v, want %q", iso.Entries, test.want)
+			}
+		})
+	}
+}
+
+// Tarballs are listed from their tar headers, compressed or not. 7-Zip showed a
+// compressed tarball as the single .tar inside, or nothing for xz and zstd.
+func TestRenderTarListsFilesInsideCompression(t *testing.T) {
+	directory := t.TempDir()
+	var data bytes.Buffer
+	writer := tar.NewWriter(&data)
+	names := []string{"project/", "project/README.md", "project/src/main.go"}
+	for _, name := range names {
+		header := &tar.Header{Name: name, Mode: 0o644, Typeflag: tar.TypeReg, Size: 5, ModTime: time.Unix(1700000000, 0)}
+		if strings.HasSuffix(name, "/") {
+			header.Typeflag, header.Mode, header.Size = tar.TypeDir, 0o755, 0
+		}
+		if err := writer.WriteHeader(header); err != nil {
+			t.Fatal(err)
+		}
+		if header.Size > 0 {
+			writer.Write([]byte("hello"))
+		}
+	}
+	writer.Close()
+	plain := filepath.Join(directory, "sample.tar")
+	if err := os.WriteFile(plain, data.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var gzipped bytes.Buffer
+	compressor := gzip.NewWriter(&gzipped)
+	compressor.Write(data.Bytes())
+	compressor.Close()
+	if err := os.WriteFile(filepath.Join(directory, "sample.tgz"), gzipped.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	archives := []string{"sample.tar", "sample.tgz"}
+	// The other compressions need their command-line tools to build the fixture.
+	for _, tool := range []struct{ name, suffix string }{{"bzip2", ".bz2"}, {"xz", ".xz"}, {"zstd", ".zst"}} {
+		if _, err := exec.LookPath(tool.name); err != nil {
+			continue
+		}
+		if out, err := exec.Command(tool.name, "-k", "-q", "-f", plain).CombinedOutput(); err != nil {
+			t.Fatalf("%s: %v: %s", tool.name, err, out)
+		}
+		archives = append(archives, "sample.tar"+tool.suffix)
+	}
+	service := preview.NewService()
+	for _, name := range archives {
+		path := filepath.Join(directory, name)
+		result, err := service.Render(context.Background(), preview.Request{Path: path, Facts: fileinfo.InspectPath(path, core.File)})
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		entries := result.(*preview.ArchivePreview).Archive.Entries
+		if len(entries) != len(names) {
+			t.Fatalf("%s: listed %d entries, want %d", name, len(entries), len(names))
+		}
+		for index, entry := range entries {
+			if entry.Path != names[index] || entry.Directory != strings.HasSuffix(names[index], "/") || entry.Modified == "" {
+				t.Fatalf("%s: entry %d = %#v, want %q", name, index, entry, names[index])
+			}
+		}
+	}
+}
+
+func TestRenderXZTarNamesMissingTool(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sample.tar.xz")
+	if err := os.WriteFile(path, []byte("not really xz"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := preview.NewServiceWithTools(preview.Tools{}).Render(context.Background(), preview.Request{Path: path, Facts: fileinfo.InspectPath(path, core.File)})
+	var toolErr *preview.ToolUnavailableError
+	if !errors.As(err, &toolErr) || toolErr.Tool != "xz" {
+		t.Fatalf("error = %v, want missing xz", err)
+	}
 }

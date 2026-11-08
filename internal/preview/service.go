@@ -76,6 +76,9 @@ func DiscoverTools() Tools {
 		ISOInfo:      lookPath("isoinfo"),
 		RSVGConvert:  lookPath("rsvg-convert"),
 		ImageMagick:  lookPath("magick", "convert"),
+		XZ:           lookPath("xz"),
+		Zstd:         lookPath("zstd"),
+		Pigz:         lookPath("pigz"),
 	}
 }
 
@@ -150,7 +153,7 @@ func (s *Service) Render(ctx context.Context, request Request) (Preview, error) 
 		return s.renderFont(ctx, path)
 	}
 	if request.Facts.BuiltinClass == core.FileClassAudio {
-		return s.renderAudio(ctx, path)
+		return s.renderAudio(ctx, path, request.Width)
 	}
 	if request.Facts.BuiltinClass == core.FileClassVideo {
 		return s.renderVideo(ctx, path, request.Width)

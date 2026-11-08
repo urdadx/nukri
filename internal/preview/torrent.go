@@ -34,7 +34,7 @@ func (s *Service) renderTorrent(ctx context.Context, path string) (*TorrentPrevi
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	info, err := parseTorrentInfo(meta.info)
+	info, err := parseTorrentInfo(meta.info, s.maxTorrentFiles)
 	if err != nil {
 		return nil, fmt.Errorf("parse torrent info: %w", err)
 	}
@@ -126,12 +126,14 @@ type torrentFileInfo struct {
 
 func parseTorrentMeta(data []byte) (torrentMeta, error) {
 	var meta torrentMeta
-	if err := bencodeValidate(data); err != nil {
-		return meta, err
-	}
-	values, _, err := bencodeDict(data)
+	// Decoding checks every value, so no separate validation pass is needed;
+	// only data after the dictionary must still be rejected.
+	values, _, end, err := bencodeDictEnd(data)
 	if err != nil {
 		return meta, err
+	}
+	if end != len(data) {
+		return meta, fmt.Errorf("%w: trailing data", errBencode)
 	}
 	info, ok := values["info"]
 	if !ok {
@@ -180,7 +182,9 @@ func parseTorrentMeta(data []byte) (torrentMeta, error) {
 	return meta, nil
 }
 
-func parseTorrentInfo(raw []byte) (torrentInfo, error) {
+// parseTorrentInfo decodes the info dictionary. Paths are kept for the first
+// keepPaths files only; the rest are needed just for their sizes.
+func parseTorrentInfo(raw []byte, keepPaths int) (torrentInfo, error) {
 	var info torrentInfo
 	values, _, err := bencodeDict(raw)
 	if err != nil {
@@ -207,7 +211,7 @@ func parseTorrentInfo(raw []byte) (torrentInfo, error) {
 	var v1Files []torrentFileInfo
 	if raw, ok := values["files"]; ok {
 		info.hasFileList = true
-		v1Files, err = parseTorrentFileList(raw)
+		v1Files, err = parseTorrentFileList(raw, keepPaths)
 		if err != nil {
 			return info, err
 		}
@@ -227,34 +231,44 @@ func parseTorrentInfo(raw []byte) (torrentInfo, error) {
 			return info, err
 		}
 		info.treeIsDir = slices.ContainsFunc(keys, func(key string) bool { return key != "" })
-		if err := info.walkFileTree(root, keys, nil, 0); err != nil {
+		if err := info.walkFileTree(root, keys, nil, 0, keepPaths); err != nil {
 			return info, err
 		}
 	}
 	return info, nil
 }
 
-func parseTorrentFileList(raw []byte) ([]torrentFileInfo, error) {
+func parseTorrentFileList(raw []byte, keepPaths int) ([]torrentFileInfo, error) {
 	items, err := bencodeList(raw)
 	if err != nil {
 		return nil, err
 	}
 	files := make([]torrentFileInfo, 0, len(items))
-	for _, item := range items {
-		values, _, err := bencodeDict(item)
-		if err != nil {
-			return nil, err
-		}
+	for index, item := range items {
 		var file torrentFileInfo
 		var path, pathUTF8 []string
-		for _, field := range []error{
-			decodeOptional(values, "length", bencodeInt, &file.length),
-			decodeOptional(values, "path", bencodeStrings, &path),
-			decodeOptional(values, "path.utf-8", bencodeStrings, &pathUTF8),
-		} {
-			if field != nil {
-				return nil, field
+		keepPath := index < keepPaths
+		err := bencodeEachEntry(item, func(key, value []byte) error {
+			var err error
+			switch string(key) {
+			case "length":
+				file.length, err = bencodeInt(value)
+			case "path":
+				if keepPath {
+					path, err = bencodeStrings(value)
+				}
+			case "path.utf-8":
+				if keepPath {
+					pathUTF8, err = bencodeStrings(value)
+				}
 			}
+			if err != nil {
+				return fmt.Errorf("%s: %w", key, err)
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
 		}
 		file.path = path
 		if len(pathUTF8) != 0 {
@@ -267,7 +281,7 @@ func parseTorrentFileList(raw []byte) ([]torrentFileInfo, error) {
 
 // walkFileTree flattens a BEP 52 file tree in key order. A node whose only key
 // is "" is a file; its properties live under that key.
-func (info *torrentInfo) walkFileTree(node map[string][]byte, keys, path []string, depth int) error {
+func (info *torrentInfo) walkFileTree(node map[string][]byte, keys, path []string, depth, keepPaths int) error {
 	if depth > bencodeMaxDepth {
 		return fmt.Errorf("file tree nesting too deep")
 	}
@@ -286,7 +300,11 @@ func (info *torrentInfo) walkFileTree(node map[string][]byte, keys, path []strin
 	}
 	children := slices.DeleteFunc(slices.Clone(keys), func(key string) bool { return key == "" })
 	if len(children) == 0 {
-		info.files = append(info.files, torrentFileInfo{length: length, path: slices.Clone(path)})
+		file := torrentFileInfo{length: length}
+		if len(info.files) < keepPaths {
+			file.path = slices.Clone(path)
+		}
+		info.files = append(info.files, file)
 		return nil
 	}
 	slices.Sort(children)
@@ -295,7 +313,7 @@ func (info *torrentInfo) walkFileTree(node map[string][]byte, keys, path []strin
 		if err != nil {
 			return err
 		}
-		if err := info.walkFileTree(child, childKeys, append(path, key), depth+1); err != nil {
+		if err := info.walkFileTree(child, childKeys, append(path, key), depth+1, keepPaths); err != nil {
 			return err
 		}
 	}

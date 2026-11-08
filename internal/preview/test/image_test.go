@@ -8,8 +8,10 @@ import (
 	"hash/crc32"
 	"image"
 	"image/color"
+	"image/draw"
 	"image/jpeg"
 	"image/png"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -273,4 +275,69 @@ func TestImagePreviewRejectsDecompressionBomb(t *testing.T) {
 	if !errors.Is(err, preview.ErrOutputTooLarge) {
 		t.Fatalf("error = %v, want ErrOutputTooLarge", err)
 	}
+}
+
+// Large images are box-averaged before the final resize; each pixel layout has
+// its own fast path, so check every one keeps colors and proportions.
+func TestImagePreviewShrinksEveryPixelLayout(t *testing.T) {
+	want := color.NRGBA{R: 200, G: 100, B: 50, A: 255}
+	gray := color.Gray{Y: 140}
+	layouts := []struct {
+		name   string
+		ext    string
+		image  image.Image
+		encode func(io.Writer, image.Image) error
+		want   color.Color
+	}{
+		{"rgba png", ".png", image.NewRGBA(image.Rect(0, 0, 3000, 1500)), png.Encode, want},
+		// Translucent, so the PNG decodes as NRGBA rather than RGBA.
+		{"nrgba png", ".png", image.NewNRGBA(image.Rect(0, 0, 3000, 1500)), png.Encode, color.NRGBA{R: 200, G: 100, B: 50, A: 160}},
+		{"gray png", ".png", image.NewGray(image.Rect(0, 0, 3000, 1500)), png.Encode, gray},
+		{"ycbcr jpeg", ".jpg", image.NewRGBA(image.Rect(0, 0, 3000, 1500)), func(w io.Writer, m image.Image) error {
+			return jpeg.Encode(w, m, &jpeg.Options{Quality: 95})
+		}, want},
+	}
+	// Without ImageMagick, JPEGs take the Go decoder and its YCbCr fast path.
+	tools := preview.DiscoverTools()
+	tools.ImageMagick = ""
+	for _, layout := range layouts {
+		t.Run(layout.name, func(t *testing.T) {
+			draw.Draw(layout.image.(draw.Image), layout.image.Bounds(), image.NewUniform(layout.want), image.Point{}, draw.Src)
+			path := filepath.Join(t.TempDir(), "large"+layout.ext)
+			file, err := os.Create(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := layout.encode(file, layout.image); err != nil {
+				t.Fatal(err)
+			}
+			file.Close()
+			result, err := preview.NewServiceWithTools(tools).Render(context.Background(), preview.Request{
+				Path: path, Facts: fileinfo.InspectPath(path, core.File), Width: 30,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			data := result.(*preview.ImagePreview).Image.Data
+			decoded, err := png.Decode(bytes.NewReader(data))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if bounds := decoded.Bounds(); bounds.Dx() != 240 || bounds.Dy() != 120 {
+				t.Fatalf("preview is %dx%d, want 240x120", bounds.Dx(), bounds.Dy())
+			}
+			got := color.NRGBAModel.Convert(decoded.At(120, 60)).(color.NRGBA)
+			expected := color.NRGBAModel.Convert(layout.want).(color.NRGBA)
+			if diff(got.R, expected.R) > 3 || diff(got.G, expected.G) > 3 || diff(got.B, expected.B) > 3 {
+				t.Fatalf("center pixel = %v, want about %v", got, expected)
+			}
+		})
+	}
+}
+
+func diff(a, b uint8) uint8 {
+	if a > b {
+		return a - b
+	}
+	return b - a
 }
