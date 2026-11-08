@@ -40,7 +40,3 @@ type SidebarRow struct {
 	Section string
 	Item    *SidebarItem
 }
-
-func (r SidebarRow) GetItem() *SidebarItem {
-	return r.Item
-}

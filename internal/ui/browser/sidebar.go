@@ -24,7 +24,7 @@ func SidebarPathAt(width int, places []core.SidebarRow, row int) string {
 			}
 			continue
 		}
-		item := place.GetItem()
+		item := place.Item
 		if item == nil {
 			continue // not drawn, see RenderSidebar
 		}
@@ -52,7 +52,7 @@ func RenderSidebar(width, height int, s Styles, data Data) string {
 			}
 			continue
 		}
-		item := row.GetItem()
+		item := row.Item
 		if item == nil {
 			continue
 		}

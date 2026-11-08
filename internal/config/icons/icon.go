@@ -11,53 +11,11 @@ type Style struct {
 	Color string
 }
 
+// Place and folder icons. InitIcon sets them for the chosen icon mode.
 var (
-	Space         = " "
-	SuperfileIcon = "\ue6ad" // Printable Rune : ""
-
-	// Well Known Directories
-	Home            = "\U000f02dc" // Printable Rune : "󰋜"
-	Desktop         = "\U000f01c4" // Printable Rune : "󰇄"
-	Downloads       = "\U000f03d4" // Printable Rune : "󰏔"
-	Documents       = "\U000f0219" // Printable Rune : "󰈙"
-	Pictures        = "\U000f02e9" // Printable Rune : "󰋩"
-	Videos          = "\U000f0381" // Printable Rune : "󰎁"
-	Music           = "♬"          // Printable Rune : "♬"
-	Templates       = "\U000f03e2" // Printable Rune : "󰏢"
-	PublicShare     = "\uf0ac"     // Printable Rune : ""
-	Trash           = "\uf1f8"     // Printable Rune : ""
-	Root            = "\U000f02ca" // Printable Rune : "󰋊"
-	CustomPlace     = "\U000f024b" // Printable Rune : "󰉋"
-	LinkedPlace     = "\uf482"     // Printable Rune : ""
-	BrokenPlace     = "\U000f033a" // Printable Rune : "󰌺"
-	FixedDevice     = "\U000f02ca" // Printable Rune : "󰋊"
-	RemovableDevice = "\U000f0553" // Printable Rune : "󰕓"
-
-	// file operations
-	CompressFile = "\U000f05c4" // Printable Rune : "󰗄"
-	ExtractFile  = "\U000f06eb" // Printable Rune : "󰛫"
-	Copy         = "\U000f018f" // Printable Rune : "󰆏"
-	Cut          = "\U000f0190" // Printable Rune : "󰆐"
-	Delete       = "\U000f01b4" // Printable Rune : "󰆴"
-
-	// other
-	Cursor          = "\uf054"     // Printable Rune : ""
-	Browser         = "\U000f0208" // Printable Rune : "󰈈"
-	Select          = "\U000f01bd" // Printable Rune : "󰆽"
-	CheckboxEmpty   = "\U000f0131" // Printable Rune : "󰄱"
-	CheckboxChecked = "\U000f0856" // Printable Rune : "󰡖"
-	Error           = "\uf530"     // Printable Rune : ""
-	Warn            = "\uf071"     // Printable Rune : ""
-	Done            = "\uf4a4"     // Printable Rune : ""
-	InOperation     = "\U000f0954" // Printable Rune : "󰥔"
-	Directory       = "\uf07b"     // Printable Rune : ""
-	Search          = "\ue68f"     // Printable Rune : ""
-	SortAsc         = "\uf0de"     // Printable Rune : ""
-	SortDesc        = "\uf0dd"     // Printable Rune : ""
-	Terminal        = "\ue795"     // Printable Rune : ""
-	Pinned          = "\U000f0403" // Printable Rune : "󰐃"
-	Disk            = "\U000f11f0" // Printable Rune : "󱇰"
-
+	Home, Desktop, Downloads, Documents, Pictures, Videos, Music string
+	Trash, Root, CustomPlace, LinkedPlace, BrokenPlace           string
+	FixedDevice, RemovableDevice, Directory                      string
 )
 
 /*
@@ -182,7 +140,6 @@ var Icons = map[string]Style{
 }
 
 var Aliases = map[string]string{
-	"dart":             "dart",
 	"apk":              "android",
 	"gradle":           "android",
 	"ds_store":         "apple",
@@ -431,9 +388,6 @@ var Folders = map[string]Style{
 	".vim":    {Icon: "\ue62b", Color: "#019833"}, // Vim folder - Green // Printable Rune : ""
 	"config":  {Icon: "\ue5fc", Color: "#ffb86c"}, // Config folder - Light orange // Printable Rune : ""
 	// Item for Generic folder, with key "folder" is initialized in InitIcon()
-	"hidden":       {Icon: "\uf023", Color: "#75715e"}, // Hidden folder - Dark yellowish // Printable Rune : ""
 	"node_modules": {Icon: "\ue5fa", Color: "#cb3837"}, // Node modules folder - Red // Printable Rune : ""
-	"link_folder":  {Icon: "\uf482", Color: "NONE"},    // link folder - None // Printable Rune : ""
 
-	"superfile": {Icon: "\U000f069d", Color: "#FF6F00"}, // Printable Rune : "󰚝"
 }

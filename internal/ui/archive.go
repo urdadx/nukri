@@ -5,10 +5,23 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/progress"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/urdadx/nukri/internal/archive"
 )
+
+// archiveState is the create-archive prompt and the running archive operation.
+type archiveState struct {
+	promptOpen bool
+	name       string // archive name being typed in the prompt
+	selectAll  bool   // the name is selected, so typing replaces it
+
+	busy      bool
+	operation string // shown in the footer while busy
+	percent   float64
+	progress  progress.Model
+}
 
 type archiveMsg struct {
 	operation string
@@ -28,7 +41,7 @@ func waitArchive(stream <-chan tea.Msg) tea.Cmd {
 }
 
 func (m Model) openArchivePrompt() (tea.Model, tea.Cmd) {
-	if m.archiveBusy {
+	if m.archive.busy {
 		m.status = "Archive operation already in progress"
 		return m, nil
 	}
@@ -36,19 +49,19 @@ func (m Model) openArchivePrompt() (tea.Model, tea.Cmd) {
 		m.status = "Nothing selected"
 		return m, nil
 	}
-	m.archivePromptOpen = true
-	m.archiveName = m.data.Entries[m.data.Selected].Entry.Name + ".zip"
-	m.archiveSelectAll = true
+	m.archive.promptOpen = true
+	m.archive.name = m.data.Entries[m.data.Selected].Entry.Name + ".zip"
+	m.archive.selectAll = true
 	return m, nil
 }
 
 func (m Model) handleArchivePromptKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch message.String() {
 	case "esc", "ctrl+c":
-		m.archivePromptOpen = false
+		m.archive.promptOpen = false
 		return m, nil
 	case "enter":
-		name := strings.TrimSpace(m.archiveName)
+		name := strings.TrimSpace(m.archive.name)
 		if name == "" || filepath.Base(name) != name {
 			m.status = "Archive name must be a filename"
 			return m, nil
@@ -59,36 +72,36 @@ func (m Model) handleArchivePromptKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		source := m.data.Entries[m.data.Selected].Entry.Path
 		destination := filepath.Join(m.data.CWD, name)
-		m.archivePromptOpen = false
-		m.archiveBusy = true
-		m.archiveOperation = "create"
-		m.archivePercent = 0
+		m.archive.promptOpen = false
+		m.archive.busy = true
+		m.archive.operation = "create"
+		m.archive.percent = 0
 		m.status = ""
 		return m, createArchive(source, destination)
 	case "backspace":
-		if m.archiveSelectAll {
-			m.archiveName = ""
-			m.archiveSelectAll = false
+		if m.archive.selectAll {
+			m.archive.name = ""
+			m.archive.selectAll = false
 		} else {
-			runes := []rune(m.archiveName)
+			runes := []rune(m.archive.name)
 			if len(runes) > 0 {
-				m.archiveName = string(runes[:len(runes)-1])
+				m.archive.name = string(runes[:len(runes)-1])
 			}
 		}
 		return m, nil
 	}
 	if message.Type == tea.KeyRunes {
-		if m.archiveSelectAll {
-			m.archiveName = ""
-			m.archiveSelectAll = false
+		if m.archive.selectAll {
+			m.archive.name = ""
+			m.archive.selectAll = false
 		}
-		m.archiveName += string(message.Runes)
+		m.archive.name += string(message.Runes)
 	}
 	return m, nil
 }
 
 func (m Model) extractSelectedArchive() (tea.Model, tea.Cmd) {
-	if m.archiveBusy {
+	if m.archive.busy {
 		m.status = "Archive operation already in progress"
 		return m, nil
 	}
@@ -101,9 +114,9 @@ func (m Model) extractSelectedArchive() (tea.Model, tea.Cmd) {
 		m.status = err.Error()
 		return m, nil
 	}
-	m.archiveBusy = true
-	m.archiveOperation = "extract"
-	m.archivePercent = 0
+	m.archive.busy = true
+	m.archive.operation = "extract"
+	m.archive.percent = 0
 	m.status = ""
 	return m, extractArchive(path)
 }
@@ -149,14 +162,14 @@ func extractArchive(source string) tea.Cmd {
 }
 
 func (m Model) archiveStatus() string {
-	if !m.archiveBusy {
+	if !m.archive.busy {
 		return ""
 	}
 	verb := "Creating"
-	if m.archiveOperation == "extract" {
+	if m.archive.operation == "extract" {
 		verb = "Extracting"
 	}
-	return fmt.Sprintf("%s archive %s %3.0f%%", verb, m.archiveProgress.ViewAs(m.archivePercent), m.archivePercent*100)
+	return fmt.Sprintf("%s archive %s %3.0f%%", verb, m.archive.progress.ViewAs(m.archive.percent), m.archive.percent*100)
 }
 
 func (m Model) renderArchivePrompt(base string) string {
@@ -165,7 +178,7 @@ func (m Model) renderArchivePrompt(base string) string {
 	t := m.styles.Theme
 	modal := lipgloss.NewStyle().Foreground(lipgloss.Color(t.ModalFG)).Background(lipgloss.Color(t.ModalBG))
 	muted := modal.Foreground(lipgloss.Color(t.SidebarDivider))
-	name := truncate(m.archiveName, max(1, innerWidth-3))
+	name := truncate(m.archive.name, max(1, innerWidth-3))
 	content := []string{
 		modal.Bold(true).Foreground(lipgloss.Color(t.ModalBorderActive)).Width(innerWidth).Render("Create archive"),
 		modal.Width(innerWidth).Render("❯ " + name + "█"),

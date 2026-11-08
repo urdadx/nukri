@@ -2,7 +2,6 @@ package ui
 
 import (
 	"io"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"time"
@@ -20,29 +19,23 @@ import (
 )
 
 type Model struct {
-	width, height     int
-	styles            Styles
-	data              browser.Data
-	previewPool       *PreviewPool
-	searchPool        *SearchPool
-	visualState       *browser.VisualState
-	backHistory       []historyEntry
-	forwardHistory    []historyEntry
-	prefetchSeq       int
-	lastClickPath     string
-	lastClickAt       time.Time
-	drag              dragState
-	clipboard         appfileops.Clipboard
-	status            string
-	search            searchState
-	placesStarted     bool
-	archivePromptOpen bool
-	archiveName       string
-	archiveSelectAll  bool
-	archiveBusy       bool
-	archiveOperation  string
-	archivePercent    float64
-	archiveProgress   progress.Model
+	width, height  int
+	styles         Styles
+	data           browser.Data
+	previewPool    *PreviewPool
+	searchPool     *SearchPool
+	visualState    *browser.VisualState
+	backHistory    []historyEntry
+	forwardHistory []historyEntry
+	prefetchSeq    int
+	lastClickPath  string
+	lastClickAt    time.Time
+	drag           dragState
+	clipboard      appfileops.Clipboard
+	status         string
+	search         searchState
+	placesStarted  bool
+	archive        archiveState
 }
 
 const doubleClickWindow = 500 * time.Millisecond
@@ -57,7 +50,7 @@ func New(t theme.Theme) Model {
 	bar := progress.New(progress.WithDefaultGradient())
 	bar.Width = 12
 	bar.ShowPercentage = false
-	return Model{width: 120, height: 32, styles: NewStyles(t), previewPool: NewPreviewPool(svc, 2), searchPool: NewSearchPool(), visualState: &browser.VisualState{}, data: browser.Data{Selected: -1, PreviewSelected: -1}, archiveProgress: bar}
+	return Model{width: 120, height: 32, styles: NewStyles(t), previewPool: NewPreviewPool(svc, 2), searchPool: NewSearchPool(), visualState: &browser.VisualState{}, data: browser.Data{Selected: -1, PreviewSelected: -1}, archive: archiveState{progress: bar}}
 }
 
 func (m Model) WithDragOutput(output io.Writer) Model {
@@ -137,18 +130,18 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return m, loadDirectory(message.destination, message.selectedPath)
 		}
 	case archiveMsg:
-		m.archiveBusy = false
-		m.archiveOperation = ""
-		m.archivePercent = 0
+		m.archive.busy = false
+		m.archive.operation = ""
+		m.archive.percent = 0
 		m.status = message.statusText()
 		if message.err == nil && filepath.Dir(message.output) == m.data.CWD {
 			return m, loadDirectory(m.data.CWD, message.output)
 		}
 	case archiveProgressMsg:
-		m.archivePercent = message.percent
+		m.archive.percent = message.percent
 		return m, waitArchive(message.stream)
 	case tea.MouseMsg:
-		if m.archivePromptOpen {
+		if m.archive.promptOpen {
 			return m, nil
 		}
 		if m.search.open {
@@ -187,7 +180,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	case kittydnd.Event:
 		return m.handleDndEvent(message)
 	case tea.KeyMsg:
-		if m.archivePromptOpen {
+		if m.archive.promptOpen {
 			return m.handleArchivePromptKey(message)
 		}
 		if m.search.open {
@@ -309,7 +302,7 @@ func (m Model) goParent() (tea.Model, tea.Cmd) {
 func (m Model) cyclePlace(delta int) (tea.Model, tea.Cmd) {
 	paths := make([]string, 0, len(m.data.Places))
 	for _, row := range m.data.Places {
-		if item := row.GetItem(); item != nil {
+		if item := row.Item; item != nil {
 			paths = append(paths, item.Path)
 		}
 	}
@@ -543,7 +536,7 @@ func (m Model) View() string {
 	browserData := m.data
 	browserData.OperationPath = m.clipboard.Source
 	browserData.OperationCut = m.clipboard.Operation == fsfileops.Move
-	body := browser.Render(bodyWidth, bodyHeight, m.visualState, os.Stdout, m.styles.Browser, browserData)
+	body := browser.Render(bodyWidth, bodyHeight, m.visualState, m.styles.Browser, browserData)
 	operation := m.clipboardStatus()
 	if archiveStatus := m.archiveStatus(); archiveStatus != "" {
 		operation = archiveStatus
@@ -554,7 +547,7 @@ func (m Model) View() string {
 		m.visualState.Clear()
 		return m.renderSearch(view)
 	}
-	if m.archivePromptOpen {
+	if m.archive.promptOpen {
 		m.visualState.Clear()
 		return m.renderArchivePrompt(view)
 	}

@@ -130,7 +130,7 @@ func (s *Service) renderAVIF(ctx context.Context, path, cacheKey string, targetS
 	case s.tools.ImageMagick != "":
 		preview, err = s.imageMagickStill(ctx, path, targetSize)
 	case s.tools.FFmpeg != "":
-		preview, err = s.ffmpegStill(ctx, path, targetSize)
+		preview, err = s.ffmpegStill(ctx, path, targetSize, true)
 	default:
 		return nil, fmt.Errorf("AVIF preview: %w", ToolUnavailable("imagemagick"))
 	}

@@ -39,6 +39,9 @@ type RenderedImage struct {
 
 type ImageRenderer interface {
 	Supported() bool
+	// Persistent reports whether placed images survive text being redrawn over
+	// them. Kitty keeps images on their own layer; Sixel pixels are overwritten.
+	Persistent() bool
 	Place(preview.Image, Placement) (RenderedImage, error)
 	// Move re-positions an already placed image without re-sending its data
 	// where the protocol allows it.
@@ -66,6 +69,8 @@ func NewKittyWithSupport(writer io.Writer, supported bool) *Kitty {
 func IsKittyTerminal() bool {
 	return os.Getenv("KITTY_WINDOW_ID") != "" || strings.EqualFold(os.Getenv("TERM"), "xterm-kitty")
 }
+
+func (*Kitty) Persistent() bool { return true }
 
 func (k *Kitty) Supported() bool {
 	return k != nil && k.supported && k.writer != nil

@@ -215,8 +215,11 @@ func iconFor(entry core.Entry) icons.Style {
 		}
 		return icons.Folders["folder"]
 	}
-	// what is the code below for? it is
 	name := strings.ToLower(entry.Name)
+	// Some icons are keyed by full file name, such as gruntfile.js or jenkinsfile.
+	if icon, ok := icons.Icons[name]; ok {
+		return icon
+	}
 	key := name
 	if alias, ok := icons.Aliases[key]; ok {
 		key = alias

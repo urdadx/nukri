@@ -32,14 +32,15 @@ func run() int {
 	}
 	icons.InitIcon(true, selectedTheme.DirectoryIconColor)
 	model := ui.New(selectedTheme)
-	options := []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseCellMotion()}
+	output := model.TerminalOutput(os.Stdout)
+	options := []tea.ProgramOption{tea.WithOutput(output), tea.WithAltScreen(), tea.WithMouseCellMotion()}
 	var input *kittydnd.Input
 	if runtime := kittydnd.DetectRuntime(); runtime.Enabled {
 		input, err = kittydnd.OpenInput()
 		if err == nil {
 			defer input.Close()
 			options = append(options, tea.WithInput(input))
-			model = model.WithDragOutput(os.Stdout)
+			model = model.WithDragOutput(output)
 			_, _ = os.Stdout.WriteString(kittydnd.EnableSequence(runtime.MachineID))
 			defer os.Stdout.WriteString(kittydnd.DisableSequence())
 		}

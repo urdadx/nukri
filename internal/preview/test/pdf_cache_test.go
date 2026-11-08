@@ -205,3 +205,40 @@ func TestOfficePreviewServesFromDiskCache(t *testing.T) {
 		t.Fatalf("cached office preview took %v", elapsed)
 	}
 }
+
+// A revisited video comes from the disk cache: no ffprobe or ffmpeg run.
+func TestVideoPreviewServesFromDiskCache(t *testing.T) {
+	service := preview.NewService()
+	requireCapability(t, service.Capabilities().Video, "ffprobe and ffmpeg")
+	path := writeVideoSample(t)
+	src, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts := fileinfo.InspectPath(path, core.File)
+	render := func() *preview.VideoPreview {
+		t.Helper()
+		result, err := service.Render(context.Background(), preview.Request{Path: path, Facts: facts, Width: 20})
+		if err != nil {
+			t.Fatalf("render: %v", err)
+		}
+		return result.(*preview.VideoPreview)
+	}
+	first := render()
+
+	// Same size and modification time but undecodable content: only a cache hit
+	// can still produce the preview.
+	if err := os.WriteFile(path, make([]byte, src.Size()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(path, src.ModTime(), src.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	second := render()
+	if string(second.Frame.Data) != string(first.Frame.Data) || second.Video != first.Video {
+		t.Fatal("cached video preview differs from the first render")
+	}
+	if len(second.Metadata) == 0 {
+		t.Fatal("cached video preview lost its metadata fields")
+	}
+}

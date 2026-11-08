@@ -1,8 +1,11 @@
 package test
 
 import (
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/urdadx/nukri/internal/theme"
@@ -53,6 +56,19 @@ func TestNamedThemeRejectsPaths(t *testing.T) {
 	for _, name := range []string{"", "..", "../../etc/passwd", "a/b", "missing"} {
 		if _, err := theme.Named(name, t.TempDir(), nukriconfig.Themes); err == nil {
 			t.Errorf("Named(%q) succeeded", name)
+		}
+	}
+}
+
+func TestEveryBundledThemeLoads(t *testing.T) {
+	files, err := fs.Glob(nukriconfig.Themes, "themes/*.toml")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no bundled themes: %v", err)
+	}
+	for _, file := range files {
+		name := strings.TrimSuffix(path.Base(file), ".toml")
+		if _, err := theme.Named(name, "", nukriconfig.Themes); err != nil {
+			t.Errorf("theme %s: %v", name, err)
 		}
 	}
 }

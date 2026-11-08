@@ -11,9 +11,6 @@ func TestInitIconRestoresNerdFontIcons(t *testing.T) {
 	if icons.Home != "" || icons.Desktop != "" || icons.Trash != "" || icons.LinkedPlace != "" || icons.RemovableDevice != "" {
 		t.Fatal("sidebar Nerd Font icons were not disabled")
 	}
-	if icons.CheckboxEmpty != "[ ]" || icons.CheckboxChecked != "[x]" {
-		t.Fatal("ASCII checkbox fallbacks were not configured")
-	}
 
 	icons.InitIcon(true, "")
 	if icons.Home == "" || icons.Desktop == "" || icons.Trash == "" || icons.LinkedPlace == "" || icons.RemovableDevice == "" {

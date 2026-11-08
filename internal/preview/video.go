@@ -1,40 +1,111 @@
 package preview
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"image/png"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 )
 
+/*
+renderVideo shows a frame from 10% into the video (at most 30s in) plus its
+metadata. Each external tool costs a few hundred milliseconds just to start, so:
+
+  - the result is cached on disk by file identity and pane size, so a revisit
+    runs no tools;
+  - the frame for long videos is grabbed while ffprobe is still running. Any
+    video of five minutes or more uses the 30s cap, so that frame is started
+    speculatively and kept when the duration confirms it.
+*/
 func (s *Service) renderVideo(ctx context.Context, path string, cellWidth int) (*VideoPreview, error) {
 	if s.tools.FFProbe == "" || s.tools.FFmpeg == "" {
 		return nil, fmt.Errorf("video preview: %w", ToolUnavailable("ffprobe/ffmpeg"))
 	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("stat video: %w", err)
+	}
+	targetSize := s.imageTargetSize(cellWidth)
+	cacheKey := s.imageCache.Key(path, info.Size(), info.ModTime(), targetSize)
+	if cached, ok := s.cachedVideo(cacheKey); ok {
+		return cached, nil
+	}
+
+	speculative, cancelSpeculative := context.WithCancel(ctx)
+	defer cancelSpeculative()
+	type frameResult struct {
+		image Image
+		err   error
+	}
+	guess := make(chan frameResult, 1)
+	go func() {
+		image, err := s.renderVideoFrame(speculative, path, videoFrameCap, targetSize)
+		guess <- frameResult{image, err}
+	}()
+
+	video, err := s.probeVideo(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	var image Image
+	if timestamp := videoFrameTime(video.Duration); timestamp == videoFrameCap {
+		result := <-guess
+		image, err = result.image, result.err
+	} else {
+		cancelSpeculative()
+		image, err = s.renderVideoFrame(ctx, path, timestamp, targetSize)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if encoded, err := json.Marshal(video); err == nil {
+		s.imageCache.Put(cacheKey, image.Data, image.Width, image.Height, "video", video.Width, video.Height, info.Size(), encoded)
+	}
+	return &VideoPreview{Video: video, Frame: image, Metadata: videoFields(video)}, nil
+}
+
+func (s *Service) cachedVideo(cacheKey string) (*VideoPreview, bool) {
+	cached, ok := s.imageCache.Get(cacheKey)
+	if !ok {
+		return nil, false
+	}
+	var video Video
+	if err := json.Unmarshal(cached.Metadata, &video); err != nil {
+		return nil, false
+	}
+	frame := Image{MediaType: "image/png", Data: cached.Data, Width: cached.Width, Height: cached.Height}
+	return &VideoPreview{Video: video, Frame: frame, Metadata: videoFields(video)}, true
+}
+
+func (s *Service) probeVideo(ctx context.Context, path string) (Video, error) {
 	output, err := runCommand(ctx, 1<<20, s.tools.FFProbe,
 		"-v", "error", "-show_format", "-show_streams", "-of", "json", path,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("inspect video: %w", err)
+		return Video{}, fmt.Errorf("inspect video: %w", err)
 	}
 	var probe ffprobeResult
 	if err := json.Unmarshal(output, &probe); err != nil {
-		return nil, fmt.Errorf("decode video metadata: %w", err)
+		return Video{}, fmt.Errorf("decode video metadata: %w", err)
 	}
 	videoStream, audioStreams, ok := selectVideoStreams(probe.Streams)
 	if !ok {
-		return nil, fmt.Errorf("inspect video: no video stream")
+		return Video{}, fmt.Errorf("inspect video: no video stream")
 	}
-	video := videoMetadata(probe.Format, videoStream, audioStreams)
-	image, err := s.renderVideoFrame(ctx, path, video.Duration, s.imageTargetSize(cellWidth))
-	if err != nil {
-		return nil, err
-	}
-	fields := videoFields(video)
-	return &VideoPreview{Video: video, Frame: image, Metadata: fields}, nil
+	return videoMetadata(probe.Format, videoStream, audioStreams), nil
+}
+
+// videoFrameCap is the latest point a preview frame is taken from, in seconds.
+const videoFrameCap = 30.0
+
+// videoFrameTime picks the preview frame: 10% in, skipping intros and fades,
+// but no later than videoFrameCap.
+func videoFrameTime(duration float64) float64 {
+	return min(max(duration*0.1, 0), videoFrameCap)
 }
 
 func selectVideoStreams(streams []ffprobeStream) (ffprobeStream, []ffprobeStream, bool) {
@@ -81,39 +152,53 @@ func videoMetadata(format ffprobeFormat, stream ffprobeStream, audioStreams []ff
 	}
 }
 
-func (s *Service) renderVideoFrame(ctx context.Context, path string, duration float64, targetSize int) (Image, error) {
-	timestamp := duration * 0.1
-	if timestamp > 30 {
-		timestamp = 30
+func (s *Service) renderVideoFrame(ctx context.Context, path string, timestamp float64, targetSize int) (Image, error) {
+	seek := []string{"-ss", strconv.FormatFloat(timestamp, 'f', 3, 64)}
+	image, err := s.ffmpegStill(ctx, path, targetSize, true, seek...)
+	if err != nil && ctx.Err() == nil {
+		// Some streams have no keyframe near the seek point; decode exactly.
+		image, err = s.ffmpegStill(ctx, path, targetSize, false, seek...)
 	}
-	if timestamp < 0 {
-		timestamp = 0
-	}
-	image, err := s.ffmpegStill(ctx, path, targetSize, "-ss", strconv.FormatFloat(timestamp, 'f', 3, 64))
 	if err != nil {
 		return Image{}, fmt.Errorf("render video frame: %w", err)
 	}
 	return image, nil
 }
 
-// ffmpegStill decodes the first frame of path (after inputArguments, such as a
-// seek) into a PNG no larger than targetSize on either side.
-func (s *Service) ffmpegStill(ctx context.Context, path string, targetSize int, inputArguments ...string) (Image, error) {
-	directory, err := os.MkdirTemp("", "nukri-frame-*")
-	if err != nil {
-		return Image{}, fmt.Errorf("create frame directory: %w", err)
+/*
+ffmpegStill decodes one frame of path (after inputArguments, such as a seek)
+into a PNG no larger than targetSize on either side. It is tuned for a single
+frame: one decoder thread avoids frame-threading delay, and the PNG is piped
+back with light compression rather than written to a temporary file. With
+keyframe set, a seek lands on the nearest keyframe and only keyframes are
+decoded, instead of every frame from the keyframe up to the exact time.
+*/
+func (s *Service) ffmpegStill(ctx context.Context, path string, targetSize int, keyframe bool, inputArguments ...string) (Image, error) {
+	arguments := []string{"-v", "error", "-nostdin", "-threads", "1"}
+	if keyframe {
+		arguments = append(arguments, "-noaccurate_seek")
 	}
-	defer os.RemoveAll(directory)
-	output := filepath.Join(directory, "frame.png")
-	arguments := append([]string{"-v", "error", "-nostdin", "-y"}, inputArguments...)
+	arguments = append(arguments, inputArguments...)
+	if keyframe {
+		arguments = append(arguments, "-skip_frame", "nokey")
+	}
 	arguments = append(arguments,
 		"-i", path, "-map", "0:v:0", "-frames:v", "1", "-an",
-		"-vf", fmt.Sprintf("scale=min(%d\\,iw):min(%d\\,ih):force_original_aspect_ratio=decrease", targetSize, targetSize), output,
+		"-vf", fmt.Sprintf("scale=min(%d\\,iw):min(%d\\,ih):force_original_aspect_ratio=decrease", targetSize, targetSize),
+		"-f", "image2pipe", "-c:v", "png", "-compression_level", "1", "-",
 	)
-	if _, err := runCommand(ctx, 64<<10, s.tools.FFmpeg, arguments...); err != nil {
+	output, err := runCommand(ctx, s.maxImageBytes, s.tools.FFmpeg, arguments...)
+	if err != nil {
 		return Image{}, err
 	}
-	return readPNG(output, s.maxImageBytes, s.maxImageDimension)
+	config, err := png.DecodeConfig(bytes.NewReader(output))
+	if err != nil {
+		return Image{}, fmt.Errorf("no frame decoded: %w", err)
+	}
+	if config.Width > s.maxImageDimension || config.Height > s.maxImageDimension {
+		return Image{}, ErrOutputTooLarge
+	}
+	return Image{MediaType: "image/png", Data: output, Width: config.Width, Height: config.Height}, nil
 }
 
 func videoFields(video Video) []Field {

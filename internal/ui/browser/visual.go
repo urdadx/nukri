@@ -2,71 +2,100 @@ package browser
 
 import (
 	"io"
+	"sync"
 
 	"github.com/urdadx/nukri/internal/preview"
 	"github.com/urdadx/nukri/internal/preview/image_protocols"
 )
 
-// VisualState caches the terminal image renderer and the last transmitted image
-// so that unchanged selections are not re-encoded or re-transmitted every frame.
-// Reuse of the same renderer instance also keeps the Kitty image ID stable, so a
-// retransmit overwrites the previous placement instead of allocating a new slot.
+/*
+VisualState tracks the preview image. Rendering only records where the image
+should be (Show, Clear); Flush writes the protocol sequences, called by the
+terminal output right after bubbletea writes a frame. That keeps View free of
+I/O, keeps image bytes from interleaving with frame output, and draws images
+after the text they sit on.
+
+The last placed image is remembered so an unchanged image isn't re-sent, and a
+moved one is re-placed rather than re-transmitted where the protocol allows.
+*/
 type VisualState struct {
+	mu       sync.Mutex
 	renderer image_protocols.ImageRenderer
-	last     image_protocols.RenderedImage
-	data     *byte // identity of the placed image's bytes; see sameImageData
-	size     int
-	x, y     int
-	columns  int
-	rows     int
-	placed   bool
+
+	// What the last render asked for.
+	want      *preview.Image
+	wantPlace image_protocols.Placement
+
+	// What is on screen.
+	last   image_protocols.RenderedImage
+	data   *byte // identity of the placed image's bytes; see sameImageData
+	size   int
+	place  image_protocols.Placement
+	placed bool
 }
 
-// renderVisual transmits the given image only when it differs from the last
-// placed image (by content and pane geometry). When unchanged it performs no
-// work.
-func (s *VisualState) renderVisual(writer io.Writer, image *preview.Image, x, y, columns, rows int) {
-	if image == nil || writer == nil {
-		return
-	}
-	if s.placed && s.sameImageData(image.Data) && s.x == x && s.y == y && s.columns == columns && s.rows == rows {
-		return
-	}
-	if s.renderer == nil {
-		s.renderer = image_protocols.NewRenderer(writer)
-		if !s.renderer.Supported() {
-			s.placed = false
-			return
-		}
-	}
-	placement := image_protocols.Placement{X: x, Y: y, Columns: columns, Rows: rows}
-	// Same image at a new position or size: move it instead of re-sending it.
-	if s.placed && s.sameImageData(image.Data) && s.last.ImageID != 0 {
-		if moved, err := s.renderer.Move(s.last, placement); err == nil {
-			s.last = moved
-			s.x, s.y, s.columns, s.rows = x, y, columns, rows
-			return
-		}
-	}
-	if s.last.ImageID != 0 {
-		_ = s.renderer.Delete(s.last)
-	}
-	placed, err := s.renderer.Place(*image, placement)
-	if err != nil {
-		s.placed = false
-		return
-	}
-	s.last = placed
-	s.data, s.size = dataIdentity(image.Data)
-	s.x, s.y, s.columns, s.rows = x, y, columns, rows
-	s.placed = true
+// Show asks for image to be drawn at the given cells on the next flush.
+func (s *VisualState) Show(image *preview.Image, x, y, columns, rows int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.want = image
+	s.wantPlace = image_protocols.Placement{X: x, Y: y, Columns: columns, Rows: rows}
 }
 
-// Clear deletes any placed image and drops cached state.
+// Clear asks for the image to be removed on the next flush.
 func (s *VisualState) Clear() {
-	if s.renderer != nil && s.last.ImageID != 0 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.want = nil
+}
+
+/*
+Flush brings the terminal in line with the last Show or Clear, writing to
+terminal. It runs after each frame is written: an unchanged image costs nothing,
+except with protocols whose images the frame's text can overwrite, which are
+redrawn.
+*/
+func (s *VisualState) Flush(terminal io.Writer) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.renderer == nil {
+		s.renderer = image_protocols.NewRenderer(terminal)
+	}
+	if !s.renderer.Supported() {
+		return
+	}
+	if s.want == nil || len(s.want.Data) == 0 {
+		if s.placed {
+			_ = s.renderer.Delete(s.last)
+		}
+		s.forget()
+		return
+	}
+	same := s.placed && s.sameImageData(s.want.Data)
+	if same && s.place == s.wantPlace && s.renderer.Persistent() {
+		return
+	}
+	// Same image at a new position or size (or one that needs redrawing): move
+	// it instead of re-sending it.
+	if same {
+		if moved, err := s.renderer.Move(s.last, s.wantPlace); err == nil {
+			s.last, s.place = moved, s.wantPlace
+			return
+		}
+	}
+	if s.placed {
 		_ = s.renderer.Delete(s.last)
 	}
+	placed, err := s.renderer.Place(*s.want, s.wantPlace)
+	if err != nil {
+		s.forget()
+		return
+	}
+	s.last, s.place, s.placed = placed, s.wantPlace, true
+	s.data, s.size = dataIdentity(s.want.Data)
+}
+
+func (s *VisualState) forget() {
 	s.last = image_protocols.RenderedImage{}
 	s.data, s.size = nil, 0
 	s.placed = false

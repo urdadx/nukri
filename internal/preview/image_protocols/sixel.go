@@ -64,6 +64,8 @@ func IsSixelTerminal() bool {
 		strings.Contains(program, "wezterm")
 }
 
+func (*Sixel) Persistent() bool { return false }
+
 func (s *Sixel) Supported() bool {
 	return s != nil && s.supported && s.writer != nil
 }

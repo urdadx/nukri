@@ -20,6 +20,7 @@ type progressTracker struct {
 	progress Progress
 	next     int64
 	report   func(Progress)
+	buffer   []byte // copy buffer shared by every file in the archive
 }
 
 // Create writes sources to destination. In-tree symlinks to regular files are
@@ -75,6 +76,11 @@ func CreateWithProgress(destination string, sources []string, report func(Progre
 		err = writeZIP(stage, sources, tracker)
 	case TAR, TARGZ:
 		err = writeTAR(stage, sources, format == TARGZ, tracker)
+	}
+	// Flush to disk before the rename publishes it, so a crash can't leave a
+	// truncated archive under the final name.
+	if err == nil {
+		err = stage.Sync()
 	}
 	if closeErr := stage.Close(); err == nil {
 		err = closeErr
@@ -178,6 +184,8 @@ func writeZIP(output io.Writer, sources []string, progress *progressTracker) err
 		header.Name = name
 		if info.IsDir() {
 			header.Name += "/"
+		} else if alreadyCompressed(name) {
+			header.Method = zip.Store
 		} else {
 			header.Method = zip.Deflate
 		}
@@ -233,8 +241,25 @@ func writeTAR(output io.Writer, sources []string, compressed bool, progress *pro
 	return err
 }
 
+// alreadyCompressed reports whether name is a format that deflate can't shrink,
+// so storing it saves CPU for no loss.
+func alreadyCompressed(name string) bool {
+	switch strings.ToLower(strings.TrimPrefix(filepath.Ext(name), ".")) {
+	case "zip", "gz", "tgz", "bz2", "xz", "zst", "7z", "rar", "jar", "apk",
+		"jpg", "jpeg", "png", "gif", "webp", "avif", "heic",
+		"mp3", "m4a", "ogg", "opus", "flac", "aac",
+		"mp4", "mkv", "mov", "webm", "avi",
+		"pdf", "docx", "xlsx", "pptx", "odt", "ods", "odp", "epub", "woff", "woff2":
+		return true
+	}
+	return false
+}
+
 func copyWithProgress(destination io.Writer, source io.Reader, progress *progressTracker) error {
-	buffer := make([]byte, 256*1024)
+	if progress.buffer == nil {
+		progress.buffer = make([]byte, 256<<10)
+	}
+	buffer := progress.buffer
 	for {
 		read, readErr := source.Read(buffer)
 		if read > 0 {

@@ -20,7 +20,8 @@ func NewRenderer(writer io.Writer) ImageRenderer {
 
 type unsupportedRenderer struct{}
 
-func (*unsupportedRenderer) Supported() bool { return false }
+func (*unsupportedRenderer) Supported() bool  { return false }
+func (*unsupportedRenderer) Persistent() bool { return true }
 
 func (*unsupportedRenderer) Place(_ preview.Image, _ Placement) (RenderedImage, error) {
 	return RenderedImage{}, ErrUnsupportedTerminal
