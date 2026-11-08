@@ -1,8 +1,11 @@
 package test
 
 import (
+	"bytes"
 	"encoding/base64"
+	"io"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/urdadx/nukri/internal/kittydnd"
@@ -62,5 +65,29 @@ func TestDropResponseSequences(t *testing.T) {
 	}
 	if got := kittydnd.FinishDropSequence(kittydnd.Copy); got != "\x1b]72;t=r:o=1\x1b\\" {
 		t.Fatalf("finish sequence = %q", got)
+	}
+}
+
+// An OSC 72 introducer that never terminates must not swallow keyboard input
+// forever: once it outgrows any valid drop it is dropped and input flows again.
+func TestFilterInputRecoversFromUnterminatedSequence(t *testing.T) {
+	junk := strings.Repeat("A", 23<<20) // longer than any valid drop sequence
+	src := strings.NewReader("ab\x1b]72;" + junk + "q")
+	var dst bytes.Buffer
+	events := make(chan kittydnd.Event, 1)
+	kittydnd.FilterInput(src, &dst, events)
+	output := dst.String()
+	if !strings.HasPrefix(output, "ab") || !strings.HasSuffix(output, "q") {
+		t.Fatalf("keyboard input around the sequence was lost: %d bytes, ends %q", len(output), output[max(0, len(output)-5):])
+	}
+}
+
+func TestFilterInputExtractsSequenceSplitAcrossReads(t *testing.T) {
+	sequence := kittydnd.RejectDropSequence() // any well-formed OSC 72 sequence
+	src := io.MultiReader(strings.NewReader("x"+sequence[:3]), strings.NewReader(sequence[3:]+"y"))
+	var dst bytes.Buffer
+	kittydnd.FilterInput(src, &dst, make(chan kittydnd.Event, 4))
+	if dst.String() != "xy" {
+		t.Fatalf("output = %q, want the sequence removed", dst.String())
 	}
 }

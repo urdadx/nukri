@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"time"
 )
 
 type limitedBuffer struct {
@@ -25,7 +26,20 @@ func (w *limitedBuffer) Write(value []byte) (int, error) {
 	return w.buffer.Write(value)
 }
 
+// Preview tools are killed after these limits, so a hung tool can't hold a
+// preview worker. Document conversions start a whole office suite and get longer.
+const (
+	toolTimeout       = 15 * time.Second
+	conversionTimeout = 60 * time.Second
+)
+
 func runCommand(ctx context.Context, outputLimit int64, executable string, arguments ...string) ([]byte, error) {
+	return runCommandWithTimeout(ctx, toolTimeout, outputLimit, executable, arguments...)
+}
+
+func runCommandWithTimeout(parent context.Context, timeout time.Duration, outputLimit int64, executable string, arguments ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	defer cancel()
 	stdout := &limitedBuffer{limit: outputLimit}
 	stderr := &limitedBuffer{limit: 64 << 10}
 	command := exec.CommandContext(ctx, executable, arguments...)
@@ -36,8 +50,11 @@ func runCommand(ctx context.Context, outputLimit int64, executable string, argum
 		return nil, ErrOutputTooLarge
 	}
 	if err != nil {
-		if contextError := ctx.Err(); contextError != nil {
-			return nil, contextError
+		if parentError := parent.Err(); parentError != nil {
+			return nil, parentError
+		}
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("%s timed out after %v", executable, timeout)
 		}
 		message := bytes.TrimSpace(stderr.buffer.Bytes())
 		if len(message) != 0 {

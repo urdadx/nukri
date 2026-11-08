@@ -1,6 +1,7 @@
 package test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -170,5 +171,30 @@ func TestPreviewPoolRevisitAfterCancelGetsRealPreview(t *testing.T) {
 		// Change the size so the next round misses the cache.
 		a.Entry.Size++
 		b.Entry.Size++
+	}
+}
+
+// Revisiting a preview keeps it cached; the least recently used one is evicted
+// once the cache is full.
+func TestPreviewPoolEvictsLeastRecentlyUsed(t *testing.T) {
+	pool := ui.NewPreviewPool(preview.NewService(), 2)
+	defer pool.Close()
+
+	const limit = 64
+	entries := make([]browser.Entry, limit+1)
+	for i := range entries {
+		entries[i] = poolTestEntry(t, fmt.Sprintf("file %d\n", i))
+	}
+	for _, entry := range entries[:limit] {
+		expectMessage(t, pool.Submit(entry, 60, "", 0, true))
+	}
+	expectMessage(t, pool.Submit(entries[0], 60, "", 0, true)) // use the oldest again
+	expectMessage(t, pool.Submit(entries[limit], 60, "", 0, true))
+
+	if !pool.Cached(ui.PreviewKey(entries[0], 60, "", 0)) {
+		t.Fatal("recently used preview was evicted")
+	}
+	if pool.Cached(ui.PreviewKey(entries[1], 60, "", 0)) {
+		t.Fatal("least recently used preview should have been evicted")
 	}
 }

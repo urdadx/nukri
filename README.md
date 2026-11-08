@@ -15,7 +15,8 @@ install. Everything else works without them.
 
 | Preview | Tool | Debian / Ubuntu | Arch |
 |---|---|---|---|
-| Video frames, audio waveforms, AVIF images | `ffmpeg`, `ffprobe` | `ffmpeg` | `ffmpeg` |
+| Video frames, audio waveforms | `ffmpeg`, `ffprobe` | `ffmpeg` | `ffmpeg` |
+| AVIF images | `magick` or `convert` (ffmpeg 6+ also works) | `imagemagick` | `imagemagick` |
 | SVG images | `rsvg-convert` | `librsvg2-bin` | `librsvg` |
 | PDF pages | `pdftocairo`, `pdfinfo` | `poppler-utils` | `poppler` |
 | Office documents (docx, xlsx, pptx, odt, …) | `libreoffice` + the PDF tools | `libreoffice` | `libreoffice-fresh` |

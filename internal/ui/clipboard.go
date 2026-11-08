@@ -4,24 +4,8 @@ import (
 	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/urdadx/nukri/internal/config/keys"
 	"github.com/urdadx/nukri/internal/fs/fileops"
 )
-
-func (m Model) handleFileAction(action keys.Action) (tea.Model, tea.Cmd) {
-	switch action {
-	case keys.ActionCopy:
-		return m.copySelected()
-	case keys.ActionCut:
-		return m.cutSelected()
-	case keys.ActionPaste:
-		return m.pasteClipboard()
-	case keys.ActionCancelClipboard:
-		return m.cancelClipboard()
-	default:
-		return m, nil
-	}
-}
 
 func (m Model) cancelClipboard() (tea.Model, tea.Cmd) {
 	if m.clipboard.Empty() {

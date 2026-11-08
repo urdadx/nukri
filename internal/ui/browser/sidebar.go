@@ -3,11 +3,41 @@ package browser
 import (
 	"strings"
 
+	"github.com/urdadx/nukri/internal/core"
+
 	"github.com/charmbracelet/lipgloss"
 )
 
+// sidebarCompact reports whether the sidebar is too narrow for titles and
+// section headings, showing icons only.
+func sidebarCompact(width int) bool { return width <= 5 }
+
+// SidebarPathAt returns the path of the place drawn on content row row of a
+// sidebar width cells wide, or "" when that row holds no place.
+func SidebarPathAt(width int, places []core.SidebarRow, row int) string {
+	compact := sidebarCompact(width)
+	rendered := 0
+	for _, place := range places {
+		if place.Section != "" {
+			if !compact {
+				rendered++
+			}
+			continue
+		}
+		item := place.GetItem()
+		if item == nil {
+			continue // not drawn, see RenderSidebar
+		}
+		if rendered == row {
+			return item.Path
+		}
+		rendered++
+	}
+	return ""
+}
+
 func RenderSidebar(width, height int, s Styles, data Data) string {
-	compact := width <= 5
+	compact := sidebarCompact(width)
 	content := make([]string, 0, len(data.Places)+1)
 	sectionStyle := lipgloss.NewStyle().Foreground(s.SidebarTitle).Background(s.SidebarBG).Bold(true)
 	rowStyle := lipgloss.NewStyle().Foreground(s.SidebarFG).Background(s.SidebarBG)

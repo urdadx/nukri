@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"container/list"
 	"context"
 	"errors"
 	"fmt"
@@ -65,8 +66,9 @@ type PreviewPool struct {
 	active map[string]*previewJob
 
 	cacheMu    sync.Mutex
-	cache      map[string]tea.Msg
-	cacheOrder []string
+	cache      map[string]*list.Element // of *previewCacheEntry
+	cacheOrder *list.List               // most recently used first
+	cacheBytes int
 
 	done chan struct{}
 	wg   sync.WaitGroup
@@ -74,6 +76,9 @@ type PreviewPool struct {
 
 const (
 	previewCacheLimit = 64
+	// previewCacheBytes bounds the cache by size too: image and PDF previews
+	// carry their PNG data, so 64 of them could otherwise hold hundreds of MB.
+	previewCacheBytes = 96 << 20
 	previewQueueDepth = 128
 )
 
@@ -83,12 +88,13 @@ func NewPreviewPool(svc *preview.Service, workers int) *PreviewPool {
 		workers = 1
 	}
 	p := &PreviewPool{
-		svc:    svc,
-		high:   make(chan *previewJob, previewQueueDepth),
-		low:    make(chan *previewJob, previewQueueDepth),
-		active: make(map[string]*previewJob),
-		cache:  make(map[string]tea.Msg),
-		done:   make(chan struct{}),
+		svc:        svc,
+		high:       make(chan *previewJob, previewQueueDepth),
+		low:        make(chan *previewJob, previewQueueDepth),
+		active:     make(map[string]*previewJob),
+		cache:      make(map[string]*list.Element),
+		cacheOrder: list.New(),
+		done:       make(chan struct{}),
 	}
 	if workers > 1 {
 		p.wg.Add(1)
@@ -287,36 +293,72 @@ func (p *PreviewPool) forget(job *previewJob) {
 	p.mu.Unlock()
 }
 
+type previewCacheEntry struct {
+	key  string
+	msg  tea.Msg
+	size int
+}
+
 func (p *PreviewPool) lookup(key string) (tea.Msg, bool) {
 	p.cacheMu.Lock()
 	defer p.cacheMu.Unlock()
-	msg, ok := p.cache[key]
-	return msg, ok
+	element, ok := p.cache[key]
+	if !ok {
+		return nil, false
+	}
+	p.cacheOrder.MoveToFront(element)
+	return element.Value.(*previewCacheEntry).msg, true
 }
 
-// store caches a preview message by its key in a simple LRU.
-// It is called only by a worker after the job has completed.
+// store caches a preview message by its key, evicting the least recently used
+// entries beyond the count and byte limits. It is called only by a worker after
+// the job has completed.
 func (p *PreviewPool) store(key string, msg tea.Msg) {
+	size := previewMsgSize(msg)
 	p.cacheMu.Lock()
 	defer p.cacheMu.Unlock()
-	if _, ok := p.cache[key]; ok {
-		// Refresh LRU position.
-		for i, k := range p.cacheOrder {
-			if k == key {
-				p.cacheOrder = append(p.cacheOrder[:i], p.cacheOrder[i+1:]...)
-				break
-			}
-		}
-		p.cacheOrder = append(p.cacheOrder, key)
+	if element, ok := p.cache[key]; ok {
+		p.cacheOrder.MoveToFront(element)
 		return
 	}
-	p.cache[key] = msg
-	p.cacheOrder = append(p.cacheOrder, key)
-	for len(p.cacheOrder) > previewCacheLimit {
-		old := p.cacheOrder[0]
-		p.cacheOrder = p.cacheOrder[1:]
-		delete(p.cache, old)
+	if size > previewCacheBytes {
+		return
 	}
+	p.cache[key] = p.cacheOrder.PushFront(&previewCacheEntry{key: key, msg: msg, size: size})
+	p.cacheBytes += size
+	for p.cacheOrder.Len() > previewCacheLimit || p.cacheBytes > previewCacheBytes {
+		oldest := p.cacheOrder.Back()
+		entry := oldest.Value.(*previewCacheEntry)
+		p.cacheOrder.Remove(oldest)
+		delete(p.cache, entry.key)
+		p.cacheBytes -= entry.size
+	}
+}
+
+// Cached reports whether a preview for key is in the cache, without counting
+// as a use.
+func (p *PreviewPool) Cached(key string) bool {
+	p.cacheMu.Lock()
+	defer p.cacheMu.Unlock()
+	_, ok := p.cache[key]
+	return ok
+}
+
+// previewMsgSize estimates the memory a cached preview holds.
+func previewMsgSize(msg tea.Msg) int {
+	preview, ok := msg.(previewMsg)
+	if !ok {
+		return 0
+	}
+	size := len(preview.view.Title) + len(preview.view.Detail) + len(preview.view.Footer)
+	for _, line := range preview.view.Lines {
+		size += len(line) + 16
+	}
+	if preview.view.Visual != nil {
+		size += len(preview.view.Visual.Data)
+	}
+	size += len(preview.entries) * 128
+	return size
 }
 
 /*

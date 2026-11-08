@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"time"
 )
 
@@ -26,7 +25,7 @@ const (
 
 func newImageCache(dir string) *imageCache {
 	if dir == "" {
-		dir = filepath.Join(os.TempDir(), "nukri-image-preview", imageCacheVersion)
+		dir = cacheDir("image-preview", imageCacheVersion)
 	}
 	return &imageCache{dir: dir, limit: imageCacheDefaultLimit}
 }
@@ -80,14 +79,18 @@ func (c *imageCache) Put(key string, data []byte, width, height int, format stri
 	if err := os.MkdirAll(c.dir, 0o755); err != nil {
 		return
 	}
-	_ = writeJSON(c.metaPath(key), cachedMeta{Width: width, Height: height, Format: format, SrcW: srcW, SrcH: srcH, Size: size, Metadata: metadata})
-	tmp := c.cachePath(key, 0, 0) + fmt.Sprintf(".tmp-%d", os.Getpid())
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		_ = os.Remove(tmp)
+	// Metadata goes first: Get treats a PNG without metadata as corrupt.
+	if writeJSON(c.metaPath(key), cachedMeta{Width: width, Height: height, Format: format, SrcW: srcW, SrcH: srcH, Size: size, Metadata: metadata}) != nil {
 		return
 	}
-	_ = os.Rename(tmp, c.cachePath(key, 0, 0))
-	c.evictIfNeeded()
+	if writeFileAtomic(c.cachePath(key, 0, 0), data) != nil {
+		return
+	}
+	evictOldest(c.dir, ".png", c.limit, imageCacheMaxBytes, func(name string) {
+		if key := trimCacheKey(name); key != "" {
+			_ = os.Remove(c.metaPath(key))
+		}
+	})
 }
 
 type cachedMeta struct {
@@ -128,47 +131,7 @@ func writeJSON(path string, value any) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
-}
-
-// evictIfNeeded removes the oldest entries when the number of cached images
-// exceeds the configured limit. Only PNG files matching our naming scheme are
-// counted, so unrelated files in the directory are left alone.
-func (c *imageCache) evictIfNeeded() {
-	entries, err := os.ReadDir(c.dir)
-	if err != nil {
-		return
-	}
-	var pngs []string
-	for _, entry := range entries {
-		if !entry.IsDir() && filepath.Ext(entry.Name()) == ".png" {
-			pngs = append(pngs, entry.Name())
-		}
-	}
-	if len(pngs) <= c.limit {
-		return
-	}
-	excess := len(pngs) - c.limit
-	sort.Slice(pngs, func(i, j int) bool {
-		ti, _ := fileInfoTime(c.dir, pngs[i])
-		tj, _ := fileInfoTime(c.dir, pngs[j])
-		return ti.Before(tj)
-	})
-	for _, name := range pngs[:excess] {
-		key := trimCacheKey(name)
-		_ = os.Remove(filepath.Join(c.dir, name))
-		if key != "" {
-			_ = os.Remove(c.metaPath(key))
-		}
-	}
-}
-
-func fileInfoTime(dir, name string) (time.Time, bool) {
-	info, err := os.Stat(filepath.Join(dir, name))
-	if err != nil {
-		return time.Time{}, false
-	}
-	return info.ModTime(), true
+	return writeFileAtomic(path, data)
 }
 
 func trimCacheKey(name string) string {

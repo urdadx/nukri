@@ -1,11 +1,15 @@
 package test
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
+	"hash/crc32"
 	"image"
 	"image/color"
 	"image/jpeg"
+	"image/png"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,11 +19,19 @@ import (
 	"github.com/urdadx/nukri/internal/preview"
 )
 
-// gradient.avif is a 320x200 AVIF; AVIF previews are decoded by ffmpeg.
+// gradient.avif is a 320x200 AVIF, decoded by ImageMagick (or ffmpeg).
 func TestRenderAVIFImagePreview(t *testing.T) {
 	service := preview.NewService()
-	requireCapability(t, service.Capabilities().AVIF, "ffmpeg")
-	path := "file_samples/gradient.avif"
+	requireCapability(t, service.Capabilities().AVIF, "imagemagick or ffmpeg")
+	// Copy to a fresh path so the on-disk image cache can't answer.
+	data, err := os.ReadFile("file_samples/gradient.avif")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "gradient.avif")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	facts := fileinfo.InspectPath(path, core.File)
 	if facts.BuiltinClass != core.FileClassImage {
 		t.Fatalf("expected AVIF to be classified as image, got %v", facts.BuiltinClass)
@@ -31,6 +43,9 @@ func TestRenderAVIFImagePreview(t *testing.T) {
 	image, ok := result.(*preview.ImagePreview)
 	if !ok {
 		t.Fatalf("expected *ImagePreview, got %T", result)
+	}
+	if image.Image.Width != 320 || image.Image.Height != 200 {
+		t.Fatalf("AVIF preview is %dx%d, want 320x200", image.Image.Width, image.Image.Height)
 	}
 	if image.Image.MediaType != "image/png" || len(image.Image.Data) == 0 {
 		t.Fatalf("expected PNG data for AVIF preview, got media=%q len=%d", image.Image.MediaType, len(image.Image.Data))
@@ -233,5 +248,29 @@ func TestImagePreviewServesFromDiskCache(t *testing.T) {
 	if second.Image.Width != first.Image.Width || second.Image.Height != first.Image.Height {
 		t.Fatalf("cached dimensions differ: first=%dx%d second=%dx%d",
 			first.Image.Width, first.Image.Height, second.Image.Width, second.Image.Height)
+	}
+}
+
+// A tiny PNG may declare enormous dimensions; it must be rejected before the
+// decoder allocates the full bitmap.
+func TestImagePreviewRejectsDecompressionBomb(t *testing.T) {
+	// A real PNG header (IHDR) declaring 100000x100000 pixels, with no image data.
+	var header bytes.Buffer
+	if err := png.Encode(&header, image.NewGray(image.Rect(0, 0, 1, 1))); err != nil {
+		t.Fatal(err)
+	}
+	data := header.Bytes()
+	// IHDR width and height live at bytes 16..23; the IHDR CRC follows.
+	binary.BigEndian.PutUint32(data[16:], 100_000)
+	binary.BigEndian.PutUint32(data[20:], 100_000)
+	binary.BigEndian.PutUint32(data[29:], crc32.ChecksumIEEE(data[12:29]))
+	path := filepath.Join(t.TempDir(), "bomb.png")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	facts := fileinfo.InspectPath(path, core.File)
+	_, err := preview.NewService().Render(context.Background(), preview.Request{Path: path, Facts: facts, Width: 40})
+	if !errors.Is(err, preview.ErrOutputTooLarge) {
+		t.Fatalf("error = %v, want ErrOutputTooLarge", err)
 	}
 }

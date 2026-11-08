@@ -14,6 +14,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/urdadx/nukri/internal/config/icons"
@@ -27,9 +28,29 @@ import (
 type loadedMsg struct {
 	cwd          string
 	selectedPath string
-	places       []core.SidebarRow
 	entries      []browser.Entry
 	err          error
+}
+
+// placesMsg carries freshly built sidebar rows.
+type placesMsg struct {
+	rows []core.SidebarRow
+}
+
+// placesRefreshInterval is how often the sidebar is rebuilt to pick up mounted
+// and unmounted devices.
+const placesRefreshInterval = 5 * time.Second
+
+// loadPlaces builds the sidebar off the UI loop. Building reads mount tables and
+// stats every place, so it runs at startup and on a timer, not per navigation.
+func loadPlaces() tea.Msg {
+	return placesMsg{rows: places.BuildSidebarRows()}
+}
+
+// refreshPlaces schedules the next sidebar rebuild. It is only re-armed after a
+// rebuild finishes, so a slow mount can't stack up rebuilds.
+func refreshPlaces() tea.Cmd {
+	return tea.Tick(placesRefreshInterval, func(time.Time) tea.Msg { return loadPlaces() })
 }
 
 // itemCountsMsg carries the visible child counts for the directories listed in
@@ -69,7 +90,7 @@ func loadDirectory(path, selectedPath string) tea.Cmd {
 func loadDirectoryMessage(cwd string) tea.Msg {
 	directoryEntries, err := os.ReadDir(cwd)
 	if err != nil {
-		return loadedMsg{cwd: cwd, places: places.BuildSidebarRows(), err: fmt.Errorf("read current directory: %w", err)}
+		return loadedMsg{cwd: cwd, err: fmt.Errorf("read current directory: %w", err)}
 	}
 	entries := make([]browser.Entry, 0, len(directoryEntries))
 	for _, directoryEntry := range directoryEntries {
@@ -99,7 +120,7 @@ func loadDirectoryMessage(cwd string) tea.Msg {
 		}
 		return entries[i].Entry.NameKey < entries[j].Entry.NameKey
 	})
-	return loadedMsg{cwd: cwd, places: places.BuildSidebarRows(), entries: entries}
+	return loadedMsg{cwd: cwd, entries: entries}
 }
 
 func loadPreview(pool *PreviewPool, entry browser.Entry, width, codeWindow int, syntaxStyle string) tea.Cmd {

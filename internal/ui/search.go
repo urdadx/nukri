@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -42,7 +43,29 @@ type searchState struct {
 	filterKey  string
 	loading    bool
 	scanned    int
+	truncated  bool
 	errMessage string
+	root       string // directory the scan started from
+	refreshSeq uint64 // identifies the latest deferred re-rank
+	// refreshPending means matches are stale until a deferred re-rank runs.
+	refreshPending bool
+}
+
+// searchCandidatePath is the full path of a scanned candidate.
+func (s *searchState) candidatePath(candidate searchCandidate) string {
+	return filepath.Join(s.root, candidate.relative)
+}
+
+// Re-ranking every candidate on each keystroke is slow for big scans, so above
+// this size a full re-rank waits until typing pauses. Narrowing a query only
+// re-checks earlier matches and always runs at once.
+const (
+	searchDeferThreshold = 20_000
+	searchDeferDelay     = 60 * time.Millisecond
+)
+
+type searchRefreshMsg struct {
+	token, seq uint64
 }
 
 func (m Model) openSearch() (tea.Model, tea.Cmd) {
@@ -50,7 +73,7 @@ func (m Model) openSearch() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	// The token keeps counting so results from an earlier search are ignored.
-	m.search = searchState{open: true, loading: true, token: m.search.token + 1}
+	m.search = searchState{open: true, loading: true, token: m.search.token + 1, root: m.data.CWD}
 	stream := m.searchPool.Submit(searchRequest{token: m.search.token, root: m.data.CWD})
 	return m, waitSearch(stream)
 }
@@ -71,10 +94,14 @@ func (m Model) handleSearchEvent(message searchMsg) (tea.Model, tea.Cmd) {
 	m.search.candidates = append(m.search.candidates, message.event.candidates...)
 	m.search.scanned = message.event.scanned
 	m.search.loading = !message.event.done
+	m.search.truncated = message.event.truncated
 	if message.event.err != nil {
 		m.search.errMessage = message.event.err.Error()
 	}
-	m.extendSearchMatches(firstNew)
+	// A pending re-rank will rank the new candidates along with the rest.
+	if !m.search.refreshPending {
+		m.extendSearchMatches(firstNew)
+	}
 	if message.event.done {
 		return m, nil
 	}
@@ -89,6 +116,7 @@ func (m *Model) refreshSearchMatches() {
 	}
 	m.search.matches, m.search.filterPool = rankSearchCandidates(m.search.candidates, pool, query, query != "")
 	m.search.filterKey = query
+	m.search.refreshPending = false
 	m.clampSearchSelection()
 }
 
@@ -257,13 +285,35 @@ func (m Model) handleSearchKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if len(runes) > 0 {
 			m.search.query = string(runes[:len(runes)-1])
 			m.search.selected = 0
-			m.refreshSearchMatches()
+			return m, m.scheduleSearchRefresh()
 		}
 		return m, nil
 	}
 	if message.Type == tea.KeyRunes {
 		m.search.query += string(message.Runes)
 		m.search.selected = 0
+		return m, m.scheduleSearchRefresh()
+	}
+	return m, nil
+}
+
+// scheduleSearchRefresh re-ranks matches for the current query, deferring a
+// full re-rank of a large scan until typing pauses.
+func (m *Model) scheduleSearchRefresh() tea.Cmd {
+	m.search.refreshSeq++
+	query := strings.ToLower(strings.TrimSpace(m.search.query))
+	narrowing := m.search.filterKey != "" && strings.HasPrefix(query, m.search.filterKey)
+	if narrowing || len(m.search.candidates) <= searchDeferThreshold {
+		m.refreshSearchMatches()
+		return nil
+	}
+	m.search.refreshPending = true
+	token, seq := m.search.token, m.search.refreshSeq
+	return tea.Tick(searchDeferDelay, func(time.Time) tea.Msg { return searchRefreshMsg{token: token, seq: seq} })
+}
+
+func (m Model) handleSearchRefresh(message searchRefreshMsg) (tea.Model, tea.Cmd) {
+	if m.search.open && message.token == m.search.token && message.seq == m.search.refreshSeq {
 		m.refreshSearchMatches()
 	}
 	return m, nil
@@ -274,15 +324,16 @@ func (m Model) activateSearchResult() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	candidate := m.search.candidates[m.search.matches[m.search.selected]]
+	path := m.search.candidatePath(candidate)
 	m = m.closeSearch()
 	if candidate.directory {
-		return m.navigateTo(candidate.path, "", true)
+		return m.navigateTo(path, "", true)
 	}
-	parent := filepath.Dir(candidate.path)
+	parent := filepath.Dir(path)
 	if parent != m.data.CWD {
-		return m.navigateTo(parent, candidate.path, true)
+		return m.navigateTo(parent, path, true)
 	}
-	index := entryIndexByPath(m.data.Entries, candidate.path)
+	index := entryIndexByPath(m.data.Entries, path)
 	return m.moveSelection(index - m.data.Selected)
 }
 
@@ -330,6 +381,9 @@ func (m Model) renderSearch(base string) string {
 	muted := modal.Foreground(lipgloss.Color(t.SidebarDivider))
 	selected := modal.Foreground(lipgloss.Color(t.FilePanelItemSelectedFG)).Background(lipgloss.Color(t.FilePanelItemSelectedBG)).Bold(true)
 	status := fmt.Sprintf("%d indexed", len(m.search.candidates))
+	if m.search.truncated {
+		status = fmt.Sprintf("first %d indexed", len(m.search.candidates))
+	}
 	if m.search.loading {
 		status = fmt.Sprintf("Scanning… %d", m.search.scanned)
 	}
@@ -365,7 +419,7 @@ func (m Model) renderSearch(base string) string {
 			if candidate.directory {
 				kind = core.Directory
 			}
-			icon := iconFor(core.Entry{Name: candidate.name, Path: candidate.path, Kind: kind})
+			icon := iconFor(core.Entry{Name: candidate.name, Path: m.search.candidatePath(candidate), Kind: kind})
 			prefix := "  "
 			style := modal
 			if resultIndex == m.search.selected {

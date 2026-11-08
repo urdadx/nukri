@@ -34,7 +34,11 @@ func ToolUnavailable(tool string) error {
 }
 
 const (
-	DefaultMaxImageDimension   = 1600
+	DefaultMaxImageDimension = 1600
+	// DefaultMaxDecodePixels caps the pixel count of an image before decoding.
+	// A small file can declare huge dimensions, and decoding allocates width ×
+	// height × 4 bytes up front.
+	DefaultMaxDecodePixels     = 64 << 20
 	DefaultMaxImageBytes       = 16 << 20
 	DefaultMaxArchiveEntries   = 10_000
 	DefaultMaxToolOutput       = 8 << 20
@@ -317,6 +321,7 @@ type Tools struct {
 	FFmpeg       string
 	ISOInfo      string
 	RSVGConvert  string
+	ImageMagick  string
 }
 
 type Capabilities struct {

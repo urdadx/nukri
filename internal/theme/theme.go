@@ -1,8 +1,12 @@
 package theme
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -51,12 +55,45 @@ type Theme struct {
 }
 
 func Load(path string) (Theme, error) {
-	var value Theme
-	if _, err := toml.DecodeFile(filepath.Clean(path), &value); err != nil {
+	data, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
 		return Theme{}, fmt.Errorf("load theme %q: %w", path, err)
 	}
+	return parse(data, path)
+}
+
+/*
+Named loads the theme called name. A file <name>.toml in userDirectory (the
+user's theme folder) wins; otherwise the theme comes from bundled, which holds
+themes/<name>.toml. A missing user folder is not an error.
+*/
+func Named(name, userDirectory string, bundled fs.FS) (Theme, error) {
+	if name == "" || strings.ContainsAny(name, `/\`) || name == "." || name == ".." {
+		return Theme{}, fmt.Errorf("invalid theme name %q", name)
+	}
+	if userDirectory != "" {
+		path := filepath.Join(userDirectory, name+".toml")
+		if _, err := os.Stat(path); err == nil {
+			return Load(path)
+		}
+	}
+	data, err := fs.ReadFile(bundled, "themes/"+name+".toml")
+	if errors.Is(err, fs.ErrNotExist) {
+		return Theme{}, fmt.Errorf("theme %q not found", name)
+	}
+	if err != nil {
+		return Theme{}, fmt.Errorf("load theme %q: %w", name, err)
+	}
+	return parse(data, name)
+}
+
+func parse(data []byte, source string) (Theme, error) {
+	var value Theme
+	if _, err := toml.Decode(string(data), &value); err != nil {
+		return Theme{}, fmt.Errorf("load theme %q: %w", source, err)
+	}
 	if value.FullScreenFG == "" || value.FullScreenBG == "" {
-		return Theme{}, fmt.Errorf("load theme %q: full_screen_fg and full_screen_bg are required", path)
+		return Theme{}, fmt.Errorf("load theme %q: full_screen_fg and full_screen_bg are required", source)
 	}
 	value.resolveEmptyColors()
 	return value, nil

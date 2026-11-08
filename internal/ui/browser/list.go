@@ -8,6 +8,15 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// ListWindowStart is the first entry shown when visible rows fit and selected
+// must stay on screen.
+func ListWindowStart(selected, visible int) int {
+	if selected >= visible {
+		return selected - visible + 1
+	}
+	return 0
+}
+
 func RenderList(width, height int, s Styles, data Data) string {
 	if data.LoadError != "" {
 		return lipgloss.NewStyle().Foreground(s.Muted).Background(s.PanelBG).Render(data.LoadError)
@@ -15,10 +24,7 @@ func RenderList(width, height int, s Styles, data Data) string {
 	if len(data.Entries) == 0 {
 		return lipgloss.NewStyle().Foreground(s.Muted).Background(s.PanelBG).Render("This folder is empty")
 	}
-	start := 0
-	if data.Selected >= height {
-		start = data.Selected - height + 1
-	}
+	start := ListWindowStart(data.Selected, height)
 	end := min(len(data.Entries), start+height)
 	rows := make([]string, 0, max(0, end-start))
 	rowStyle := lipgloss.NewStyle().Foreground(s.PanelFG).Background(s.PanelBG)

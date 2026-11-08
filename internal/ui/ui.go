@@ -35,6 +35,7 @@ type Model struct {
 	clipboard         appfileops.Clipboard
 	status            string
 	search            searchState
+	placesStarted     bool
 	archivePromptOpen bool
 	archiveName       string
 	archiveSelectAll  bool
@@ -72,7 +73,13 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = message.Width, message.Height
 		m.clampPreviewOffset()
 	case loadedMsg:
-		m.data.CWD, m.data.Places, m.data.Entries = message.cwd, message.places, message.entries
+		m.data.CWD, m.data.Entries = message.cwd, message.entries
+		// The sidebar loads once, after the first listing, then keeps itself fresh.
+		var places tea.Cmd
+		if !m.placesStarted {
+			m.placesStarted = true
+			places = loadPlaces
+		}
 		m.data.LoadError = ""
 		m.data.Selected = -1
 		m.resetPreview(false)
@@ -83,8 +90,12 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.data.Selected = entryIndexByPath(message.entries, message.selectedPath)
 			m.resetPreview(true)
 			m, load := m.requestPreview()
-			return m, tea.Batch(load, loadItemCounts(message.cwd, message.entries))
+			return m, tea.Batch(load, loadItemCounts(message.cwd, message.entries), places)
 		}
+		return m, places
+	case placesMsg:
+		m.data.Places = message.rows
+		return m, refreshPlaces()
 	case itemCountsMsg:
 		if message.cwd == m.data.CWD {
 			m.data.Entries = applyItemCounts(m.data.Entries, message.counts)
@@ -111,6 +122,8 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.submitPrefetch(message)
 	case searchMsg:
 		return m.handleSearchEvent(message)
+	case searchRefreshMsg:
+		return m.handleSearchRefresh(message)
 	case transferMsg:
 		if message.origin == transferClipboard && message.err == nil {
 			m.status = ""
@@ -183,70 +196,62 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m.handleSearchKey(message)
 		}
-		key := message.String()
-		if action, ok := keys.Resolve(key); ok {
-			if action == keys.ActionCreateArchive {
-				return m.openArchivePrompt()
-			}
-			if action == keys.ActionExtractArchive {
-				return m.extractSelectedArchive()
-			}
-			return m.handleFileAction(action)
+		if action, ok := keys.Resolve(message.String()); ok {
+			return m.handleAction(action)
 		}
-		switch key {
-		case "q", "ctrl+c":
-			return m, tea.Quit
-		case "f":
-			return m.openSearch()
-		case "down", "j":
-			return m.moveSelection(1)
-		case "up", "k":
-			return m.moveSelection(-1)
-		case "enter":
-			return m.enterSelected()
-		case "backspace", "left", "h":
-			return m.goParent()
-		case "alt+left":
-			return m.goHistoryBack()
-		case "alt+right":
-			return m.goHistoryForward()
-		case "tab":
-			return m.cyclePlace(1)
-		case "shift+tab":
-			return m.cyclePlace(-1)
-		case "pgdown", "ctrl+d":
-			return m, m.scrollPreview(m.previewPageSize())
-		case "pgup", "ctrl+u":
-			return m, m.scrollPreview(-m.previewPageSize())
-		}
+	}
+	return m, nil
+}
+
+// handleAction runs a key-bound action in the file browser.
+func (m Model) handleAction(action keys.Action) (tea.Model, tea.Cmd) {
+	switch action {
+	case keys.ActionQuit:
+		return m, tea.Quit
+	case keys.ActionSearch:
+		return m.openSearch()
+	case keys.ActionDown:
+		return m.moveSelection(1)
+	case keys.ActionUp:
+		return m.moveSelection(-1)
+	case keys.ActionOpen:
+		return m.enterSelected()
+	case keys.ActionParent:
+		return m.goParent()
+	case keys.ActionHistoryBack:
+		return m.goHistoryBack()
+	case keys.ActionHistoryForward:
+		return m.goHistoryForward()
+	case keys.ActionNextPlace:
+		return m.cyclePlace(1)
+	case keys.ActionPreviousPlace:
+		return m.cyclePlace(-1)
+	case keys.ActionPreviewPageDown:
+		return m, m.scrollPreview(m.previewPageSize())
+	case keys.ActionPreviewPageUp:
+		return m, m.scrollPreview(-m.previewPageSize())
+	case keys.ActionCreateArchive:
+		return m.openArchivePrompt()
+	case keys.ActionExtractArchive:
+		return m.extractSelectedArchive()
+	case keys.ActionCopy:
+		return m.copySelected()
+	case keys.ActionCut:
+		return m.cutSelected()
+	case keys.ActionPaste:
+		return m.pasteClipboard()
+	case keys.ActionCancelClipboard:
+		return m.cancelClipboard()
 	}
 	return m, nil
 }
 
 func (m Model) sidebarPathAt(x, y int) string {
 	layout := m.layout()
-	if layout.SidebarWidth == 0 || x < 0 || x >= layout.SidebarWidth || y < 3 || y >= m.height-1 {
+	if layout.SidebarWidth == 0 || x < 0 || x >= layout.SidebarWidth || y < browser.PanelContentTop || y >= m.height-1 {
 		return ""
 	}
-	compact := layout.SidebarWidth <= 5
-	rowIndex := y - 3
-	renderedRow := 0
-	for _, row := range m.data.Places {
-		if row.Section != "" {
-			if !compact {
-				renderedRow++
-			}
-			continue
-		}
-		if renderedRow == rowIndex {
-			if item := row.GetItem(); item != nil {
-				return item.Path
-			}
-			return ""
-		}
-		renderedRow++
-	}
-	return ""
+	return browser.SidebarPathAt(layout.SidebarWidth, m.data.Places, y-browser.PanelContentTop)
 }
 
 func entryIndexByPath(entries []browser.Entry, path string) int {
@@ -391,20 +396,15 @@ func (m Model) mouseOverEntries(x, y int) bool {
 }
 
 func (m Model) entryIndexAt(x, y int) int {
-	if !m.mouseOverEntries(x, y) || y < 3 {
+	if !m.mouseOverEntries(x, y) || y < browser.PanelContentTop {
 		return -1
 	}
-	layout := m.layout()
-	visibleRows := max(0, layout.FilesHeight-4)
-	row := y - 3
+	visibleRows := max(0, m.layout().FilesHeight-browser.PanelChrome)
+	row := y - browser.PanelContentTop
 	if row >= visibleRows {
 		return -1
 	}
-	start := 0
-	if m.data.Selected >= visibleRows {
-		start = m.data.Selected - visibleRows + 1
-	}
-	index := start + row
+	index := browser.ListWindowStart(m.data.Selected, visibleRows) + row
 	if index >= len(m.data.Entries) {
 		return -1
 	}
@@ -450,7 +450,7 @@ func (m Model) layout() browser.Layout {
 
 // previewWidth is the preview pane's content width in cells.
 func (m Model) previewWidth() int {
-	return m.layout().PreviewWidth - 4
+	return m.layout().PreviewWidth - browser.PanelChrome
 }
 
 // initialCodeWindow is the leading-line budget for the first render of a code
@@ -509,7 +509,7 @@ func (m Model) previewVisibleLines() int {
 	if layout.PreviewWidth == 0 {
 		return 0
 	}
-	return max(0, height-4)
+	return max(0, height-browser.PanelChrome)
 }
 
 func (m Model) previewLineCount() int {

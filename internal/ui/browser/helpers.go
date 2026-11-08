@@ -7,6 +7,15 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
+// Panel geometry shared by rendering and mouse hit-testing.
+const (
+	// PanelContentTop is the number of rows above a titled panel's content: the
+	// top border, the title and a blank line.
+	PanelContentTop = 3
+	// PanelChrome is the width and height a panel's border and padding take up.
+	PanelChrome = 4
+)
+
 func panel(content, title string, width, height int, fg, bg, border, titleColor lipgloss.Color) string {
 	return panelWithPadding(content, title, width, height, 1, 1, fg, bg, border, titleColor)
 }

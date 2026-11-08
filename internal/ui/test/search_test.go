@@ -146,3 +146,36 @@ func BenchmarkSearchTypingLargeIndex(b *testing.B) {
 		searching = backspaced.(ui.Model)
 	}
 }
+
+// With a large scan, a query that needs a full re-rank waits for typing to
+// pause; the deferred re-rank then shows the matches.
+func TestSearchDefersFullReRankForLargeScans(t *testing.T) {
+	directory := t.TempDir()
+	for i := range 20_050 {
+		if err := os.WriteFile(filepath.Join(directory, fmt.Sprintf("f%05d", i)), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(directory, "zebra.txt"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(directory)
+	model := ui.New(searchTheme())
+	loaded, _ := model.Update(model.Init()())
+	searching := openAndLoadSearch(t, loaded.(ui.Model))
+
+	typed, command := searching.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("zeb")})
+	if command == nil {
+		t.Fatal("a full re-rank of a large scan should be deferred")
+	}
+	refreshed, _ := typed.(ui.Model).Update(command())
+	if !strings.Contains(refreshed.(ui.Model).View(), "zebra.txt") {
+		t.Fatal("deferred re-rank did not show the match")
+	}
+
+	// Narrowing the query only re-checks current matches, so it runs at once.
+	narrowed, command := refreshed.(ui.Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
+	if command != nil || !strings.Contains(narrowed.(ui.Model).View(), "zebra.txt") {
+		t.Fatal("narrowing the query should re-rank immediately")
+	}
+}

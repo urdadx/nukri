@@ -33,7 +33,7 @@ func (s *Service) renderOfficeDocument(ctx context.Context, path string, format 
 	pdf, err := s.renderConvertedPDF(ctx, path, cellWidth, func(ctx context.Context, directory string) (string, error) {
 		profile := filepath.Join(directory, "profile")
 		profileURL := (&url.URL{Scheme: "file", Path: profile}).String()
-		_, err := runCommand(ctx, s.maxToolOutput, s.tools.LibreOffice,
+		_, err := runCommandWithTimeout(ctx, conversionTimeout, s.maxToolOutput, s.tools.LibreOffice,
 			"-env:UserInstallation="+profileURL,
 			"--headless", "--convert-to", "pdf", "--outdir", directory, path,
 		)
@@ -58,7 +58,7 @@ func (s *Service) renderEbook(ctx context.Context, path string, format fileinfo.
 	}
 	pdf, err := s.renderConvertedPDF(ctx, path, cellWidth, func(ctx context.Context, directory string) (string, error) {
 		output := filepath.Join(directory, "book.pdf")
-		if _, err := runCommand(ctx, s.maxToolOutput, s.tools.EbookConvert, path, output); err != nil {
+		if _, err := runCommandWithTimeout(ctx, conversionTimeout, s.maxToolOutput, s.tools.EbookConvert, path, output); err != nil {
 			return "", fmt.Errorf("convert ebook to PDF: %w", err)
 		}
 		return output, nil

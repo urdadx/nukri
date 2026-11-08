@@ -1,12 +1,14 @@
 package preview
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"image"
 	_ "image/gif"
 	_ "image/jpeg"
 	"image/png"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -72,6 +74,16 @@ func (s *Service) renderImage(ctx context.Context, path string, facts fileinfo.F
 		return nil, fmt.Errorf("open image preview: %w", err)
 	}
 	defer file.Close()
+	config, _, err := image.DecodeConfig(file)
+	if err != nil {
+		return nil, fmt.Errorf("decode image preview: %w", err)
+	}
+	if config.Width <= 0 || config.Height <= 0 || int64(config.Width)*int64(config.Height) > DefaultMaxDecodePixels {
+		return nil, ErrOutputTooLarge
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return nil, fmt.Errorf("decode image preview: %w", err)
+	}
 	decoded, format, err := image.Decode(file)
 	if err != nil {
 		return nil, fmt.Errorf("decode image preview: %w", err)
@@ -106,17 +118,42 @@ func (s *Service) renderImage(ctx context.Context, path string, facts fileinfo.F
 	}, nil
 }
 
-// renderAVIF decodes AVIF with ffmpeg; Go's image packages have no AVIF decoder.
+/*
+renderAVIF decodes AVIF with an external tool; Go's image packages have no AVIF
+decoder. ImageMagick is tried first because ffmpeg only reads still AVIF images
+from version 6 or so, and many distributions ship older builds.
+*/
 func (s *Service) renderAVIF(ctx context.Context, path, cacheKey string, targetSize int, size int64) (*ImagePreview, error) {
-	if s.tools.FFmpeg == "" {
-		return nil, fmt.Errorf("AVIF preview: %w", ToolUnavailable("ffmpeg"))
+	var preview Image
+	var err error
+	switch {
+	case s.tools.ImageMagick != "":
+		preview, err = s.imageMagickStill(ctx, path, targetSize)
+	case s.tools.FFmpeg != "":
+		preview, err = s.ffmpegStill(ctx, path, targetSize)
+	default:
+		return nil, fmt.Errorf("AVIF preview: %w", ToolUnavailable("imagemagick"))
 	}
-	preview, err := s.ffmpegStill(ctx, path, targetSize)
 	if err != nil {
 		return nil, fmt.Errorf("decode image preview: %w", err)
 	}
 	s.imageCache.Put(cacheKey, preview.Data, preview.Width, preview.Height, "avif", 0, 0, size, nil)
 	return &ImagePreview{Image: preview}, nil
+}
+
+// imageMagickStill converts the first frame of path to a PNG no larger than
+// targetSize on either side.
+func (s *Service) imageMagickStill(ctx context.Context, path string, targetSize int) (Image, error) {
+	fit := fmt.Sprintf("%dx%d>", targetSize, targetSize) // ">" only ever shrinks
+	output, err := runCommand(ctx, s.maxImageBytes, s.tools.ImageMagick, path+"[0]", "-resize", fit, "png:-")
+	if err != nil {
+		return Image{}, err
+	}
+	config, err := png.DecodeConfig(bytes.NewReader(output))
+	if err != nil {
+		return Image{}, err
+	}
+	return Image{MediaType: "image/png", Data: output, Width: config.Width, Height: config.Height}, nil
 }
 
 /*

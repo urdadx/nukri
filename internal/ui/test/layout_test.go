@@ -186,7 +186,8 @@ func TestEnterSelectedEntry(t *testing.T) {
 		SidebarFG: "#ffffff", SidebarBG: "#000000", SidebarDivider: "#777777",
 	}
 	model := ui.New(colors)
-	loaded, _ := model.Update(model.Init()())
+	loaded, loadCommand := model.Update(model.Init()())
+	loaded = runCommand(loaded, loadCommand) // loads the sidebar places
 	navigating, directoryCommand := loaded.(ui.Model).Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if directoryCommand == nil {
 		t.Fatal("entering a selected directory should start a directory load")
@@ -285,7 +286,7 @@ func TestPreviewPageDown(t *testing.T) {
 	model := ui.New(colors)
 	resized, _ := model.Update(tea.WindowSizeMsg{Width: 100, Height: 12})
 	loaded, previewCommand := resized.(ui.Model).Update(model.Init()())
-	previewed, _ := loaded.(ui.Model).Update(previewCommand())
+	previewed := runCommand(loaded, previewCommand)
 	if !strings.Contains(previewed.(ui.Model).View(), "line-00") {
 		t.Fatal("initial preview does not show its first line")
 	}
@@ -318,4 +319,21 @@ func TestPreviewPageDown(t *testing.T) {
 	if !strings.Contains(outside.(ui.Model).View(), "line-00") {
 		t.Fatal("mouse wheel outside preview should not scroll it")
 	}
+}
+
+// runCommand runs cmd and feeds its messages to model, expanding batches. The
+// commands those updates return are not run, so timers don't loop.
+func runCommand(model tea.Model, cmd tea.Cmd) tea.Model {
+	if cmd == nil {
+		return model
+	}
+	message := cmd()
+	if batch, ok := message.(tea.BatchMsg); ok {
+		for _, command := range batch {
+			model = runCommand(model, command)
+		}
+		return model
+	}
+	model, _ = model.Update(message)
+	return model
 }

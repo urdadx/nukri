@@ -7,8 +7,6 @@ import (
 	"hash/fnv"
 	"os"
 	"path/filepath"
-	"sort"
-	"time"
 )
 
 /*
@@ -38,7 +36,7 @@ var codeCacheService = newCodeCache("")
 
 func newCodeCache(dir string) *codeCache {
 	if dir == "" {
-		dir = filepath.Join(os.TempDir(), "nukri-code-preview", codeCacheVersion)
+		dir = cacheDir("code-preview", codeCacheVersion)
 	}
 	return &codeCache{dir: dir, limit: codeCacheDefaultLimit}
 }
@@ -65,57 +63,14 @@ func (c *codeCache) put(key, content string) {
 	if err := os.MkdirAll(c.dir, 0o755); err != nil {
 		return
 	}
-	tmp := c.path(key) + fmt.Sprintf(".tmp-%d", os.Getpid())
-	if err := os.WriteFile(tmp, []byte(content), 0o644); err != nil {
-		_ = os.Remove(tmp)
+	if writeFileAtomic(c.path(key), []byte(content)) != nil {
 		return
 	}
-	if err := os.Rename(tmp, c.path(key)); err != nil {
-		_ = os.Remove(tmp)
-		return
-	}
-	c.evictIfNeeded()
+	evictOldest(c.dir, ".hl", c.limit, codeCacheMaxBytes, nil)
 }
 
 func (c *codeCache) path(key string) string {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(key))
 	return filepath.Join(c.dir, fmt.Sprintf("code-%016x.hl", h.Sum64()))
-}
-
-/*
-evictIfNeeded removes the oldest entries from the cache until the total
-number of entries is below the limit. It is called after a new entry is added.
-*/
-func (c *codeCache) evictIfNeeded() {
-	entries, err := os.ReadDir(c.dir)
-	if err != nil {
-		return
-	}
-	var files []string
-	for _, entry := range entries {
-		if !entry.IsDir() && filepath.Ext(entry.Name()) == ".hl" {
-			files = append(files, entry.Name())
-		}
-	}
-	if len(files) <= c.limit {
-		return
-	}
-	excess := len(files) - c.limit
-	sort.Slice(files, func(i, j int) bool {
-		ti, _ := fileTime(c.dir, files[i])
-		tj, _ := fileTime(c.dir, files[j])
-		return ti.Before(tj)
-	})
-	for _, name := range files[:excess] {
-		_ = os.Remove(filepath.Join(c.dir, name))
-	}
-}
-
-func fileTime(dir, name string) (time.Time, bool) {
-	info, err := os.Stat(filepath.Join(dir, name))
-	if err != nil {
-		return time.Time{}, false
-	}
-	return info.ModTime(), true
 }

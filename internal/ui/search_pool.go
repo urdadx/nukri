@@ -3,7 +3,6 @@ package ui
 import (
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -11,9 +10,15 @@ import (
 
 const searchBatchSize = 512
 
+// searchCandidateLimit caps how many entries one scan collects, so searching
+// from / or a huge home directory can't exhaust memory.
+const searchCandidateLimit = 200_000
+
+// searchCandidate is one scanned entry. Its full path is the search root joined
+// with relative; it isn't stored, to keep large scans small.
 type searchCandidate struct {
-	path, name, nameKey, relative, relativeKey string
-	directory                                  bool
+	name, nameKey, relative, relativeKey string
+	directory                            bool
 }
 
 type searchEvent struct {
@@ -21,6 +26,7 @@ type searchEvent struct {
 	candidates []searchCandidate
 	scanned    int
 	done       bool
+	truncated  bool // the scan stopped at the candidate limit
 	err        error
 }
 
@@ -108,12 +114,15 @@ func (p *SearchPool) scan(job *searchJob) {
 	queue := []string{job.request.root}
 	batch := make([]searchCandidate, 0, searchBatchSize)
 	scanned := 0
-	for len(queue) > 0 {
+	// Walk the queue with a cursor rather than re-slicing, which would keep the
+	// whole backing array alive. Entries come in directory order; ranking breaks
+	// ties itself, so sorting each directory isn't needed.
+	for next := 0; next < len(queue); next++ {
 		if job.cancel.Load() {
 			return
 		}
-		directory := queue[0]
-		queue = queue[1:]
+		directory := queue[next]
+		queue[next] = ""
 		entries, err := os.ReadDir(directory)
 		if err != nil {
 			if directory == job.request.root {
@@ -122,15 +131,16 @@ func (p *SearchPool) scan(job *searchJob) {
 			}
 			continue
 		}
-		sort.Slice(entries, func(i, j int) bool {
-			return strings.ToLower(entries[i].Name()) < strings.ToLower(entries[j].Name())
-		})
 		for _, entry := range entries {
 			if job.cancel.Load() {
 				return
 			}
 			if strings.HasPrefix(entry.Name(), ".") {
 				continue
+			}
+			if scanned >= searchCandidateLimit {
+				job.send(searchEvent{token: job.request.token, candidates: batch, scanned: scanned, done: true, truncated: true})
+				return
 			}
 			scanned++
 			path := filepath.Join(directory, entry.Name())
@@ -139,7 +149,7 @@ func (p *SearchPool) scan(job *searchJob) {
 				continue
 			}
 			candidate := searchCandidate{
-				path: path, name: entry.Name(), nameKey: strings.ToLower(entry.Name()),
+				name: entry.Name(), nameKey: strings.ToLower(entry.Name()),
 				relative: relative, relativeKey: strings.ToLower(relative), directory: entry.IsDir(),
 			}
 			batch = append(batch, candidate)

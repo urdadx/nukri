@@ -14,3 +14,21 @@ func TestCreateArchiveKey(t *testing.T) {
 		}
 	}
 }
+
+func TestNavigationKeys(t *testing.T) {
+	for key, want := range map[string]keys.Action{
+		"j": keys.ActionDown, "down": keys.ActionDown,
+		"k": keys.ActionUp, "enter": keys.ActionOpen,
+		"h": keys.ActionParent, "backspace": keys.ActionParent,
+		"q": keys.ActionQuit, "ctrl+c": keys.ActionQuit,
+		"f": keys.ActionSearch, "shift+tab": keys.ActionPreviousPlace,
+		"ctrl+d": keys.ActionPreviewPageDown, "pgup": keys.ActionPreviewPageUp,
+	} {
+		if action, ok := keys.Resolve(key); !ok || action != want {
+			t.Errorf("Resolve(%q) = %v, %v; want %v", key, action, ok, want)
+		}
+	}
+	if _, ok := keys.Resolve("z"); ok {
+		t.Error("unbound key resolved to an action")
+	}
+}

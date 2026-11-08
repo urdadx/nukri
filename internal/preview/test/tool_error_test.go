@@ -65,7 +65,7 @@ func TestImageFormatsNameMissingTool(t *testing.T) {
 		tool   string
 	}{
 		{"diamond.svg", "rsvg-convert"},
-		{"gradient.avif", "ffmpeg"},
+		{"gradient.avif", "imagemagick"},
 	}
 	for _, test := range tests {
 		t.Run(test.sample, func(t *testing.T) {
