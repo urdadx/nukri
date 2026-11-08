@@ -30,6 +30,8 @@ type Data struct {
 	LoadError       string
 	OperationPath   string
 	OperationCut    bool
+	// Marked holds the paths picked with multi-select.
+	Marked map[string]bool
 }
 
 type Styles struct {

@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -72,6 +74,30 @@ func Named(name, userDirectory string, bundled fs.FS) (Theme, error) {
 		return Theme{}, fmt.Errorf("load theme %q: %w", name, err)
 	}
 	return parse(data, name)
+}
+
+// Names lists the themes Named can load: the bundled ones and any <name>.toml
+// in userDirectory, sorted and without duplicates.
+func Names(userDirectory string, bundled fs.FS) []string {
+	seen := map[string]bool{}
+	add := func(file string) {
+		if name, ok := strings.CutSuffix(filepath.Base(file), ".toml"); ok && name != "" {
+			seen[name] = true
+		}
+	}
+	if files, err := fs.Glob(bundled, "themes/*.toml"); err == nil {
+		for _, file := range files {
+			add(file)
+		}
+	}
+	if userDirectory != "" {
+		if files, err := filepath.Glob(filepath.Join(userDirectory, "*.toml")); err == nil {
+			for _, file := range files {
+				add(file)
+			}
+		}
+	}
+	return slices.Sorted(maps.Keys(seen))
 }
 
 func parse(data []byte, source string) (Theme, error) {

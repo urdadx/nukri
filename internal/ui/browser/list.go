@@ -54,8 +54,12 @@ func RenderList(width, height int, s Styles, data Data) string {
 		if data.OperationCut {
 			operationColor = s.OperationCut
 		}
+		marked := data.Marked[entry.Path]
 		if operated {
 			prefix = "▌ "
+		}
+		if marked {
+			prefix = "● "
 		}
 		nameText := fmt.Sprintf(" %-*s", max(1, nameWidth), name)
 		iconStyle := rowStyle
@@ -64,6 +68,9 @@ func RenderList(width, height int, s Styles, data Data) string {
 		}
 		if i == data.Selected {
 			marker := "▌ "
+			if marked {
+				marker = "● "
+			}
 			markerStyle := selectedStyle
 			if operated {
 				markerStyle = markerStyle.Foreground(operationColor)
@@ -79,6 +86,9 @@ func RenderList(width, height int, s Styles, data Data) string {
 		prefixStyle := metadataStyle
 		if operated {
 			prefixStyle = rowStyle.Foreground(operationColor).Bold(true)
+		}
+		if marked {
+			prefixStyle = rowStyle.Foreground(s.ActiveBorder).Bold(true)
 		}
 		rows = append(rows, prefixStyle.Render(prefix)+iconStyle.Render(item.Icon)+metadataStyle.Render(nameText+metadata+filler))
 	}

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -70,5 +71,25 @@ func TestEveryBundledThemeLoads(t *testing.T) {
 		if _, err := theme.Named(name, "", nukriconfig.Themes); err != nil {
 			t.Errorf("theme %s: %v", name, err)
 		}
+	}
+}
+
+func TestNamesListsBundledAndUserThemes(t *testing.T) {
+	directory := t.TempDir()
+	for _, name := range []string{"mine.toml", "nord.toml", "notes.txt"} {
+		if err := os.WriteFile(filepath.Join(directory, name), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	names := theme.Names(directory, nukriconfig.Themes)
+	count := map[string]int{}
+	for _, name := range names {
+		count[name]++
+	}
+	if count["mine"] != 1 || count["nord"] != 1 || count["dracula"] != 1 || count["notes"] != 0 {
+		t.Fatalf("names = %v", names)
+	}
+	if !slices.IsSorted(names) {
+		t.Fatalf("names are not sorted: %v", names)
 	}
 }

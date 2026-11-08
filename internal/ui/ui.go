@@ -2,7 +2,6 @@ package ui
 
 import (
 	"io"
-	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -34,6 +33,10 @@ type Model struct {
 	clipboard      appfileops.Clipboard
 	status         string
 	search         searchState
+	dialog         *dialog   // modal for file actions, nil when closed
+	terminal       io.Writer // for OSC 52 clipboard writes
+	duplicates     duplicateState
+	themes         ThemeCatalog
 	placesStarted  bool
 	archive        archiveState
 }
@@ -66,6 +69,11 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = message.Width, message.Height
 		m.clampPreviewOffset()
 	case loadedMsg:
+		if message.cwd == m.data.CWD {
+			m.keepMarks(message.entries)
+		} else {
+			m.clearMarks()
+		}
 		m.data.CWD, m.data.Entries = message.cwd, message.entries
 		// The sidebar loads once, after the first listing, then keeps itself fresh.
 		var places tea.Cmd
@@ -149,7 +157,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.archive.percent = message.percent
 		return m, waitArchive(message.stream)
 	case tea.MouseMsg:
-		if m.archive.promptOpen {
+		if m.archive.promptOpen || m.dialog != nil || m.duplicates.open {
 			return m, nil
 		}
 		if m.search.open {
@@ -185,9 +193,21 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
+	case fileActionMsg:
+		return m.handleFileActionMsg(message)
+	case editorRenameMsg:
+		return m.handleEditorRename(message)
+	case duplicateMsg:
+		return m.handleDuplicateEvent(message)
 	case kittydnd.Event:
 		return m.handleDndEvent(message)
 	case tea.KeyMsg:
+		if m.dialog != nil {
+			return m.handleDialogKey(message)
+		}
+		if m.duplicates.open {
+			return m.handleDuplicateKey(message)
+		}
 		if m.archive.promptOpen {
 			return m.handleArchivePromptKey(message)
 		}
@@ -242,7 +262,36 @@ func (m Model) handleAction(action keys.Action) (tea.Model, tea.Cmd) {
 	case keys.ActionPaste:
 		return m.pasteClipboard()
 	case keys.ActionCancelClipboard:
+		// Esc drops the selection first, then the clipboard.
+		if m.clearMarks() {
+			return m, nil
+		}
 		return m.cancelClipboard()
+	case keys.ActionToggleMark:
+		return m.toggleMark()
+	case keys.ActionTrash:
+		return m.trashTargets()
+	case keys.ActionDelete:
+		return m.deleteTargets()
+	case keys.ActionRename:
+		if m.inTrash() {
+			return m.restoreTargets()
+		}
+		return m.renameTargets()
+	case keys.ActionEditorRename:
+		return m.editorRename()
+	case keys.ActionCreate:
+		return m.createEntries()
+	case keys.ActionCopyPath:
+		return m.copyPath()
+	case keys.ActionOpenDefault:
+		return m.openDefault()
+	case keys.ActionOpenWith:
+		return m.openWith()
+	case keys.ActionFindDuplicates:
+		return m.openDuplicates()
+	case keys.ActionThemes:
+		return m.openThemePicker()
 	}
 	return m, nil
 }
@@ -274,14 +323,7 @@ func (m Model) enterSelected() (tea.Model, tea.Cmd) {
 	if entry.IsDirectory() {
 		return m.navigateTo(entry.Path, "", true)
 	}
-	return m, openFile(entry.Path)
-}
-
-func openFile(path string) tea.Cmd {
-	return func() tea.Msg {
-		_ = exec.Command("xdg-open", path).Run()
-		return nil
-	}
+	return m, openWithDefault(entry.Path)
 }
 
 func (m Model) clickEntry(index int, clickedAt time.Time) (tea.Model, tea.Cmd) {
@@ -558,6 +600,14 @@ func (m Model) View() string {
 	if m.archive.promptOpen {
 		m.visualState.Clear()
 		return m.renderArchivePrompt(view)
+	}
+	if m.duplicates.open {
+		m.visualState.Clear()
+		view = m.renderDuplicates(view)
+	}
+	if m.dialog != nil {
+		m.visualState.Clear()
+		return m.renderDialog(view)
 	}
 	return view
 }

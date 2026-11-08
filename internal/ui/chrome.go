@@ -17,6 +17,9 @@ func renderFooter(width int, s Styles, data browser.Data, operation, status stri
 	} else if data.LoadError != "" {
 		name = "Load failed"
 	}
+	if marked := len(data.Marked); marked > 0 {
+		position += fmt.Sprintf(" · %d selected", marked)
+	}
 	left := s.Accent.Render(" " + position + "  " + name)
 	if operation != "" {
 		left += s.Muted.Render(" │ " + operation)

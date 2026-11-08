@@ -7,7 +7,7 @@ import (
 )
 
 func TestCreateArchiveKey(t *testing.T) {
-	for _, key := range []string{"c", "C"} {
+	for _, key := range []string{"C"} {
 		action, ok := keys.Resolve(key)
 		if !ok || action != keys.ActionCreateArchive {
 			t.Fatalf("Resolve(%q) = %v, %v", key, action, ok)
@@ -30,5 +30,20 @@ func TestNavigationKeys(t *testing.T) {
 	}
 	if _, ok := keys.Resolve("z"); ok {
 		t.Error("unbound key resolved to an action")
+	}
+}
+
+func TestFileActionKeys(t *testing.T) {
+	for key, want := range map[string]keys.Action{
+		"d": keys.ActionTrash, "delete": keys.ActionTrash,
+		"D": keys.ActionDelete, "alt+insert": keys.ActionDelete,
+		"a": keys.ActionCreate, "r": keys.ActionRename, "f2": keys.ActionRename,
+		"R": keys.ActionEditorRename, "f14": keys.ActionEditorRename,
+		"c": keys.ActionCopyPath, "o": keys.ActionOpenDefault, "O": keys.ActionOpenWith,
+		"alt+d": keys.ActionFindDuplicates, " ": keys.ActionToggleMark,
+	} {
+		if action, ok := keys.Resolve(key); !ok || action != want {
+			t.Errorf("Resolve(%q) = %v, %v; want %v", key, action, ok, want)
+		}
 	}
 }
