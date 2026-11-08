@@ -25,6 +25,16 @@ func (s *Service) listArchive(ctx context.Context, path string) (*ArchivePreview
 	if compression, ok := tarCompression(path); ok {
 		return s.listTar(ctx, path, compression)
 	}
+	if isRARPath(path) {
+		archive, err := listRAR(ctx, path, s.maxArchiveEntries)
+		if err == nil {
+			return &ArchivePreview{Archive: archive}, nil
+		}
+		if !errors.Is(err, errNotRAR) {
+			return nil, fmt.Errorf("list RAR: %w", err)
+		}
+		// Not RAR inside despite the name: let the other readers try.
+	}
 	if archive, ok := parseZipListing(ctx, path, s.maxArchiveEntries); ok {
 		return &ArchivePreview{Archive: archive}, nil
 	}

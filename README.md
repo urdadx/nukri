@@ -66,9 +66,9 @@ install. Everything else works without them.
 | Ebooks (mobi, azw3) | `ebook-convert` + the PDF tools | `calibre` | `calibre` |
 | `.tar.xz` / `.tar.zst` file lists | `xz` / `zstd` | `xz-utils` / `zstd` | `xz` / `zstd` |
 | Faster listing of large `.tar.gz` | `pigz` (optional) | `pigz` | `pigz` |
-| Other archives (7z, rar, …) | `7z` or `7zz` | `7zip` | `7zip` |
+| Other archives (7z, …) | `7z` or `7zz` | `7zip` | `7zip` |
 | ISO disk images | `isoinfo` | `genisoimage` | `cdrtools` |
 | Opening files with the default app | `xdg-open` | `xdg-utils` | `xdg-utils` |
 
 EPUB metadata, fonts, torrents, images (PNG, JPEG, GIF, WebP, BMP, TIFF), code, Markdown,
-CSV, ZIP archives and tarballs (plain, gzip, bzip2) are previewed natively.
+CSV, ZIP and RAR archives, and tarballs (plain, gzip, bzip2) are previewed natively.
