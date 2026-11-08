@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"strings"
-	"unicode"
 )
 
 const markdownLineLimit = 800
@@ -37,11 +36,4 @@ func (s *Service) renderMarkdown(ctx context.Context, path string, _ int) (*Mark
 	return &MarkdownPreview{Text: text}, nil
 }
 
-func sanitizeMarkdown(value string) string {
-	return strings.Map(func(r rune) rune {
-		if r == '\n' || r == '\r' || r == '\t' || !unicode.IsControl(r) {
-			return r
-		}
-		return -1
-	}, value)
-}
+func sanitizeMarkdown(value string) string { return sanitizeText(value) }

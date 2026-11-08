@@ -2,6 +2,7 @@ package browser
 
 import (
 	"strings"
+	"unicode"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -44,3 +45,39 @@ func panelWithPadding(content, title string, width, height, leftPadding, rightPa
 }
 
 func truncate(text string, width int) string { return ansi.Truncate(text, width, "…") }
+
+/*
+SafeName makes a file name safe to draw. Names may legally hold control
+characters: a carriage return would move the cursor back over the panels to
+its left, and an escape could send the terminal commands. Each one is shown as
+"?".
+*/
+func SafeName(name string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return '?'
+		}
+		return r
+	}, name)
+}
+
+/*
+safeLine prepares a preview line for the pane. Escape sequences are kept
+(highlighted code is styled with them), but carriage returns and other control
+characters are dropped and tabs become spaces, so the line is exactly as wide
+as layout measures it.
+*/
+func safeLine(line string) string {
+	if !strings.ContainsFunc(line, func(r rune) bool { return r != '\x1b' && unicode.IsControl(r) }) {
+		return line
+	}
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r == '\t':
+			return ' '
+		case r != '\x1b' && unicode.IsControl(r):
+			return -1
+		}
+		return r
+	}, line)
+}

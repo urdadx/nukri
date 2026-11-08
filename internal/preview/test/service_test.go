@@ -172,7 +172,10 @@ func TestRenderSourceCodeIsSyntaxHighlighted(t *testing.T) {
 	if !strings.Contains(highlighted, "\x1b[") {
 		t.Fatal("source code view is not syntax highlighted")
 	}
-	if stripped := ansi.Strip(highlighted); !strings.Contains(stripped, strings.TrimSuffix(source, "\n")) {
+	// Highlighting keeps the text as is; tabs are expanded to 4-column stops
+	// before it, since the pane can't draw a raw tab at a known width.
+	expected := strings.ReplaceAll(strings.TrimSuffix(source, "\n"), "\t", "    ")
+	if stripped := ansi.Strip(highlighted); !strings.Contains(stripped, expected) {
 		t.Fatalf("highlighting changed source code:\n%s", stripped)
 	}
 }

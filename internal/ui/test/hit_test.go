@@ -40,3 +40,12 @@ func TestListWindowStartKeepsSelectionVisible(t *testing.T) {
 		}
 	}
 }
+
+func TestSafeNameHidesControlCharacters(t *testing.T) {
+	if got := browser.SafeName("evil\r\x1b[2Jname\t.txt"); got != "evil??[2Jname?.txt" {
+		t.Fatalf("SafeName = %q", got)
+	}
+	if got := browser.SafeName("plain é name.txt"); got != "plain é name.txt" {
+		t.Fatalf("SafeName changed a normal name: %q", got)
+	}
+}

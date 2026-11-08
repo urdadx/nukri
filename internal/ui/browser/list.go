@@ -47,7 +47,7 @@ func RenderList(width, height int, s Styles, data Data) string {
 			}
 			metadata = fmt.Sprintf("%10s %9s", detail, formatModified(entry.Modified))
 		}
-		name := truncate(entry.Name, max(1, nameWidth))
+		name := truncate(SafeName(entry.Name), max(1, nameWidth))
 		operated := data.OperationPath != "" && entry.Path == data.OperationPath
 		prefix := "  "
 		operationColor := s.OperationCopy

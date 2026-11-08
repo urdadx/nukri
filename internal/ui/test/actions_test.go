@@ -237,3 +237,26 @@ func TestDuplicateFinderNeverTrashesLastCopy(t *testing.T) {
 }
 
 func fmtType(value any) string { return reflect.TypeOf(value).String() }
+
+// Previewing a file with Windows line endings must not send a carriage return
+// to the terminal; it used to corrupt the sidebar and file list.
+func TestCRLFPreviewSendsNoCarriageReturn(t *testing.T) {
+	_, directory := actionModel(t)
+	if err := os.WriteFile(filepath.Join(directory, "License.txt"), []byte("\tLicense\r\n\r\nline two\r\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, "bad\rname.txt"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fresh := ui.New(searchTheme())
+	loaded, cmd := fresh.Update(fresh.Init()())
+	model := settle(t, loaded.(ui.Model), cmd)
+	// Check both entries: License.txt, then the oddly named file.
+	if strings.ContainsAny(model.View(), "\r\t") {
+		t.Fatal("view contains a carriage return or tab")
+	}
+	moved, next := press(t, model, "down")
+	if strings.ContainsAny(settle(t, moved, next).View(), "\r\t") {
+		t.Fatal("view of the second entry contains a carriage return or tab")
+	}
+}

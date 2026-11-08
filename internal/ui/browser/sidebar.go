@@ -59,7 +59,7 @@ func RenderSidebar(width, height int, s Styles, data Data) string {
 		prefix := " "
 		text := ""
 		if !compact {
-			text = "  " + item.Title
+			text = "  " + SafeName(item.Title)
 		}
 		textStyle := rowStyle
 		placeIconStyle := iconStyle

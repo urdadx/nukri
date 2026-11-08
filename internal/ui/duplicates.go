@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/urdadx/nukri/internal/fs/duplicates"
 	"github.com/urdadx/nukri/internal/fs/trash"
+	"github.com/urdadx/nukri/internal/ui/browser"
 )
 
 /*
@@ -260,7 +261,7 @@ func (m Model) renderDuplicates(base string) string {
 			if err != nil {
 				relative = row.path
 			}
-			line := truncate("  "+relative, innerWidth)
+			line := truncate("  "+browser.SafeName(relative), innerWidth)
 			if index == state.selected {
 				content = append(content, selected.Width(innerWidth).Render(line))
 			} else {

@@ -13,7 +13,7 @@ func renderFooter(width int, s Styles, data browser.Data, operation, status stri
 	position, name := "0/0", "Loading..."
 	if data.Selected >= 0 && data.Selected < len(data.Entries) {
 		position = fmt.Sprintf("%d/%d", data.Selected+1, len(data.Entries))
-		name = data.Entries[data.Selected].Entry.Name
+		name = browser.SafeName(data.Entries[data.Selected].Entry.Name)
 	} else if data.LoadError != "" {
 		name = "Load failed"
 	}

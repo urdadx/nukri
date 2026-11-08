@@ -15,7 +15,7 @@ func RenderPreview(width, height, originX, originY int, visualState *VisualState
 	showingVisual := false
 	if data.Selected >= 0 && data.Selected < len(data.Entries) {
 		entry := data.Entries[data.Selected]
-		title = " " + entry.Icon + "  " + entry.Entry.Name + " "
+		title = " " + entry.Icon + "  " + SafeName(entry.Entry.Name) + " "
 		switch {
 		case data.PreviewLoading:
 			text = []string{muted.Render("Loading preview...")}
@@ -51,7 +51,7 @@ func RenderPreview(width, height, originX, originY int, visualState *VisualState
 	lineStyle := lipgloss.NewStyle().Foreground(s.PanelFG).Background(s.PanelBG)
 	backgroundPrefix := stylePrefix(lineStyle)
 	for i := range text {
-		text[i] = truncate(text[i], bodyWidth)
+		text[i] = truncate(safeLine(text[i]), bodyWidth)
 		text[i] = strings.ReplaceAll(text[i], "\x1b[0m", "\x1b[0m"+backgroundPrefix)
 		text[i] += strings.Repeat(" ", max(0, bodyWidth-lipgloss.Width(text[i])))
 		text[i] = lineStyle.Render(text[i])
@@ -85,7 +85,7 @@ func renderPreviewEntries(entries []Entry, selected, width int, s Styles) []stri
 			}
 		}
 		nameWidth := max(1, width-lipgloss.Width(detail)-5)
-		name := truncate(item.Entry.Name, nameWidth)
+		name := truncate(SafeName(item.Entry.Name), nameWidth)
 		gap := strings.Repeat(" ", max(1, width-lipgloss.Width(item.Icon)-lipgloss.Width(name)-lipgloss.Width(detail)-2))
 		if index == selected {
 			row := item.Icon + " " + name + gap + detail

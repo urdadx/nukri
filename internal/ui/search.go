@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/urdadx/nukri/internal/core"
+	"github.com/urdadx/nukri/internal/ui/browser"
 )
 
 const searchMatchLimit = 100
@@ -426,7 +427,7 @@ func (m Model) renderSearch(base string) string {
 				prefix = "› "
 				style = selected
 			}
-			content = append(content, style.Width(innerWidth).Render(prefix+icon.Icon+" "+truncate(candidate.relative, max(1, innerWidth-5))))
+			content = append(content, style.Width(innerWidth).Render(prefix+icon.Icon+" "+truncate(browser.SafeName(candidate.relative), max(1, innerWidth-5))))
 		}
 	}
 	for len(content) < height-3 {
