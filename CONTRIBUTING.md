@@ -46,8 +46,7 @@ go test -race ./...
 
 Nukri doesn't bundle decoders for heavy formats. A preview calls a tool the user
 already has, and when that tool is missing the preview pane names what to install.
-Keep new previews that way, and add the tool to the table in the
-[README](README.md#optional-tools-for-previews).
+Keep new previews that way.
 
 ## Commits and pull requests
 

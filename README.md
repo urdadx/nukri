@@ -32,29 +32,6 @@ This puts `nukri` in `~/go/bin`. Icons need a [Nerd Font](https://www.nerdfonts.
 - **21 themes**, previewed live as you pick, plus your own.
 - **Mouse support**: click, double-click and scroll.
 
-## Optional tools for previews
-
-Nukri doesn't bundle decoders for heavy file formats. It calls tools you already have
-installed. If a preview needs a tool that's missing, the preview pane names the tool to
-install. Everything else works without them.
-
-| Preview | Tool | Debian / Ubuntu | Arch |
-|---|---|---|---|
-| Video frames, audio waveforms | `ffmpeg`, `ffprobe` | `ffmpeg` | `ffmpeg` |
-| AVIF images | `magick` or `convert` (ffmpeg 6+ also works) | `imagemagick` | `imagemagick` |
-| SVG images | `rsvg-convert` (best), or ImageMagick | `librsvg2-bin` | `librsvg` |
-| PDF pages | `pdftocairo`, `pdfinfo` | `poppler-utils` | `poppler` |
-| Office documents (docx, xlsx, pptx, odt, …) | `libreoffice` + the PDF tools | `libreoffice` | `libreoffice-fresh` |
-| Ebooks (mobi, azw3) | `ebook-convert` + the PDF tools | `calibre` | `calibre` |
-| `.tar.xz` / `.tar.zst` file lists | `xz` / `zstd` | `xz-utils` / `zstd` | `xz` / `zstd` |
-| Faster listing of large `.tar.gz` | `pigz` (optional) | `pigz` | `pigz` |
-| Other archives (7z, …) | `7z` or `7zz` | `7zip` | `7zip` |
-| ISO disk images | `isoinfo` | `genisoimage` | `cdrtools` |
-| Opening files with the default app | `xdg-open` | `xdg-utils` | `xdg-utils` |
-
-EPUB metadata, fonts, torrents, images (PNG, JPEG, GIF, WebP, BMP, TIFF), code, Markdown,
-CSV, ZIP and RAR archives, and tarballs (plain, gzip, bzip2) are previewed natively.
-
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
