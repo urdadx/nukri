@@ -38,6 +38,7 @@ type Model struct {
 	terminal       io.Writer // for OSC 52 clipboard writes
 	duplicates     duplicateState
 	themes         ThemeCatalog
+	savePreview    func(shown bool) error // remembers the preview toggle; may be nil
 	placesStarted  bool
 	archive        archiveState
 }
@@ -485,10 +486,22 @@ func (m Model) moveSelection(delta int) (tea.Model, tea.Cmd) {
 	return m.requestPreview()
 }
 
-// togglePreview hides or shows the preview pane. Shown again, it loads the
-// focused entry's preview at the pane's width.
+// WithPreview starts with the preview pane shown or hidden, and remembers each
+// toggle with save.
+func (m Model) WithPreview(shown bool, save func(shown bool) error) Model {
+	m.data.HidePreview, m.savePreview = !shown, save
+	return m
+}
+
+// togglePreview hides or shows the preview pane and remembers the choice.
+// Shown again, it loads the focused entry's preview at the pane's width.
 func (m Model) togglePreview() (tea.Model, tea.Cmd) {
 	m.data.HidePreview = !m.data.HidePreview
+	if m.savePreview != nil {
+		if err := m.savePreview(!m.data.HidePreview); err != nil {
+			m.status = "Couldn't remember the preview setting: " + err.Error()
+		}
+	}
 	if m.data.HidePreview || m.data.Selected < 0 || m.data.Selected >= len(m.data.Entries) {
 		return m, nil
 	}

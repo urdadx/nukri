@@ -53,3 +53,45 @@ func TestSaveThemeAddsLineWhenMissing(t *testing.T) {
 		t.Fatalf("settings = %#v, err = %v", settings, err)
 	}
 }
+
+func TestPreviewIsShownUnlessTurnedOff(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if settings, _ := config.LoadSettings(path); !settings.PreviewShown() {
+		t.Fatal("preview should be shown when never set")
+	}
+	if err := config.SavePreview(path, false); err != nil {
+		t.Fatal(err)
+	}
+	if settings, err := config.LoadSettings(path); err != nil || settings.PreviewShown() {
+		t.Fatalf("settings = %#v, err = %v; want the preview off", settings, err)
+	}
+	if err := config.SavePreview(path, true); err != nil {
+		t.Fatal(err)
+	}
+	if settings, err := config.LoadSettings(path); err != nil || !settings.PreviewShown() {
+		t.Fatalf("settings = %#v, err = %v; want the preview on", settings, err)
+	}
+}
+
+// Saving one setting rewrites only its line, and a new setting goes ahead of
+// any table so it stays a top-level key.
+func TestSavePreviewKeepsOtherSettings(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	original := "# my settings\ntheme = \"nord\"\n\n[places]\nhome = true\n"
+	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.SavePreview(path, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.SavePreview(path, false); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	if string(data) != "preview = false\n"+original {
+		t.Fatalf("config = %q", data)
+	}
+	if settings, err := config.LoadSettings(path); err != nil || settings.Theme != "nord" || settings.PreviewShown() {
+		t.Fatalf("settings = %#v, err = %v", settings, err)
+	}
+}

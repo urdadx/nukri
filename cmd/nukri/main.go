@@ -55,7 +55,7 @@ func run() int {
 		Names:   func() []string { return theme.Names(userThemes, nukriconfig.Themes) },
 		Load:    func(name string) (theme.Theme, error) { return theme.Named(name, userThemes, nukriconfig.Themes) },
 		Save:    func(name string) error { return config.SaveTheme(configPath, name) },
-	})
+	}).WithPreview(settings.PreviewShown(), func(shown bool) error { return config.SavePreview(configPath, shown) })
 	output := model.TerminalOutput(os.Stdout)
 	model = model.WithTerminal(output)
 	options := []tea.ProgramOption{tea.WithOutput(output), tea.WithAltScreen(), tea.WithMouseCellMotion()}

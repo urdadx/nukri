@@ -13,7 +13,13 @@ import (
 // Settings is the user's config.toml.
 type Settings struct {
 	Theme string `toml:"theme"`
+	// Preview is whether the preview pane is shown; nil when never set.
+	Preview *bool `toml:"preview"`
 }
+
+// PreviewShown reports whether the preview pane starts shown: yes unless the
+// user turned it off.
+func (s Settings) PreviewShown() bool { return s.Preview == nil || *s.Preview }
 
 // LoadSettings reads config.toml at path. A missing file gives empty settings.
 func LoadSettings(path string) (Settings, error) {
@@ -31,22 +37,32 @@ func LoadSettings(path string) (Settings, error) {
 	return settings, nil
 }
 
-var themeLine = regexp.MustCompile(`(?m)^[ \t]*theme[ \t]*=.*$`)
+// SaveTheme records name as the theme in config.toml at path.
+func SaveTheme(path, name string) error {
+	return saveSetting(path, "theme", fmt.Sprintf("%q", name))
+}
+
+// SavePreview records whether the preview pane is shown in config.toml at path.
+func SavePreview(path string, shown bool) error {
+	return saveSetting(path, "preview", fmt.Sprint(shown))
+}
 
 /*
-SaveTheme records name as the theme in config.toml at path. Only the theme line
-is rewritten, so the rest of the file (comments included) is left alone; the
-file and its folder are created when missing.
+saveSetting sets key to value, a TOML value, in config.toml at path. Only that
+key's line is rewritten, so the rest of the file (comments included) is left
+alone. A new key goes first, ahead of any table. The file and its folder are
+created when missing.
 */
-func SaveTheme(path, name string) error {
+func saveSetting(path, key, value string) error {
 	data, err := os.ReadFile(path)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("read config: %w", err)
 	}
-	line := fmt.Sprintf("theme = %q", name)
+	keyLine := regexp.MustCompile(`(?m)^[ \t]*` + regexp.QuoteMeta(key) + `[ \t]*=.*$`)
+	line := key + " = " + value
 	var updated string
-	if themeLine.Match(data) {
-		updated = themeLine.ReplaceAllLiteralString(string(data), line)
+	if keyLine.Match(data) {
+		updated = keyLine.ReplaceAllLiteralString(string(data), line)
 	} else {
 		updated = line + "\n" + string(data)
 	}
