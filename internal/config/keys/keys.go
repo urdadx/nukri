@@ -33,6 +33,7 @@ const (
 	ActionOpenWith
 	ActionFindDuplicates
 	ActionThemes
+	ActionTogglePreview
 )
 
 var defaults = map[string]Action{
@@ -76,6 +77,7 @@ var defaults = map[string]Action{
 	"O":            ActionOpenWith,
 	"alt+d":        ActionFindDuplicates,
 	"T":            ActionThemes,
+	"P":            ActionTogglePreview,
 	// bubbletea v1 reports Shift+Delete (CSI 3;2~) as alt+insert and
 	// Shift+F2 (CSI 1;2Q) as f14.
 	"alt+insert": ActionDelete,

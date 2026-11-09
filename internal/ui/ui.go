@@ -301,6 +301,8 @@ func (m Model) handleAction(action keys.Action) (tea.Model, tea.Cmd) {
 		return m.openDuplicates()
 	case keys.ActionThemes:
 		return m.openThemePicker()
+	case keys.ActionTogglePreview:
+		return m.togglePreview()
 	}
 	return m, nil
 }
@@ -483,6 +485,17 @@ func (m Model) moveSelection(delta int) (tea.Model, tea.Cmd) {
 	return m.requestPreview()
 }
 
+// togglePreview hides or shows the preview pane. Shown again, it loads the
+// focused entry's preview at the pane's width.
+func (m Model) togglePreview() (tea.Model, tea.Cmd) {
+	m.data.HidePreview = !m.data.HidePreview
+	if m.data.HidePreview || m.data.Selected < 0 || m.data.Selected >= len(m.data.Entries) {
+		return m, nil
+	}
+	m.resetPreview(true)
+	return m.requestPreview()
+}
+
 // resetPreview clears the preview pane, marking it loading when a new preview
 // has been requested.
 func (m *Model) resetPreview(loading bool) {
@@ -496,15 +509,18 @@ func (m *Model) resetPreview(loading bool) {
 }
 
 // requestPreview loads the selected entry's preview and prefetches its
-// neighbours.
+// neighbours. Nothing is loaded while the preview is hidden.
 func (m Model) requestPreview() (Model, tea.Cmd) {
+	if m.data.HidePreview {
+		return m, nil
+	}
 	width, window, syntax := m.previewWidth(), m.initialCodeWindow(), m.styles.Theme.CodeSyntaxHighlight
 	m, prefetch := schedulePrefetch(m, m.data.Entries, m.data.Selected, width, window, syntax)
 	return m, tea.Batch(loadPreview(m.previewPool, m.data.Entries[m.data.Selected], width, window, syntax), prefetch)
 }
 
 func (m Model) layout() browser.Layout {
-	return browser.ResolveLayout(m.width, max(1, m.height-1))
+	return browser.ResolveLayout(m.width, max(1, m.height-1), !m.data.HidePreview)
 }
 
 // previewWidth is the preview pane's content width in cells.

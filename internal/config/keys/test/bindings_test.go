@@ -47,3 +47,9 @@ func TestFileActionKeys(t *testing.T) {
 		}
 	}
 }
+
+func TestTogglePreviewKey(t *testing.T) {
+	if action, ok := keys.Resolve("P"); !ok || action != keys.ActionTogglePreview {
+		t.Fatalf("Resolve(\"P\") = %v, %v", action, ok)
+	}
+}

@@ -18,19 +18,32 @@ import (
 )
 
 func TestResponsiveLayouts(t *testing.T) {
-	wide := browser.ResolveLayout(120, 30)
+	wide := browser.ResolveLayout(120, 30, true)
 	if wide.SidebarWidth == 0 || wide.FilesWidth == 0 || wide.PreviewWidth == 0 || wide.Stacked {
 		t.Fatalf("wide layout should contain three horizontal panes: %#v", wide)
 	}
 
-	narrow := browser.ResolveLayout(50, 24)
+	narrow := browser.ResolveLayout(50, 24, true)
 	if !narrow.Stacked || narrow.SidebarWidth == 0 || narrow.PreviewHeight == 0 {
 		t.Fatalf("narrow layout should stack files and preview: %#v", narrow)
 	}
 
-	minimal := browser.ResolveLayout(30, 20)
+	minimal := browser.ResolveLayout(30, 20, true)
 	if minimal.FilesWidth != 30 || minimal.SidebarWidth != 0 || minimal.PreviewWidth != 0 {
 		t.Fatalf("minimal layout should only show files: %#v", minimal)
+	}
+}
+
+func TestHiddenPreviewGivesFilesItsRoom(t *testing.T) {
+	for _, size := range [][2]int{{120, 30}, {50, 24}} {
+		shown := browser.ResolveLayout(size[0], size[1], true)
+		hidden := browser.ResolveLayout(size[0], size[1], false)
+		if hidden.PreviewWidth != 0 || hidden.PreviewHeight != 0 || hidden.Stacked {
+			t.Fatalf("%dx%d with the preview hidden still has one: %#v", size[0], size[1], hidden)
+		}
+		if hidden.SidebarWidth != shown.SidebarWidth || hidden.FilesWidth != size[0]-shown.SidebarWidth || hidden.FilesHeight != size[1] {
+			t.Fatalf("%dx%d hidden layout %#v should give the files all but the sidebar", size[0], size[1], hidden)
+		}
 	}
 }
 

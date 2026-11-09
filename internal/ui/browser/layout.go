@@ -6,7 +6,12 @@ type Layout struct {
 	Stacked                                bool
 }
 
-func ResolveLayout(width, height int) Layout {
+/*
+ResolveLayout fits the panes into width by height cells. The preview goes
+beside the files when there is room, below them when narrow, and is left out
+when it would be too small or showPreview is false.
+*/
+func ResolveLayout(width, height int, showPreview bool) Layout {
 	if width < 34 {
 		return Layout{FilesWidth: width, FilesHeight: height}
 	}
@@ -18,6 +23,9 @@ func ResolveLayout(width, height int) Layout {
 		sidebar = 5
 	}
 	remaining := width - sidebar
+	if !showPreview {
+		return Layout{SidebarWidth: sidebar, FilesWidth: remaining, FilesHeight: height}
+	}
 	if width <= 54 {
 		filesHeight := height * 54 / 100
 		if filesHeight < 6 {

@@ -33,6 +33,8 @@ type Data struct {
 	OperationCut bool
 	// Marked holds the paths picked with multi-select.
 	Marked map[string]bool
+	// HidePreview leaves the preview pane out, giving the files its room.
+	HidePreview bool
 }
 
 type Styles struct {
@@ -44,7 +46,10 @@ type Styles struct {
 }
 
 func Render(width, height int, visualState *VisualState, styles Styles, data Data) string {
-	layout := ResolveLayout(width, height)
+	layout := ResolveLayout(width, height, !data.HidePreview)
+	if layout.PreviewWidth == 0 {
+		visualState.Clear() // no pane to draw a preview image in
+	}
 	if layout.FilesWidth == width {
 		return RenderEntries(width, height, styles, data)
 	}

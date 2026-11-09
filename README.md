@@ -30,6 +30,7 @@ A fast and elegant terminal file manager for linux written in Go. Currently a wo
 | `C` / `e` | Create archive / extract archive |
 | `Alt+D` | Find duplicate files |
 | `T` | Pick a theme (previews live; Enter saves it) |
+| `P` | Hide or show the preview |
 | `PgDn` / `PgUp` | Scroll the preview |
 | `q` | Quit |
 
