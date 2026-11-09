@@ -161,6 +161,12 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.archive.percent = message.percent
 		return m, waitArchive(message.stream)
 	case tea.MouseMsg:
+		// A drag starts from the entry under the last left press. Forget it when
+		// any button is released, even while a dialog has the mouse, and when a
+		// press lands anywhere else, so a later drag can't pick up an old entry.
+		if message.Action == tea.MouseActionRelease || message.Action == tea.MouseActionPress && message.Button == tea.MouseButtonLeft {
+			m.drag.candidate = ""
+		}
 		if m.archive.promptOpen || m.dialog != nil || m.duplicates.open {
 			return m, nil
 		}
@@ -175,9 +181,6 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				m.drag.candidate = m.data.Entries[index].Entry.Path
 				return m.clickEntry(index, time.Now())
 			}
-		}
-		if message.Button == tea.MouseButtonLeft && message.Action == tea.MouseActionRelease {
-			m.drag.candidate = ""
 		}
 		if m.mouseOverEntries(message.X, message.Y) {
 			switch message.Button {

@@ -218,3 +218,46 @@ func TestFailedDropIsReportedCanceled(t *testing.T) {
 		t.Fatalf("failed drop = %q, want it reported canceled", output.String())
 	}
 }
+
+// dragsAfter presses the left button on the first entry, sends between, then
+// starts a drag over an empty row of the list. It reports whether that drag
+// offered the pressed entry.
+func dragsAfter(t *testing.T, between func(ui.Model) ui.Model) bool {
+	t.Helper()
+	model, _, output := dndModel(t, "a.txt")
+	x := listX(t, model)
+	pressed, _ := model.Update(tea.MouseMsg{X: x, Y: 3, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	model = between(pressed.(ui.Model))
+	output.Reset()
+	model.Update(kittydnd.Event{Kind: kittydnd.DragOffer, X: x, Y: 20})
+	return strings.Contains(output.String(), "t=p:x=0")
+}
+
+func TestDragForgetsPressedEntryAfterRelease(t *testing.T) {
+	// X10 mouse reports a release without saying which button went up.
+	released := dragsAfter(t, func(model ui.Model) ui.Model {
+		updated, _ := model.Update(tea.MouseMsg{X: 0, Y: 0, Button: tea.MouseButtonNone, Action: tea.MouseActionRelease})
+		return updated.(ui.Model)
+	})
+	if released {
+		t.Fatal("a drag after the button was released offered the old entry")
+	}
+}
+
+func TestDragForgetsPressedEntryReleasedUnderDialog(t *testing.T) {
+	releasedUnderDialog := dragsAfter(t, func(model ui.Model) ui.Model {
+		model, _ = press(t, model, "a") // open the create dialog
+		updated, _ := model.Update(tea.MouseMsg{X: 0, Y: 0, Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease})
+		model, _ = press(t, updated.(ui.Model), "esc")
+		return model
+	})
+	if releasedUnderDialog {
+		t.Fatal("a release while a dialog was open did not forget the pressed entry")
+	}
+}
+
+func TestDragStartsFromPressedEntry(t *testing.T) {
+	if !dragsAfter(t, func(model ui.Model) ui.Model { return model }) {
+		t.Fatal("a drag before the release did not offer the pressed entry")
+	}
+}
