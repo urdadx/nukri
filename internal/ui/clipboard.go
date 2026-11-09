@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"path/filepath"
+	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/urdadx/nukri/internal/fs/fileops"
@@ -17,33 +17,42 @@ func (m Model) cancelClipboard() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) clipboardStatus() string {
-	if m.clipboard.Empty() {
+	count := len(m.clipboard.Sources)
+	if count == 0 {
 		return ""
 	}
-	if m.clipboard.Operation == fileops.Move {
-		return "1 file cut"
+	items := fmt.Sprintf("%d items", count)
+	if count == 1 {
+		items = "1 item"
 	}
-	return "1 file copied"
+	if m.clipboard.Operation == fileops.Move {
+		return items + " cut"
+	}
+	return items + " copied"
 }
 
+// copySelected puts the marked entries, or the focused one, on the clipboard.
 func (m Model) copySelected() (tea.Model, tea.Cmd) {
-	path := m.selectedPath()
-	if path == "" {
+	targets := m.targets()
+	if len(targets) == 0 {
 		m.status = "Nothing selected"
 		return m, nil
 	}
-	m.clipboard.Copy(path)
+	m.clipboard.Copy(targets)
+	m.clearMarks()
 	m.status = ""
 	return m, nil
 }
 
+// cutSelected marks the marked entries, or the focused one, to be moved.
 func (m Model) cutSelected() (tea.Model, tea.Cmd) {
-	path := m.selectedPath()
-	if path == "" {
+	targets := m.targets()
+	if len(targets) == 0 {
 		m.status = "Nothing selected"
 		return m, nil
 	}
-	m.clipboard.Cut(path)
+	m.clipboard.Cut(targets)
+	m.clearMarks()
 	m.status = ""
 	return m, nil
 }
@@ -61,8 +70,8 @@ func (m Model) pasteClipboard() (tea.Model, tea.Cmd) {
 	if m.clipboard.Operation == fileops.Move {
 		verb = "Moving"
 	}
-	m.status = verb + " " + filepath.Base(m.clipboard.Source) + "..."
-	return m, applyTransfer(m.data.CWD, []string{m.clipboard.Source}, m.clipboard.Operation, transferClipboard)
+	m.status = verb + " " + countLabel(m.clipboard.Sources) + "..."
+	return m, applyTransfer(m.data.CWD, m.clipboard.Sources, m.clipboard.Operation, transferClipboard)
 }
 
 func (m Model) selectedPath() string {

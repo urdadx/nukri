@@ -26,7 +26,7 @@ A fast and elegant terminal file manager for linux written in Go. Currently a wo
 | `d` / `Delete` | Move to trash; in the trash, delete permanently |
 | `D` / `Shift+Delete` | Delete permanently, after confirming |
 | `c` | Copy name, name without extension, path or folder path |
-| `y` / `x` / `p` | Copy / cut / paste |
+| `y` / `x` / `p` | Copy / cut the marked items (or the focused one) / paste them all here |
 | `C` / `e` | Create archive / extract archive |
 | `Alt+D` | Find duplicate files |
 | `T` | Pick a theme (previews live; Enter saves it) |

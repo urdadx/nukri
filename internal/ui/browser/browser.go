@@ -28,8 +28,9 @@ type Data struct {
 	PreviewLoading  bool
 	PreviewError    string
 	LoadError       string
-	OperationPath   string
-	OperationCut    bool
+	// Clipboard reports whether a path is waiting to be pasted; nil for none.
+	Clipboard    func(path string) bool
+	OperationCut bool
 	// Marked holds the paths picked with multi-select.
 	Marked map[string]bool
 }

@@ -144,7 +144,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = message.statusText()
 		}
 		if message.origin == transferClipboard && message.completed > 0 {
-			m.clipboard.ClearIf(message.source, message.operation)
+			m.clipboard.ClearIf(message.sources, message.operation)
 		}
 		if message.destination == m.data.CWD {
 			return m, loadDirectory(message.destination, message.selectedPath)
@@ -598,7 +598,7 @@ func (m Model) View() string {
 	bodyHeight := m.height - 1
 	bodyWidth := m.width
 	browserData := m.data
-	browserData.OperationPath = m.clipboard.Source
+	browserData.Clipboard = m.clipboard.Contains
 	browserData.OperationCut = m.clipboard.Operation == fsfileops.Move
 	body := browser.Render(bodyWidth, bodyHeight, m.visualState, m.styles.Browser, browserData)
 	operation := m.clipboardStatus()

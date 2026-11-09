@@ -268,3 +268,44 @@ func TestCRLFPreviewSendsNoCarriageReturn(t *testing.T) {
 		t.Fatal("view of the second entry contains a carriage return or tab")
 	}
 }
+
+// pasteMarkedInto marks a.txt and b.txt, presses key (y or x), enters dest and
+// pastes.
+func pasteMarkedInto(t *testing.T, key string) (ui.Model, string) {
+	t.Helper()
+	model, directory := actionModel(t, "dest/", "a.txt", "b.txt", "c.txt")
+	// Folders come first: dest, a.txt, b.txt, c.txt.
+	model, _ = press(t, model, "down", "space", "space", key)
+	if !strings.Contains(model.View(), "2 items") {
+		t.Fatalf("footer should count the 2 items on the clipboard")
+	}
+	model, _ = press(t, model, "up", "up", "up")
+	model, cmd := press(t, model, "enter")
+	model = settle(t, model, cmd)
+	model, cmd = press(t, model, "p")
+	return settle(t, model, cmd), directory
+}
+
+func TestCopyAndPasteMarkedEntries(t *testing.T) {
+	_, directory := pasteMarkedInto(t, "y")
+	for _, name := range []string{"a.txt", "b.txt"} {
+		if !exists(filepath.Join(directory, "dest", name)) || !exists(filepath.Join(directory, name)) {
+			t.Fatalf("%s should be copied into dest and stay in place", name)
+		}
+	}
+	if exists(filepath.Join(directory, "dest", "c.txt")) {
+		t.Fatal("an unmarked entry was copied")
+	}
+}
+
+func TestCutAndPasteMovesMarkedEntries(t *testing.T) {
+	model, directory := pasteMarkedInto(t, "x")
+	for _, name := range []string{"a.txt", "b.txt"} {
+		if !exists(filepath.Join(directory, "dest", name)) || exists(filepath.Join(directory, name)) {
+			t.Fatalf("%s should be moved into dest", name)
+		}
+	}
+	if strings.Contains(model.View(), "items cut") {
+		t.Fatal("the clipboard should be empty after the move")
+	}
+}

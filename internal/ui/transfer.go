@@ -18,7 +18,7 @@ const (
 type transferMsg struct {
 	destination  string
 	selectedPath string
-	source       string
+	sources      []string
 	operation    fileops.Operation
 	origin       transferOrigin
 	completed    int
@@ -32,12 +32,8 @@ func applyTransfer(destination string, sources []string, operation fileops.Opera
 		if len(result.Destinations) > 0 {
 			selectedPath = result.Destinations[0]
 		}
-		source := ""
-		if len(sources) == 1 {
-			source = sources[0]
-		}
 		return transferMsg{
-			destination: destination, selectedPath: selectedPath, source: source,
+			destination: destination, selectedPath: selectedPath, sources: sources,
 			operation: operation, origin: origin, completed: len(result.Destinations),
 			err: errors.Join(result.Errors...),
 		}
