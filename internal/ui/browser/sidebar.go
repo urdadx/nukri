@@ -15,6 +15,15 @@ func sidebarCompact(width int) bool { return width <= 5 }
 // SidebarPathAt returns the path of the place drawn on content row row of a
 // sidebar width cells wide, or "" when that row holds no place.
 func SidebarPathAt(width int, places []core.SidebarRow, row int) string {
+	if item := SidebarItemAt(width, places, row); item != nil {
+		return item.Path
+	}
+	return ""
+}
+
+// SidebarItemAt returns the place drawn on content row row of a sidebar width
+// cells wide, or nil when that row holds no place.
+func SidebarItemAt(width int, places []core.SidebarRow, row int) *core.SidebarItem {
 	compact := sidebarCompact(width)
 	rendered := 0
 	for _, place := range places {
@@ -29,11 +38,11 @@ func SidebarPathAt(width int, places []core.SidebarRow, row int) string {
 			continue // not drawn, see RenderSidebar
 		}
 		if rendered == row {
-			return item.Path
+			return item
 		}
 		rendered++
 	}
-	return ""
+	return nil
 }
 
 func RenderSidebar(width, height int, s Styles, data Data) string {

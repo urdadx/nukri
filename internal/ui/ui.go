@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	appfileops "github.com/urdadx/nukri/internal/app/fileops"
 	"github.com/urdadx/nukri/internal/config/keys"
+	"github.com/urdadx/nukri/internal/core"
 	fsfileops "github.com/urdadx/nukri/internal/fs/fileops"
 	"github.com/urdadx/nukri/internal/kittydnd"
 	"github.com/urdadx/nukri/internal/preview"
@@ -297,11 +298,18 @@ func (m Model) handleAction(action keys.Action) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) sidebarPathAt(x, y int) string {
+	if item := m.sidebarItemAt(x, y); item != nil {
+		return item.Path
+	}
+	return ""
+}
+
+func (m Model) sidebarItemAt(x, y int) *core.SidebarItem {
 	layout := m.layout()
 	if layout.SidebarWidth == 0 || x < 0 || x >= layout.SidebarWidth || y < browser.PanelContentTop || y >= m.height-1 {
-		return ""
+		return nil
 	}
-	return browser.SidebarPathAt(layout.SidebarWidth, m.data.Places, y-browser.PanelContentTop)
+	return browser.SidebarItemAt(layout.SidebarWidth, m.data.Places, y-browser.PanelContentTop)
 }
 
 func entryIndexByPath(entries []browser.Entry, path string) int {

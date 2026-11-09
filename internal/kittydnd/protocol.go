@@ -142,6 +142,7 @@ func payloadSequence(metadata string, data []byte, finish bool) string {
 }
 
 type Parser struct {
+	offerMIME  int // uri-list index in the current drag's MIME list
 	dropFields fields
 	dropData   []byte
 	dropActive bool
@@ -169,7 +170,7 @@ func (p *Parser) Parse(sequence []byte) (Event, bool) {
 		if parsed.typeCode == 'R' {
 			p.reset()
 		}
-		return eventFromParts(parsed, payload)
+		return p.eventFromParts(parsed, payload)
 	}
 	if p.dropActive {
 		if len(p.dropData)+len(payload) > maxDropBytes {
@@ -189,7 +190,7 @@ func (p *Parser) Parse(sequence []byte) (Event, bool) {
 		p.dropData = append(p.dropData, payload...)
 		return Event{}, false
 	}
-	return eventFromParts(parsed, payload)
+	return p.eventFromParts(parsed, payload)
 }
 
 func (p *Parser) reset() {
@@ -226,23 +227,29 @@ func parseFields(metadata string) fields {
 	return result
 }
 
-func eventFromParts(fields fields, payload string) (Event, bool) {
+func (p *Parser) eventFromParts(fields fields, payload string) (Event, bool) {
 	switch fields.typeCode {
 	case 'm', 'M':
 		if fields.typeCode == 'm' && fields.x == -1 && fields.y == -1 {
+			p.offerMIME = 0
 			return Event{Kind: DropLeave}, true
 		}
-		mime := 0
-		for index, offered := range strings.Fields(payload) {
-			if offered == uriListMIME {
-				mime = index + 1
-				break
+		// The terminal sends the MIME list with the first move only, and again
+		// when it changes.
+		if payload != "" || fields.typeCode == 'M' {
+			p.offerMIME = 0
+			for index, offered := range strings.Fields(payload) {
+				if offered == uriListMIME {
+					p.offerMIME = index + 1
+					break
+				}
 			}
 		}
-		if mime == 0 || fields.operation < Copy || fields.operation > Either {
-			return Event{Kind: DropUnsupported, Final: fields.typeCode == 'M'}, true
+		final := fields.typeCode == 'M'
+		if p.offerMIME == 0 || fields.operation < Copy || fields.operation > Either {
+			return Event{Kind: DropUnsupported, Final: final}, true
 		}
-		return Event{Kind: DropOffer, MIME: mime, Operation: fields.operation, Final: fields.typeCode == 'M'}, true
+		return Event{Kind: DropOffer, X: fields.x, Y: fields.y, MIME: p.offerMIME, Operation: fields.operation, Final: final}, true
 	case 'r':
 		if payload == "" && fields.more != nil && !*fields.more {
 			return Event{}, false

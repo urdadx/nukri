@@ -4,6 +4,7 @@ import (
 	"io"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/urdadx/nukri/internal/core"
 	"github.com/urdadx/nukri/internal/kittydnd"
 )
 
@@ -18,6 +19,7 @@ type dragState struct {
 
 	dropOperation kittydnd.Operation // negotiated for the drop being offered
 	dropMIME      int
+	dropTarget    string // directory under the pointer, where the drop lands
 }
 
 // end forgets the outgoing drag.
@@ -28,7 +30,7 @@ func (d *dragState) end() {
 
 // resetDrop forgets the incoming drop negotiation.
 func (d *dragState) resetDrop() {
-	d.dropOperation, d.dropMIME = 0, 0
+	d.dropOperation, d.dropMIME, d.dropTarget = 0, 0, ""
 }
 
 func (m Model) handleDndEvent(event kittydnd.Event) (tea.Model, tea.Cmd) {
@@ -53,7 +55,17 @@ func (m Model) handleDndEvent(event kittydnd.Event) (tea.Model, tea.Cmd) {
 		if operation == kittydnd.Either {
 			operation = kittydnd.Copy
 		}
-		m.drag.dropOperation, m.drag.dropMIME = operation, event.MIME
+		target, ok := m.dropTarget(event.X, event.Y)
+		if !ok {
+			m.drag.resetDrop()
+			sequence := kittydnd.RejectDropSequence()
+			if event.Final {
+				sequence = kittydnd.FinishDropSequence(0)
+			}
+			_, _ = io.WriteString(m.drag.output, sequence)
+			return m, nil
+		}
+		m.drag.dropOperation, m.drag.dropMIME, m.drag.dropTarget = operation, event.MIME, target
 		if event.Final {
 			_, _ = io.WriteString(m.drag.output, kittydnd.RequestDropDataSequence(event.MIME))
 		} else {
@@ -93,11 +105,11 @@ func (m Model) handleDndEvent(event kittydnd.Event) (tea.Model, tea.Cmd) {
 			m.drag.resetDrop()
 			return m, nil
 		}
-		operation := m.drag.dropOperation
+		operation, target := m.drag.dropOperation, m.drag.dropTarget
 		m.drag.resetDrop()
 		_, _ = io.WriteString(m.drag.output, kittydnd.FinishDropSequence(operation))
 		m.status = "Dropping files..."
-		return m, applyDrop(m.data.CWD, event.Paths, operation)
+		return m, applyDrop(target, event.Paths, operation)
 	case kittydnd.DropDataError:
 		_, _ = io.WriteString(m.drag.output, kittydnd.FinishDropSequence(0))
 		m.drag.resetDrop()
@@ -131,6 +143,21 @@ func (m Model) handleDndEvent(event kittydnd.Event) (tea.Model, tea.Cmd) {
 		m.drag.end()
 	}
 	return m, nil
+}
+
+/*
+dropTarget returns the directory a drop over cell (x, y) lands in: the folder
+under the pointer in the list or the sidebar, else the folder being viewed. ok
+is false over the Trash place, which takes no drops.
+*/
+func (m Model) dropTarget(x, y int) (string, bool) {
+	if item := m.sidebarItemAt(x, y); item != nil {
+		return item.Path, item.Kind != core.Trash
+	}
+	if index := m.entryIndexAt(x, y); index >= 0 && m.data.Entries[index].Entry.IsDirectory() {
+		return m.data.Entries[index].Entry.Path, true
+	}
+	return m.data.CWD, true
 }
 
 func (m Model) dragLabel(path string) string {

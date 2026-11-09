@@ -128,3 +128,18 @@ func TestDataErrorDuringChunkedDropEndsIt(t *testing.T) {
 		t.Fatalf("next drop = %+v, %v", event, ok)
 	}
 }
+
+// The terminal sends the MIME list with the first move only, so later moves
+// keep the offer, with the cell under the pointer.
+func TestDropMovesWithoutMIMEListKeepOffer(t *testing.T) {
+	var parser kittydnd.Parser
+	parser.Parse([]byte("\x1b]72;t=m:x=1:y=1:o=1;text/plain text/uri-list\x1b\\"))
+	event, ok := parser.Parse([]byte("\x1b]72;t=m:x=4:y=7:o=1\x1b\\"))
+	if !ok || event.Kind != kittydnd.DropOffer || event.MIME != 2 || event.X != 4 || event.Y != 7 {
+		t.Fatalf("later move = %+v, %v", event, ok)
+	}
+	parser.Parse([]byte("\x1b]72;t=m:x=-1:y=-1\x1b\\"))
+	if event, _ := parser.Parse([]byte("\x1b]72;t=m:x=4:y=7:o=1\x1b\\")); event.Kind != kittydnd.DropUnsupported {
+		t.Fatalf("move after leaving = %+v, want the old offer forgotten", event)
+	}
+}

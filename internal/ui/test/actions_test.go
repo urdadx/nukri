@@ -17,6 +17,14 @@ import (
 // private trash.
 func actionModel(t *testing.T, files ...string) (ui.Model, string) {
 	t.Helper()
+	model, directory, _ := loadActionModel(t, files...)
+	return model, directory
+}
+
+// loadActionModel is actionModel that also returns the commands the first
+// listing started, such as loading the sidebar.
+func loadActionModel(t *testing.T, files ...string) (ui.Model, string, tea.Cmd) {
+	t.Helper()
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	directory := t.TempDir()
 	for _, name := range files {
@@ -33,8 +41,8 @@ func actionModel(t *testing.T, files ...string) (ui.Model, string) {
 	}
 	t.Chdir(directory)
 	model := ui.New(searchTheme())
-	loaded, _ := model.Update(model.Init()())
-	return loaded.(ui.Model), directory
+	loaded, cmd := model.Update(model.Init()())
+	return loaded.(ui.Model), directory, cmd
 }
 
 func press(t *testing.T, model ui.Model, keys ...string) (ui.Model, tea.Cmd) {
