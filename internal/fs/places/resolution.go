@@ -21,6 +21,7 @@ import (
 	"github.com/urdadx/nukri/internal/config"
 	"github.com/urdadx/nukri/internal/config/icons"
 	"github.com/urdadx/nukri/internal/core"
+	"github.com/urdadx/nukri/internal/fs/trash"
 )
 
 type PlaceResolutionContext struct {
@@ -172,12 +173,13 @@ func pathIdentityKey(path string) string {
 	return filepath.Clean(path)
 }
 
+// trashDir is the home trash's files folder, if it exists. For the user's own
+// home it is where trashing puts files; for another home, its default spot.
 func trashDir(home string) *string {
-	dataHome := xdg.DataHome
+	path := trash.TrashFilesDir()
 	if processHome, err := os.UserHomeDir(); err != nil || processHome != home {
-		dataHome = filepath.Join(home, ".local", "share")
+		path = filepath.Join(home, ".local", "share", "Trash", "files")
 	}
-	path := filepath.Join(dataHome, "Trash", "files")
 	if info, err := os.Stat(path); err == nil && info.IsDir() {
 		return &path
 	}

@@ -19,11 +19,15 @@ import (
 
 // dndModel is an action model with its sidebar places loaded, sized so entries
 // can be hit, writing its drag-and-drop replies to the returned buffer. HOME is
-// a temporary directory.
+// a temporary directory, and so is the trash, which exists so the sidebar
+// lists it.
 func dndModel(t *testing.T, files ...string) (ui.Model, string, *bytes.Buffer) {
 	t.Helper()
 	t.Setenv("HOME", t.TempDir())
 	model, directory, cmd := loadActionModel(t, files...)
+	if err := os.MkdirAll(filepath.Join(os.Getenv("XDG_DATA_HOME"), "Trash", "files"), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	model = settle(t, model, cmd)
 	output := &bytes.Buffer{}
 	model = model.WithDragOutput(output, nil)
