@@ -172,3 +172,49 @@ func TestDropOnTrashPlaceIsRejected(t *testing.T) {
 		t.Fatal("drop on Trash copied files into the trash")
 	}
 }
+
+// dropUntilData offers source at cell (x, y) and delivers its data, returning
+// the model and the transfer command without running it.
+func dropUntilData(t *testing.T, model ui.Model, x, y int, operation kittydnd.Operation, source string) (ui.Model, tea.Cmd) {
+	t.Helper()
+	updated, _ := model.Update(kittydnd.Event{Kind: kittydnd.DropOffer, X: x, Y: y, MIME: 1, Operation: operation, Final: true})
+	updated, cmd := updated.(ui.Model).Update(kittydnd.Event{Kind: kittydnd.DropData, MIME: 1, Paths: []string{source}})
+	return updated.(ui.Model), cmd
+}
+
+func TestDropIsFinishedOnlyAfterTheTransfer(t *testing.T) {
+	model, directory, output := dndModel(t, "a.txt")
+	source := droppedFile(t)
+	model, cmd := dropUntilData(t, model, listX(t, model), 20, kittydnd.Move, source)
+	if strings.Contains(output.String(), "t=r:o=") {
+		t.Fatalf("drop finished before its files were moved: %q", output.String())
+	}
+
+	// A second drop can't start while the first is unfinished.
+	output.Reset()
+	model.Update(kittydnd.Event{Kind: kittydnd.DropOffer, X: 1, Y: 20, MIME: 1, Operation: kittydnd.Copy})
+	if output.String() != kittydnd.RejectDropSequence() {
+		t.Fatalf("offer during a drop = %q, want a rejection", output.String())
+	}
+
+	output.Reset()
+	settle(t, model, cmd)
+	if !strings.HasPrefix(output.String(), kittydnd.FinishDropSequence(kittydnd.Move)) {
+		t.Fatalf("finished drop = %q, want the move reported", output.String())
+	}
+	if !exists(filepath.Join(directory, "dropped.txt")) || exists(source) {
+		t.Fatal("dropped file was not moved in")
+	}
+}
+
+func TestFailedDropIsReportedCanceled(t *testing.T) {
+	model, _, output := dndModel(t, "a.txt")
+	missing := filepath.Join(t.TempDir(), "missing.txt")
+	model, cmd := dropUntilData(t, model, listX(t, model), 20, kittydnd.Move, missing)
+
+	output.Reset()
+	settle(t, model, cmd)
+	if !strings.HasPrefix(output.String(), kittydnd.FinishDropSequence(0)) {
+		t.Fatalf("failed drop = %q, want it reported canceled", output.String())
+	}
+}

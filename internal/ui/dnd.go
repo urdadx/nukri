@@ -5,6 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/urdadx/nukri/internal/core"
+	"github.com/urdadx/nukri/internal/fs/fileops"
 	"github.com/urdadx/nukri/internal/kittydnd"
 )
 
@@ -20,6 +21,7 @@ type dragState struct {
 	dropOperation kittydnd.Operation // negotiated for the drop being offered
 	dropMIME      int
 	dropTarget    string // directory under the pointer, where the drop lands
+	dropping      bool   // a drop's files are being transferred; see finishDrop
 }
 
 // end forgets the outgoing drag.
@@ -51,6 +53,12 @@ func (m Model) handleDndEvent(event kittydnd.Event) (tea.Model, tea.Cmd) {
 		}
 		// When the source allows either, copy: a move would take the files out of
 		// the app they were dragged from.
+		if m.drag.dropping {
+			// The terminal has one drop in progress at a time, and the last one
+			// is not finished until its files are.
+			_, _ = io.WriteString(m.drag.output, kittydnd.RejectDropSequence())
+			return m, nil
+		}
 		operation := event.Operation
 		if operation == kittydnd.Either {
 			operation = kittydnd.Copy
@@ -107,7 +115,8 @@ func (m Model) handleDndEvent(event kittydnd.Event) (tea.Model, tea.Cmd) {
 		}
 		operation, target := m.drag.dropOperation, m.drag.dropTarget
 		m.drag.resetDrop()
-		_, _ = io.WriteString(m.drag.output, kittydnd.FinishDropSequence(operation))
+		// The terminal is told what was done once the transfer ends.
+		m.drag.dropping = true
 		m.status = "Dropping files..."
 		return m, applyDrop(target, event.Paths, operation)
 	case kittydnd.DropDataError:
@@ -143,6 +152,26 @@ func (m Model) handleDndEvent(event kittydnd.Event) (tea.Model, tea.Cmd) {
 		m.drag.end()
 	}
 	return m, nil
+}
+
+/*
+finishDrop tells the terminal what a drop's transfer did: the operation if any
+file arrived, else that the drop was canceled, so the source never treats
+files that failed to move as moved.
+*/
+func (m *Model) finishDrop(message transferMsg) {
+	if !m.drag.dropping || m.drag.output == nil {
+		return
+	}
+	m.drag.dropping = false
+	var operation kittydnd.Operation
+	if message.completed > 0 {
+		operation = kittydnd.Copy
+		if message.operation == fileops.Move {
+			operation = kittydnd.Move
+		}
+	}
+	_, _ = io.WriteString(m.drag.output, kittydnd.FinishDropSequence(operation))
 }
 
 /*

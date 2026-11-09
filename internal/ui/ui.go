@@ -135,6 +135,9 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	case searchRefreshMsg:
 		return m.handleSearchRefresh(message)
 	case transferMsg:
+		if message.origin == transferDrop {
+			m.finishDrop(message)
+		}
 		if message.origin == transferClipboard && message.err == nil {
 			m.status = ""
 		} else {
