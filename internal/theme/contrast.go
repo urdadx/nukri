@@ -1,6 +1,7 @@
 package theme
 
 import (
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -63,20 +64,80 @@ func contrastRatio(first, second string) float64 {
 }
 
 func relativeLuminance(color string) (float64, bool) {
-	hex := strings.TrimPrefix(color, "#")
-	if len(hex) != 6 {
+	rgb, ok := parseHex(color)
+	if !ok {
 		return 0, false
 	}
-	value, err := strconv.ParseUint(hex, 16, 32)
-	if err != nil {
-		return 0, false
-	}
-	channel := func(shift uint) float64 {
-		c := float64(value>>shift&0xff) / 255
+	channel := func(value float64) float64 {
+		c := value / 255
 		if c <= 0.03928 {
 			return c / 12.92
 		}
 		return math.Pow((c+0.055)/1.055, 2.4)
 	}
-	return 0.2126*channel(16) + 0.7152*channel(8) + 0.0722*channel(0), true
+	return 0.2126*channel(rgb[0]) + 0.7152*channel(rgb[1]) + 0.0722*channel(rgb[2]), true
+}
+
+// Contrast targets for pop-up text, from WCAG: 4.5:1 keeps normal text
+// readable, 7:1 makes it stand out.
+const (
+	readableText  = 4.5
+	prominentText = 7.0
+)
+
+// ModalTitle is the color for pop-up titles: the theme's accent when it stands
+// out clearly on the pop-up background, else the pop-up's text color.
+func (t Theme) ModalTitle() string {
+	if contrastRatio(t.ModalBorderActive, t.ModalBG) >= prominentText {
+		return t.ModalBorderActive
+	}
+	return t.ModalFG
+}
+
+// ModalMuted is the color for secondary text in pop-ups, such as details and
+// key hints: the theme's divider color, brightened toward the text color until
+// it is readable.
+func (t Theme) ModalMuted() string { return legibleOn(t.SidebarDivider, t.ModalFG, t.ModalBG) }
+
+// ModalError is the color for errors in pop-ups, made readable the same way.
+func (t Theme) ModalError() string { return legibleOn(t.Cancel, t.ModalFG, t.ModalBG) }
+
+/*
+legibleOn returns color if it is readable on background, else color mixed
+toward toward, in tenths, until it is. Mixing keeps the color's character,
+so muted text still looks secondary. Colors that can't be judged are kept.
+*/
+func legibleOn(color, toward, background string) string {
+	if contrastRatio(color, background) >= readableText {
+		return color
+	}
+	from, okFrom := parseHex(color)
+	to, okTo := parseHex(toward)
+	if !okFrom || !okTo {
+		return color
+	}
+	for step := 1; step < 10; step++ {
+		var mixed [3]float64
+		for channel := range mixed {
+			mixed[channel] = from[channel] + (to[channel]-from[channel])*float64(step)/10
+		}
+		candidate := fmt.Sprintf("#%02x%02x%02x", int(math.Round(mixed[0])), int(math.Round(mixed[1])), int(math.Round(mixed[2])))
+		if contrastRatio(candidate, background) >= readableText {
+			return candidate
+		}
+	}
+	return toward
+}
+
+// parseHex splits a "#rrggbb" color into its channels.
+func parseHex(color string) ([3]float64, bool) {
+	hex := strings.TrimPrefix(color, "#")
+	if len(hex) != 6 {
+		return [3]float64{}, false
+	}
+	value, err := strconv.ParseUint(hex, 16, 32)
+	if err != nil {
+		return [3]float64{}, false
+	}
+	return [3]float64{float64(value >> 16 & 0xff), float64(value >> 8 & 0xff), float64(value & 0xff)}, true
 }

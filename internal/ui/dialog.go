@@ -139,18 +139,44 @@ func (m Model) handleDialogKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
+/*
+renderHint draws a key hint such as "y confirm  n cancel" across width: each
+key in key's style, its description in description's. Parts are separated by
+two spaces, and a part's key is its first word.
+*/
+func renderHint(hint string, key, description lipgloss.Style, width int) string {
+	var parts []string
+	for _, part := range strings.Split(hint, "  ") {
+		name, text, _ := strings.Cut(part, " ")
+		rendered := key.Render(name)
+		if text != "" {
+			rendered += description.Render(" " + text)
+		}
+		parts = append(parts, rendered)
+	}
+	line := ansi.Truncate(strings.Join(parts, description.Render("  ")), width, "…")
+	return line + description.Render(strings.Repeat(" ", max(0, width-lipgloss.Width(line))))
+}
+
 func (m Model) renderDialog(base string) string {
 	d := m.dialog
 	width := min(max(48, m.width*2/3), max(1, m.width-4))
 	innerWidth := max(1, width-4)
 	t := m.styles.Theme
 	modal := lipgloss.NewStyle().Foreground(lipgloss.Color(t.ModalFG)).Background(lipgloss.Color(t.ModalBG))
-	muted := modal.Foreground(lipgloss.Color(t.SidebarDivider))
-	errorStyle := modal.Foreground(lipgloss.Color(t.Cancel))
+	muted := modal.Foreground(lipgloss.Color(t.ModalMuted()))
+	accent := modal.Foreground(lipgloss.Color(t.ModalTitle())).Bold(true)
+	errorStyle := modal.Foreground(lipgloss.Color(t.ModalError()))
 	selected := modal.Foreground(lipgloss.Color(t.FilePanelItemSelectedFG)).Background(lipgloss.Color(t.FilePanelItemSelectedBG)).Bold(true)
-	content := []string{modal.Bold(true).Foreground(lipgloss.Color(t.ModalBorderActive)).Width(innerWidth).Render(truncate(d.title, innerWidth))}
+	content := []string{accent.Width(innerWidth).Render(truncate(d.title, innerWidth))}
 	if d.detail != "" {
-		content = append(content, muted.Width(innerWidth).Render(truncate(d.detail, innerWidth)))
+		// A confirmation's detail names what it acts on, so it reads as text;
+		// elsewhere the detail is help, so it stays muted.
+		detail := muted
+		if d.kind == dialogConfirm {
+			detail = modal
+		}
+		content = append(content, detail.Width(innerWidth).Render(truncate(d.detail, innerWidth)))
 	}
 	content = append(content, modal.Width(innerWidth).Render(""))
 	switch d.kind {
@@ -201,7 +227,7 @@ func (m Model) renderDialog(base string) string {
 			}
 		}
 	}
-	content = append(content, modal.Width(innerWidth).Render(""), muted.Width(innerWidth).Render(d.hint))
+	content = append(content, modal.Width(innerWidth).Render(""), renderHint(d.hint, accent, muted, innerWidth))
 	box := modal.Width(width-2).Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(t.ModalBorderActive)).BorderBackground(lipgloss.Color(t.ModalBG)).
 		Padding(0, 1).Render(strings.Join(content, "\n"))

@@ -177,13 +177,14 @@ func (m Model) renderArchivePrompt(base string) string {
 	innerWidth := max(1, width-4)
 	t := m.styles.Theme
 	modal := lipgloss.NewStyle().Foreground(lipgloss.Color(t.ModalFG)).Background(lipgloss.Color(t.ModalBG))
-	muted := modal.Foreground(lipgloss.Color(t.SidebarDivider))
+	muted := modal.Foreground(lipgloss.Color(t.ModalMuted()))
+	accent := modal.Foreground(lipgloss.Color(t.ModalTitle())).Bold(true)
 	name := truncate(m.archive.name, max(1, innerWidth-3))
 	content := []string{
-		modal.Bold(true).Foreground(lipgloss.Color(t.ModalBorderActive)).Width(innerWidth).Render("Create archive"),
+		accent.Width(innerWidth).Render("Create archive"),
 		modal.Width(innerWidth).Render("❯ " + name + "█"),
 		muted.Width(innerWidth).Render("zip, tar, tar.gz, or tgz"),
-		muted.Width(innerWidth).Render("enter create  esc cancel"),
+		renderHint("enter create  esc cancel", accent, muted, innerWidth),
 	}
 	dialog := modal.Width(width-2).Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(t.ModalBorderActive)).BorderBackground(lipgloss.Color(t.ModalBG)).

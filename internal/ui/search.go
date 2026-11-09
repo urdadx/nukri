@@ -379,7 +379,8 @@ func (m Model) renderSearch(base string) string {
 	innerWidth := max(1, width-4)
 	t := m.styles.Theme
 	modal := lipgloss.NewStyle().Foreground(lipgloss.Color(t.ModalFG)).Background(lipgloss.Color(t.ModalBG))
-	muted := modal.Foreground(lipgloss.Color(t.SidebarDivider))
+	muted := modal.Foreground(lipgloss.Color(t.ModalMuted()))
+	accent := modal.Foreground(lipgloss.Color(t.ModalTitle())).Bold(true)
 	selected := modal.Foreground(lipgloss.Color(t.FilePanelItemSelectedFG)).Background(lipgloss.Color(t.FilePanelItemSelectedBG)).Bold(true)
 	status := fmt.Sprintf("%d indexed", len(m.search.candidates))
 	if m.search.truncated {
@@ -392,7 +393,7 @@ func (m Model) renderSearch(base string) string {
 	statusWidth := min(lipgloss.Width(status), max(0, innerWidth-lipgloss.Width(titleText)-2))
 	status = truncate(status, statusWidth)
 	headerGap := max(0, innerWidth-lipgloss.Width(titleText)-lipgloss.Width(status))
-	header := modal.Bold(true).Foreground(lipgloss.Color(t.ModalBorderActive)).Render(titleText) +
+	header := accent.Render(titleText) +
 		modal.Render(strings.Repeat(" ", headerGap)) + muted.Render(status)
 	content := []string{
 		modal.Width(innerWidth).Render(header),
@@ -433,7 +434,7 @@ func (m Model) renderSearch(base string) string {
 	for len(content) < height-3 {
 		content = append(content, modal.Width(innerWidth).Render(""))
 	}
-	content = append(content, muted.Width(innerWidth).Render("↑↓ select  enter open  esc close"))
+	content = append(content, renderHint("↑↓ select  enter open  esc close", accent, muted, innerWidth))
 	dialog := modal.Width(width-2).Height(height-2).Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(t.ModalBorderActive)).BorderBackground(lipgloss.Color(t.ModalBG)).
 		Padding(0, 1).Render(strings.Join(content, "\n"))

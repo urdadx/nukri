@@ -223,8 +223,8 @@ func (m Model) renderDuplicates(base string) string {
 	innerWidth := max(1, width-4)
 	t := m.styles.Theme
 	modal := lipgloss.NewStyle().Foreground(lipgloss.Color(t.ModalFG)).Background(lipgloss.Color(t.ModalBG))
-	muted := modal.Foreground(lipgloss.Color(t.SidebarDivider))
-	heading := modal.Foreground(lipgloss.Color(t.ModalBorderActive)).Bold(true)
+	muted := modal.Foreground(lipgloss.Color(t.ModalMuted()))
+	accent := modal.Foreground(lipgloss.Color(t.ModalTitle())).Bold(true)
 	selected := modal.Foreground(lipgloss.Color(t.FilePanelItemSelectedFG)).Background(lipgloss.Color(t.FilePanelItemSelectedBG)).Bold(true)
 
 	status := ""
@@ -236,7 +236,7 @@ func (m Model) renderDuplicates(base string) string {
 	case state.err == "":
 		status = fmt.Sprintf("%d groups · %s reclaimable", len(state.groups), formatBytes(duplicates.Wasted(state.groups)))
 	}
-	title := heading.Render("Duplicate files")
+	title := accent.Render("Duplicate files")
 	gap := max(1, innerWidth-lipgloss.Width(title)-lipgloss.Width(status))
 	content := []string{modal.Width(innerWidth).Render(title + modal.Render(strings.Repeat(" ", gap)) + muted.Render(status))}
 	content = append(content, muted.Width(innerWidth).Render(truncate(state.root, innerWidth)), modal.Width(innerWidth).Render(""))
@@ -254,7 +254,7 @@ func (m Model) renderDuplicates(base string) string {
 			group := state.groups[row.group]
 			if row.path == "" {
 				label := fmt.Sprintf("%d copies · %s each", len(group.Paths), formatBytes(group.Size))
-				content = append(content, heading.Width(innerWidth).Render(truncate(label, innerWidth)))
+				content = append(content, accent.Width(innerWidth).Render(truncate(label, innerWidth)))
 				continue
 			}
 			relative, err := filepath.Rel(state.root, row.path)
@@ -272,7 +272,7 @@ func (m Model) renderDuplicates(base string) string {
 	for len(content) < height-3 {
 		content = append(content, modal.Width(innerWidth).Render(""))
 	}
-	content = append(content, muted.Width(innerWidth).Render("enter go to file  d trash copy  esc close"))
+	content = append(content, renderHint("enter go to file  d trash copy  esc close", accent, muted, innerWidth))
 	box := modal.Width(width-2).Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(t.ModalBorderActive)).BorderBackground(lipgloss.Color(t.ModalBG)).
 		Padding(0, 1).Render(strings.Join(content, "\n"))
