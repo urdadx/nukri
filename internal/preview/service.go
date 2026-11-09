@@ -94,7 +94,7 @@ func lookPath(names ...string) string {
 func (s *Service) Capabilities() Capabilities {
 	return Capabilities{
 		PDF:       s.canRenderPDF(),
-		SVG:       s.tools.RSVGConvert != "",
+		SVG:       s.tools.RSVGConvert != "" || s.tools.ImageMagick != "",
 		AVIF:      s.tools.ImageMagick != "" || s.tools.FFmpeg != "",
 		Archives:  true, // ZIP-based containers (.zip/.jar/.cbz/.apk/...) list natively
 		Documents: s.tools.LibreOffice != "" && s.canRenderPDF(),
@@ -144,7 +144,7 @@ func (s *Service) Render(ctx context.Context, request Request) (Preview, error) 
 		return s.renderISO(ctx, path)
 	}
 	if request.Facts.BuiltinClass == core.FileClassImage && strings.EqualFold(filepath.Ext(path), ".svg") {
-		return s.renderSVG(ctx, path)
+		return s.renderSVG(ctx, path, request.Width)
 	}
 	if request.Facts.BuiltinClass == core.FileClassImage {
 		return s.renderImage(ctx, path, request.Facts, request.Width)

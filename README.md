@@ -60,7 +60,7 @@ install. Everything else works without them.
 |---|---|---|---|
 | Video frames, audio waveforms | `ffmpeg`, `ffprobe` | `ffmpeg` | `ffmpeg` |
 | AVIF images | `magick` or `convert` (ffmpeg 6+ also works) | `imagemagick` | `imagemagick` |
-| SVG images | `rsvg-convert` | `librsvg2-bin` | `librsvg` |
+| SVG images | `rsvg-convert` (best), or ImageMagick | `librsvg2-bin` | `librsvg` |
 | PDF pages | `pdftocairo`, `pdfinfo` | `poppler-utils` | `poppler` |
 | Office documents (docx, xlsx, pptx, odt, …) | `libreoffice` + the PDF tools | `libreoffice` | `libreoffice-fresh` |
 | Ebooks (mobi, azw3) | `ebook-convert` + the PDF tools | `calibre` | `calibre` |

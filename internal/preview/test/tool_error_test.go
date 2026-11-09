@@ -225,3 +225,31 @@ func TestSevenZipListingStopsAtEntryLimit(t *testing.T) {
 		t.Fatal("a failing 7-Zip should produce an error")
 	}
 }
+
+// When rsvg-convert is missing, SVGs render through ImageMagick. If ImageMagick
+// fails on a file, the preview asks for rsvg-convert, which renders full SVG.
+func TestSVGFallsBackToImageMagick(t *testing.T) {
+	imageMagick := preview.DiscoverTools().ImageMagick
+	if imageMagick == "" {
+		t.Skip("requires ImageMagick")
+	}
+	service := preview.NewServiceWithTools(preview.Tools{ImageMagick: imageMagick})
+	good := copyToTemp(t, filepath.Join("file_samples", "diamond.svg"))
+	result, err := service.Render(context.Background(), preview.Request{Path: good, Facts: fileinfo.InspectPath(good, core.File), Width: 30})
+	if err != nil {
+		t.Fatalf("render through ImageMagick: %v", err)
+	}
+	if image := result.(*preview.SVGPreview).Image; image.Width != 24 || image.Height != 30 {
+		t.Fatalf("image = %dx%d, want 24x30", image.Width, image.Height)
+	}
+
+	broken := filepath.Join(t.TempDir(), "broken.svg")
+	if err := os.WriteFile(broken, []byte("<svg xmlns='http://www.w3.org/2000/svg'><unclosed"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err = service.Render(context.Background(), preview.Request{Path: broken, Facts: fileinfo.InspectPath(broken, core.File), Width: 30})
+	var toolErr *preview.ToolUnavailableError
+	if !errors.As(err, &toolErr) || toolErr.Tool != "rsvg-convert" {
+		t.Fatalf("error = %v, want a suggestion to install rsvg-convert", err)
+	}
+}

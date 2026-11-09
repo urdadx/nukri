@@ -279,3 +279,44 @@ func TestAudioPreviewServesFromDiskCache(t *testing.T) {
 		t.Fatalf("cached audio preview lost its details: %#v", second.Audio)
 	}
 }
+
+// A revisited SVG comes from the disk cache: the renderer doesn't run again.
+func TestSVGPreviewServesFromDiskCache(t *testing.T) {
+	service := preview.NewService()
+	requireCapability(t, service.Capabilities().SVG, "rsvg-convert or imagemagick")
+	data, err := os.ReadFile(filepath.Join("file_samples", "diamond.svg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "diamond.svg")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	src, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts := fileinfo.InspectPath(path, core.File)
+	render := func() *preview.SVGPreview {
+		t.Helper()
+		result, err := service.Render(context.Background(), preview.Request{Path: path, Facts: facts, Width: 20})
+		if err != nil {
+			t.Fatalf("render: %v", err)
+		}
+		return result.(*preview.SVGPreview)
+	}
+	first := render()
+
+	// Same size and modification time but no longer an SVG: only a cache hit
+	// can still produce the image.
+	if err := os.WriteFile(path, make([]byte, src.Size()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(path, src.ModTime(), src.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	second := render()
+	if string(second.Image.Data) != string(first.Image.Data) || second.Image.Width != first.Image.Width {
+		t.Fatal("cached SVG preview differs from the first render")
+	}
+}
