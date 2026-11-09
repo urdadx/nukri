@@ -59,7 +59,7 @@ func CancelSequence() string  { return "\x1b]72;t=E:y=-1\x1b\\" }
 
 func AcceptDropSequence(operation Operation) string {
 	if operation == Either {
-		operation = Move
+		operation = Copy
 	}
 	return fmt.Sprintf("\x1b]72;t=m:o=%d;%s\x1b\\", operation, uriListMIME)
 }
@@ -162,6 +162,14 @@ func (p *Parser) Parse(sequence []byte) (Event, bool) {
 	if len(payload) > maxDropBytes {
 		p.reset()
 		return Event{Kind: DropDataError, Error: "drop data is too large"}, true
+	}
+	if p.dropActive && parsed.typeCode != 0 && parsed.typeCode != 'r' {
+		// Another message between drop data chunks is not part of the data. A
+		// data error ends the drop; anything else leaves it pending.
+		if parsed.typeCode == 'R' {
+			p.reset()
+		}
+		return eventFromParts(parsed, payload)
 	}
 	if p.dropActive {
 		if len(p.dropData)+len(payload) > maxDropBytes {

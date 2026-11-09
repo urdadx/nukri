@@ -57,7 +57,7 @@ func TestDropDataReportsRemoteAndUnsupportedURIs(t *testing.T) {
 }
 
 func TestDropResponseSequences(t *testing.T) {
-	if got := kittydnd.AcceptDropSequence(kittydnd.Either); got != "\x1b]72;t=m:o=2;text/uri-list\x1b\\" {
+	if got := kittydnd.AcceptDropSequence(kittydnd.Either); got != "\x1b]72;t=m:o=1;text/uri-list\x1b\\" {
 		t.Fatalf("accept sequence = %q", got)
 	}
 	if got := kittydnd.RequestDropDataSequence(2); got != "\x1b]72;t=r:x=2\x1b\\" {
@@ -89,5 +89,42 @@ func TestFilterInputExtractsSequenceSplitAcrossReads(t *testing.T) {
 	kittydnd.FilterInput(src, &dst, make(chan kittydnd.Event, 4))
 	if dst.String() != "xy" {
 		t.Fatalf("output = %q, want the sequence removed", dst.String())
+	}
+}
+
+// A message arriving between drop data chunks must neither end the drop nor
+// become part of its data.
+func TestOtherMessageDuringChunkedDropIsHandledSeparately(t *testing.T) {
+	payload := base64.RawStdEncoding.EncodeToString([]byte("file:///tmp/a.txt\r\nfile:///tmp/b.txt"))
+	var parser kittydnd.Parser
+	if _, ok := parser.Parse([]byte("\x1b]72;t=r:x=1:m=1;" + payload[:10] + "\x1b\\")); ok {
+		t.Fatal("first chunk unexpectedly produced an event")
+	}
+	event, ok := parser.Parse([]byte("\x1b]72;t=m:x=-1:y=-1\x1b\\"))
+	if !ok || event.Kind != kittydnd.DropLeave {
+		t.Fatalf("message during drop = %+v, %v, want DropLeave", event, ok)
+	}
+	event, ok = parser.Parse([]byte("\x1b]72;m=0;" + payload[10:] + "\x1b\\"))
+	if !ok || event.Kind != kittydnd.DropData {
+		t.Fatalf("last chunk = %+v, %v, want DropData", event, ok)
+	}
+	want := []string{"/tmp/a.txt", "/tmp/b.txt"}
+	if !reflect.DeepEqual(event.Paths, want) {
+		t.Fatalf("paths = %#v, want %#v", event.Paths, want)
+	}
+}
+
+func TestDataErrorDuringChunkedDropEndsIt(t *testing.T) {
+	var parser kittydnd.Parser
+	parser.Parse([]byte("\x1b]72;t=r:x=1:m=1;ZmlsZTovLy90bXAv\x1b\\"))
+	event, ok := parser.Parse([]byte("\x1b]72;t=R:x=1;EIO\x1b\\"))
+	if !ok || event.Kind != kittydnd.DropDataError {
+		t.Fatalf("error during drop = %+v, %v", event, ok)
+	}
+	// The next drop starts clean instead of extending the abandoned one.
+	payload := base64.RawStdEncoding.EncodeToString([]byte("file:///tmp/c.txt"))
+	event, ok = parser.Parse([]byte("\x1b]72;t=r:x=1:m=0;" + payload + "\x1b\\"))
+	if !ok || !reflect.DeepEqual(event.Paths, []string{"/tmp/c.txt"}) {
+		t.Fatalf("next drop = %+v, %v", event, ok)
 	}
 }

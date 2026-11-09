@@ -47,9 +47,11 @@ func (m Model) handleDndEvent(event kittydnd.Event) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		// When the source allows either, copy: a move would take the files out of
+		// the app they were dragged from.
 		operation := event.Operation
 		if operation == kittydnd.Either {
-			operation = kittydnd.Move
+			operation = kittydnd.Copy
 		}
 		m.drag.dropOperation, m.drag.dropMIME = operation, event.MIME
 		if event.Final {
@@ -110,7 +112,14 @@ func (m Model) handleDndEvent(event kittydnd.Event) (tea.Model, tea.Cmd) {
 				path = m.data.Entries[index].Entry.Path
 			}
 		}
-		payload, sequence := kittydnd.StartSequence([]string{path}, m.dragLabel(path))
+		paths, label := []string{path}, m.dragLabel(path)
+		// Dragging a marked entry drags every marked entry.
+		if m.data.Marked[path] {
+			if paths = m.targets(); len(paths) > 1 {
+				label = "" // StartSequence labels it "N selected files"
+			}
+		}
+		payload, sequence := kittydnd.StartSequence(paths, label)
 		_, _ = io.WriteString(m.drag.output, sequence)
 		if len(payload) > 0 {
 			m.drag.payload = payload
