@@ -11,9 +11,11 @@ import (
 )
 
 const (
-	uriListMIME  = "text/uri-list"
-	chunkSize    = 4096
-	maxDropBytes = 16 << 20
+	uriListMIME = "text/uri-list"
+	chunkSize   = 4096
+
+	maxDropBytes        = 16 << 20                   // largest drop, decoded
+	maxEncodedDropBytes = (maxDropBytes + 2) / 3 * 4 // maxDropBytes in base64
 )
 
 type Operation uint8
@@ -160,7 +162,7 @@ func (p *Parser) Parse(sequence []byte) (Event, bool) {
 	body = strings.TrimPrefix(body, "\x1b]72;")
 	metadata, payload, _ := strings.Cut(body, ";")
 	parsed := parseFields(metadata)
-	if len(payload) > maxDropBytes {
+	if len(payload) > maxEncodedDropBytes {
 		p.reset()
 		return Event{Kind: DropDataError, Error: "drop data is too large"}, true
 	}
@@ -173,7 +175,7 @@ func (p *Parser) Parse(sequence []byte) (Event, bool) {
 		return p.eventFromParts(parsed, payload)
 	}
 	if p.dropActive {
-		if len(p.dropData)+len(payload) > maxDropBytes {
+		if len(p.dropData)+len(payload) > maxEncodedDropBytes {
 			p.reset()
 			return Event{Kind: DropDataError, Error: "drop data is too large"}, true
 		}
@@ -288,6 +290,9 @@ func dropDataEvent(mime int, encoded []byte) (Event, bool) {
 	}
 	if err != nil {
 		return Event{Kind: DropDataError, MIME: mime, Error: "invalid drop data"}, true
+	}
+	if len(data) > maxDropBytes {
+		return Event{Kind: DropDataError, MIME: mime, Error: "drop data is too large"}, true
 	}
 	paths, unsupported := parseURIList(string(data))
 	return Event{Kind: DropData, MIME: mime, Paths: paths, UnsupportedSchemes: unsupported}, true

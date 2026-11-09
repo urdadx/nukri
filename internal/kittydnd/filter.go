@@ -10,7 +10,7 @@ var oscIntroducer = []byte("\x1b]72;")
 // maxPendingOSC bounds one buffered drag-and-drop sequence: a full base64 drop
 // plus slack. Without it, an introducer that never terminates would hold back
 // every later byte, keyboard input included.
-const maxPendingOSC = maxDropBytes*4/3 + 4096
+const maxPendingOSC = maxEncodedDropBytes + 4096
 
 // FilterInput copies terminal input from src to dst, removing Kitty
 // drag-and-drop OSC 72 sequences and sending what they decode to on events. It

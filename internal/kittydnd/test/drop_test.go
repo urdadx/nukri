@@ -143,3 +143,41 @@ func TestDropMovesWithoutMIMEListKeepOffer(t *testing.T) {
 		t.Fatalf("move after leaving = %+v, want the old offer forgotten", event)
 	}
 }
+
+// dropOfSize returns drop data sequences, in two chunks, for a URI list of
+// exactly size bytes naming /tmp/a.
+func dropOfSize(size int) [][]byte {
+	uri := "file:///tmp/a\n#"
+	encoded := base64.RawStdEncoding.EncodeToString([]byte(uri + strings.Repeat("x", size-len(uri))))
+	half := len(encoded) / 2 / 4 * 4
+	return [][]byte{
+		[]byte("\x1b]72;t=r:x=1:m=1;" + encoded[:half] + "\x1b\\"),
+		[]byte("\x1b]72;m=1;" + encoded[half:] + "\x1b\\"),
+		[]byte("\x1b]72;t=r:x=1:m=0;\x1b\\"),
+	}
+}
+
+func parseAll(sequences [][]byte) (kittydnd.Event, bool) {
+	var parser kittydnd.Parser
+	var event kittydnd.Event
+	var ok bool
+	for _, sequence := range sequences {
+		if event, ok = parser.Parse(sequence); ok {
+			break
+		}
+	}
+	return event, ok
+}
+
+// The 16 MiB drop limit applies to the decoded data, not its base64 encoding,
+// which is a third larger.
+func TestDropSizeLimitIsOnDecodedData(t *testing.T) {
+	event, ok := parseAll(dropOfSize(16 << 20))
+	if !ok || event.Kind != kittydnd.DropData || !reflect.DeepEqual(event.Paths, []string{"/tmp/a"}) {
+		t.Fatalf("16 MiB drop = %v %q, want its data", event.Kind, event.Error)
+	}
+	event, ok = parseAll(dropOfSize(16<<20 + 1))
+	if !ok || event.Kind != kittydnd.DropDataError {
+		t.Fatalf("drop over 16 MiB = %v, want an error", event.Kind)
+	}
+}
