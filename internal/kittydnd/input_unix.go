@@ -3,13 +3,21 @@
 package kittydnd
 
 import (
+	"bytes"
+	"errors"
 	"io"
 	"os"
+	"time"
 
 	"github.com/charmbracelet/x/term"
+	"github.com/muesli/cancelreader"
 )
 
 var _ term.File = (*Input)(nil)
+
+// ErrUnsupported is returned by OpenInput when the terminal doesn't support
+// the drag-and-drop protocol.
+var ErrUnsupported = errors.New("terminal does not support drag and drop")
 
 type Input struct {
 	tty    *os.File
@@ -17,15 +25,47 @@ type Input struct {
 	events chan Event
 }
 
+// OpenInput opens the terminal for input with drag-and-drop sequences filtered
+// out, after asking the terminal whether it supports them.
 func OpenInput() (*Input, error) {
-	tty, err := os.Open("/dev/tty")
+	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
 	if err != nil {
+		return nil, err
+	}
+	supported, rest, err := probeTerminal(tty)
+	if err != nil || !supported {
+		_ = tty.Close()
+		if err == nil {
+			err = ErrUnsupported
+		}
 		return nil, err
 	}
 	reader, writer := io.Pipe()
 	input := &Input{tty: tty, reader: reader, events: make(chan Event, 8)}
-	go input.filter(writer)
+	go input.filter(io.MultiReader(bytes.NewReader(rest), tty), writer)
 	return input, nil
+}
+
+// probeTerminal sends ProbeSequence to tty and reads the answers in raw mode,
+// giving up after probeTimeout.
+func probeTerminal(tty *os.File) (bool, []byte, error) {
+	state, err := term.MakeRaw(tty.Fd())
+	if err != nil {
+		return false, nil, err
+	}
+	defer func() { _ = term.Restore(tty.Fd(), state) }()
+	reader, err := cancelreader.NewReader(tty)
+	if err != nil {
+		return false, nil, err
+	}
+	defer reader.Close()
+	if _, err := tty.WriteString(ProbeSequence()); err != nil {
+		return false, nil, err
+	}
+	timer := time.AfterFunc(probeTimeout, func() { reader.Cancel() })
+	defer timer.Stop()
+	supported, rest := Probe(reader)
+	return supported, rest, nil
 }
 
 func (i *Input) Read(p []byte) (int, error) { return i.reader.Read(p) }
@@ -41,8 +81,8 @@ func (i *Input) Close() error {
 	return i.tty.Close()
 }
 
-func (i *Input) filter(writer *io.PipeWriter) {
+func (i *Input) filter(source io.Reader, writer *io.PipeWriter) {
 	defer writer.Close()
 	defer close(i.events)
-	FilterInput(i.tty, writer, i.events)
+	FilterInput(source, writer, i.events)
 }
