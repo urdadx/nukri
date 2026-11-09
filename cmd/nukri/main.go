@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 
 	"github.com/adrg/xdg"
 	tea "github.com/charmbracelet/bubbletea"
@@ -18,6 +19,22 @@ import (
 
 const defaultTheme = "catppuccin-mocha"
 
+// version is set by release builds (-ldflags "-X main.version=...").
+var version = ""
+
+// versionString is the release version, else the version Go recorded at build
+// time (the module version for go install, a git-based one in a checkout),
+// else "dev".
+func versionString() string {
+	if version != "" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	return "dev"
+}
+
 func main() {
 	os.Exit(run())
 }
@@ -30,7 +47,12 @@ func run() int {
 	userThemes := filepath.Join(configDir, "themes")
 	themeFlag := flag.String("theme", "", "theme name: a bundled theme, or <name>.toml in "+userThemes+
 		" (default: the theme in "+configPath+", else "+defaultTheme+")")
+	versionFlag := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
+	if *versionFlag {
+		fmt.Println("nukri", versionString())
+		return 0
+	}
 
 	settings, err := config.LoadSettings(configPath)
 	if err != nil {

@@ -39,7 +39,6 @@ func TestPDFPreviewIgnoresSourceByteSize(t *testing.T) {
 	}
 }
 
-
 // copyPDFSample copies the bundled session_history.pdf fixture into a fresh
 // temp path so tests can mutate it without touching the repo fixture.
 func copyPDFSample(t *testing.T) string {

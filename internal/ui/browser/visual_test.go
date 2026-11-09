@@ -8,7 +8,7 @@ import (
 func TestFitImageToPanePreservesAspect(t *testing.T) {
 	cellAspect := 2.0
 	tests := []struct {
-		name                          string
+		name                         string
 		imgW, imgH, maxCols, maxRows int
 	}{
 		{"square in wide pane", 100, 100, 40, 20},
