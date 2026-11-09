@@ -22,5 +22,6 @@ archives:
 checksum:
   name_template: checksums.txt
 
+# The changelog lists commits newest first, as git log does.
 changelog:
-  sort: asc
+  use: git
