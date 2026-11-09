@@ -8,22 +8,14 @@ import (
 	"time"
 )
 
-type Runtime struct {
-	Enabled   bool
-	MachineID string
-}
-
 /*
-DetectRuntime reports whether drag and drop may be used here. Inside tmux,
-zellij or over SSH it is off: multiplexers don't pass the protocol through,
-and dropped file paths would name files on another machine. Whether the
-terminal supports the protocol is asked by OpenInput.
+Allowed reports whether drag and drop may be used here. Inside tmux, zellij or
+over SSH it is off: multiplexers don't pass the protocol through, and dropped
+file paths would name files on another machine. Whether the terminal supports
+the protocol is asked by OpenInput.
 */
-func DetectRuntime() Runtime {
-	if os.Getenv("TMUX") != "" || os.Getenv("ZELLIJ") != "" || os.Getenv("SSH_CONNECTION") != "" || os.Getenv("SSH_TTY") != "" {
-		return Runtime{}
-	}
-	return Runtime{Enabled: true}
+func Allowed() bool {
+	return os.Getenv("TMUX") == "" && os.Getenv("ZELLIJ") == "" && os.Getenv("SSH_CONNECTION") == "" && os.Getenv("SSH_TTY") == ""
 }
 
 // probeTimeout bounds the wait for a terminal that answers neither probe query.

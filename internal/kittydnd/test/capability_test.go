@@ -56,3 +56,20 @@ func TestProbeWithoutAnswerIsUnsupported(t *testing.T) {
 		t.Fatalf("supported = %v, rest = %q; want unsupported with \"x\" left", supported, rest)
 	}
 }
+
+func TestAllowedOnlyOutsideMultiplexersAndSSH(t *testing.T) {
+	for _, name := range []string{"TMUX", "ZELLIJ", "SSH_CONNECTION", "SSH_TTY"} {
+		t.Setenv(name, "")
+	}
+	if !kittydnd.Allowed() {
+		t.Fatal("drag and drop not allowed in a local terminal")
+	}
+	for _, name := range []string{"TMUX", "ZELLIJ", "SSH_CONNECTION", "SSH_TTY"} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv(name, "1")
+			if kittydnd.Allowed() {
+				t.Fatalf("drag and drop allowed with %s set", name)
+			}
+		})
+	}
+}

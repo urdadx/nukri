@@ -52,8 +52,13 @@ type Event struct {
 	Error              string
 }
 
-func EnableSequence(machineID string) string {
-	return fmt.Sprintf("\x1b]72;t=a;%s\x1b\\\x1b]72;t=o:x=1;%s\x1b\\", uriListMIME, machineID)
+/*
+EnableSequence turns on drops and drag offers. It sends no machine id: that
+id lets a terminal fetch dragged files from a program on another machine,
+and nukri only runs drag and drop locally (see Allowed).
+*/
+func EnableSequence() string {
+	return "\x1b]72;t=a;" + uriListMIME + "\x1b\\\x1b]72;t=o:x=1\x1b\\"
 }
 
 func DisableSequence() string { return "\x1b]72;t=A\x1b\\\x1b]72;t=o:x=2\x1b\\" }

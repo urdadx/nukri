@@ -57,6 +57,9 @@ func TestDropDataReportsRemoteAndUnsupportedURIs(t *testing.T) {
 }
 
 func TestDropResponseSequences(t *testing.T) {
+	if got := kittydnd.EnableSequence(); got != "\x1b]72;t=a;text/uri-list\x1b\\\x1b]72;t=o:x=1\x1b\\" {
+		t.Fatalf("enable sequence = %q", got)
+	}
 	if got := kittydnd.AcceptDropSequence(kittydnd.Either); got != "\x1b]72;t=m:o=1;text/uri-list\x1b\\" {
 		t.Fatalf("accept sequence = %q", got)
 	}
