@@ -61,12 +61,12 @@ func run() int {
 	options := []tea.ProgramOption{tea.WithOutput(output), tea.WithAltScreen(), tea.WithMouseCellMotion()}
 	var input *kittydnd.Input
 	if kittydnd.Allowed() {
-		input, err = kittydnd.OpenInput()
+		input, err = kittydnd.OpenInput(output.Protocol())
 		if err == nil {
 			defer input.Close()
 			options = append(options, tea.WithInput(input))
-			model = model.WithDragOutput(output)
-			_, _ = os.Stdout.WriteString(kittydnd.EnableSequence())
+			model = model.WithDragOutput(output, input)
+			_, _ = os.Stdout.WriteString(kittydnd.EnableSequence(kittydnd.MachineID()))
 			defer os.Stdout.WriteString(kittydnd.DisableSequence())
 		}
 	}

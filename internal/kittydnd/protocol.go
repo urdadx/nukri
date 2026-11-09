@@ -39,6 +39,8 @@ const (
 	DragEnded
 	DragError
 	DragOther
+	DragEntryRequested // the terminal wants the contents of dragged entry Index
+	RemoteDropDone     // a FetchRemoteDrop finished; see Paths, Completed, Error
 )
 
 type Event struct {
@@ -50,15 +52,34 @@ type Event struct {
 	Paths              []string
 	UnsupportedSchemes []string
 	Error              string
+
+	// Remote marks drop data from another machine: Paths name files there, and
+	// their contents are fetched with FetchRemoteDrop using Entries.
+	Remote    bool
+	Entries   []DropEntry
+	Index     int // DragEntryRequested: 1-based index into the dragged paths
+	Completed int // RemoteDropDone: top-level entries received
+}
+
+// DropEntry is a dropped file and its 1-based index in the drop's URI list,
+// which the terminal uses to name it in requests for its contents.
+type DropEntry struct {
+	Index int
+	Path  string
 }
 
 /*
-EnableSequence turns on drops and drag offers. It sends no machine id: that
-id lets a terminal fetch dragged files from a program on another machine,
-and nukri only runs drag and drop locally (see Allowed).
+EnableSequence turns on drops and drag offers. machineID (see MachineID) lets
+the terminal tell when nukri runs on another machine; it may be empty, and
+then drag and drop only works with files local to the terminal.
 */
-func EnableSequence() string {
-	return "\x1b]72;t=a;" + uriListMIME + "\x1b\\\x1b]72;t=o:x=1\x1b\\"
+func EnableSequence(machineID string) string {
+	sequence := "\x1b]72;t=a;" + uriListMIME + "\x1b\\"
+	if machineID != "" {
+		sequence += "\x1b]72;t=a:x=1;" + machineID + "\x1b\\"
+		return sequence + "\x1b]72;t=o:x=1;" + machineID + "\x1b\\"
+	}
+	return sequence + "\x1b]72;t=o:x=1\x1b\\"
 }
 
 func DisableSequence() string { return "\x1b]72;t=A\x1b\\\x1b]72;t=o:x=2\x1b\\" }
@@ -156,16 +177,15 @@ type Parser struct {
 }
 
 type fields struct {
-	typeCode  byte
-	x, y      int
-	operation Operation
-	more      *bool
+	typeCode       byte
+	x, y           int
+	upperX, upperY int // the X and Y keys; their meaning depends on the type
+	operation      Operation
+	more           *bool
 }
 
 func (p *Parser) Parse(sequence []byte) (Event, bool) {
-	body := strings.TrimSuffix(strings.TrimSuffix(string(sequence), "\x1b\\"), "\a")
-	body = strings.TrimPrefix(body, "\x1b]72;")
-	metadata, payload, _ := strings.Cut(body, ";")
+	metadata, payload := splitSequence(sequence)
 	parsed := parseFields(metadata)
 	if len(payload) > maxEncodedDropBytes {
 		p.reset()
@@ -190,7 +210,7 @@ func (p *Parser) Parse(sequence []byte) (Event, bool) {
 		}
 		fields, data := p.dropFields, p.dropData
 		p.reset()
-		return dropDataEvent(fields.x, data)
+		return dropDataEvent(fields, data)
 	}
 	if parsed.typeCode == 'r' && (parsed.more != nil && *parsed.more || parsed.more == nil && payload != "") {
 		p.dropActive, p.dropFields = true, parsed
@@ -205,7 +225,7 @@ func (p *Parser) reset() {
 }
 
 func parseFields(metadata string) fields {
-	result := fields{x: -1, y: -1}
+	result := fields{x: -1, y: -1, upperX: -1, upperY: -1}
 	for _, field := range strings.Split(metadata, ":") {
 		key, value, found := strings.Cut(field, "=")
 		if !found || len(key) != 1 {
@@ -224,6 +244,10 @@ func parseFields(metadata string) fields {
 			result.x = parsed
 		case "y":
 			result.y = parsed
+		case "X":
+			result.upperX = parsed
+		case "Y":
+			result.upperY = parsed
 		case "o":
 			result.operation = Operation(parsed)
 		case "m":
@@ -261,7 +285,7 @@ func (p *Parser) eventFromParts(fields fields, payload string) (Event, bool) {
 		if payload == "" && fields.more != nil && !*fields.more {
 			return Event{}, false
 		}
-		return dropDataEvent(fields.x, []byte(payload))
+		return dropDataEvent(fields, []byte(payload))
 	case 'R':
 		return Event{Kind: DropDataError, MIME: fields.x, Error: payload}, true
 	case 'o':
@@ -269,6 +293,11 @@ func (p *Parser) eventFromParts(fields fields, payload string) (Event, bool) {
 			return Event{}, false
 		}
 		return Event{Kind: DragOffer, X: fields.x, Y: fields.y}, true
+	case 'k':
+		if fields.x < 1 {
+			return Event{}, false
+		}
+		return Event{Kind: DragEntryRequested, Index: fields.x}, true
 	case 'e':
 		switch fields.x {
 		case 4:
@@ -288,7 +317,10 @@ func (p *Parser) eventFromParts(fields fields, payload string) (Event, bool) {
 	}
 }
 
-func dropDataEvent(mime int, encoded []byte) (Event, bool) {
+// dropDataEvent decodes the URI list sent for a drop. The terminal marks the
+// list with X=1 when it comes from another machine.
+func dropDataEvent(fields fields, encoded []byte) (Event, bool) {
+	mime, remote := fields.x, fields.upperX == 1
 	data, err := base64.StdEncoding.DecodeString(string(encoded))
 	if err != nil {
 		data, err = base64.RawStdEncoding.DecodeString(string(encoded))
@@ -299,20 +331,33 @@ func dropDataEvent(mime int, encoded []byte) (Event, bool) {
 	if len(data) > maxDropBytes {
 		return Event{Kind: DropDataError, MIME: mime, Error: "drop data is too large"}, true
 	}
-	paths, unsupported := parseURIList(string(data))
-	return Event{Kind: DropData, MIME: mime, Paths: paths, UnsupportedSchemes: unsupported}, true
+	entries, unsupported := parseURIList(string(data), remote)
+	paths := make([]string, len(entries))
+	for index, entry := range entries {
+		paths[index] = entry.Path
+	}
+	return Event{Kind: DropData, MIME: mime, Paths: paths, UnsupportedSchemes: unsupported, Remote: remote, Entries: entries}, true
 }
 
-func parseURIList(data string) ([]string, []string) {
-	var paths, unsupported []string
+/*
+parseURIList returns the local files in a text/uri-list, each with its 1-based
+index among the list's URIs, and the schemes of URIs that aren't local files.
+A file URI naming another host counts as local only in a remote drop, where
+every file is on the other machine anyway.
+*/
+func parseURIList(data string, remote bool) ([]DropEntry, []string) {
+	var entries []DropEntry
+	var unsupported []string
 	seenPaths, seenSchemes := map[string]bool{}, map[string]bool{}
+	index := 0
 	for _, line := range strings.Split(data, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
+		index++
 		u, err := url.Parse(line)
-		if err != nil || !strings.EqualFold(u.Scheme, "file") || u.Host != "" && !strings.EqualFold(u.Host, "localhost") {
+		if err != nil || !strings.EqualFold(u.Scheme, "file") || !remote && u.Host != "" && !strings.EqualFold(u.Host, "localhost") {
 			scheme := "invalid"
 			if err == nil && u.Scheme != "" {
 				scheme = strings.ToLower(u.Scheme)
@@ -329,9 +374,9 @@ func parseURIList(data string) ([]string, []string) {
 		}
 		path = filepath.Clean(filepath.FromSlash(path))
 		if !seenPaths[path] {
-			paths = append(paths, path)
+			entries = append(entries, DropEntry{Index: index, Path: path})
 			seenPaths[path] = true
 		}
 	}
-	return paths, unsupported
+	return entries, unsupported
 }

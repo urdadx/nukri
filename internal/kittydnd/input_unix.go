@@ -20,14 +20,19 @@ var _ term.File = (*Input)(nil)
 var ErrUnsupported = errors.New("terminal does not support drag and drop")
 
 type Input struct {
+	*Session
 	tty    *os.File
 	reader *io.PipeReader
 	events chan Event
 }
 
-// OpenInput opens the terminal for input with drag-and-drop sequences filtered
-// out, after asking the terminal whether it supports them.
-func OpenInput() (*Input, error) {
+/*
+OpenInput opens the terminal for input with drag-and-drop sequences filtered
+out, after asking the terminal whether it supports them. Replies and file
+contents for transfers with another machine are written to terminal, which
+must be safe to share with the program's own output.
+*/
+func OpenInput(terminal io.Writer) (*Input, error) {
 	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
 	if err != nil {
 		return nil, err
@@ -41,7 +46,8 @@ func OpenInput() (*Input, error) {
 		return nil, err
 	}
 	reader, writer := io.Pipe()
-	input := &Input{tty: tty, reader: reader, events: make(chan Event, 8)}
+	events := make(chan Event, 8)
+	input := &Input{Session: NewSession(terminal, events), tty: tty, reader: reader, events: events}
 	go input.filter(io.MultiReader(bytes.NewReader(rest), tty), writer)
 	return input, nil
 }
@@ -84,5 +90,5 @@ func (i *Input) Close() error {
 func (i *Input) filter(source io.Reader, writer *io.PipeWriter) {
 	defer writer.Close()
 	defer close(i.events)
-	FilterInput(source, writer, i.events)
+	i.Session.Filter(source, writer)
 }

@@ -39,6 +39,21 @@ func (t *TerminalOutput) Write(p []byte) (int, error) {
 
 func (t *TerminalOutput) Read(p []byte) (int, error) { return t.file.Read(p) }
 
+/*
+Protocol returns a writer for drag-and-drop data, which can be large and comes
+from other goroutines. It shares the lock with every other write but leaves
+the preview image alone, since the data changes nothing on screen.
+*/
+func (t *TerminalOutput) Protocol() io.Writer { return protocolWriter{t} }
+
+type protocolWriter struct{ t *TerminalOutput }
+
+func (w protocolWriter) Write(p []byte) (int, error) {
+	w.t.mu.Lock()
+	defer w.t.mu.Unlock()
+	return w.t.file.Write(p)
+}
+
 func (t *TerminalOutput) Fd() uintptr { return t.file.Fd() }
 
 // Close does nothing: the program doesn't own stdout.

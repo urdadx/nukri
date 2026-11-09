@@ -9,13 +9,13 @@ import (
 )
 
 /*
-Allowed reports whether drag and drop may be used here. Inside tmux, zellij or
-over SSH it is off: multiplexers don't pass the protocol through, and dropped
-file paths would name files on another machine. Whether the terminal supports
-the protocol is asked by OpenInput.
+Allowed reports whether drag and drop may be used here. Inside tmux or zellij
+it is off, as multiplexers don't pass the protocol through. Over SSH it works:
+the terminal moves file contents across (see MachineID). Whether the terminal
+supports the protocol is asked by OpenInput.
 */
 func Allowed() bool {
-	return os.Getenv("TMUX") == "" && os.Getenv("ZELLIJ") == "" && os.Getenv("SSH_CONNECTION") == "" && os.Getenv("SSH_TTY") == ""
+	return os.Getenv("TMUX") == "" && os.Getenv("ZELLIJ") == ""
 }
 
 // probeTimeout bounds the wait for a terminal that answers neither probe query.

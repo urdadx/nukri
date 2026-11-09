@@ -3,6 +3,7 @@ package test
 import (
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,7 +26,7 @@ func dndModel(t *testing.T, files ...string) (ui.Model, string, *bytes.Buffer) {
 	model, directory, cmd := loadActionModel(t, files...)
 	model = settle(t, model, cmd)
 	output := &bytes.Buffer{}
-	model = model.WithDragOutput(output)
+	model = model.WithDragOutput(output, nil)
 	resized, _ := model.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
 	return resized.(ui.Model), directory, output
 }
@@ -49,7 +50,7 @@ func dragFromFirstEntry(t *testing.T, model ui.Model, output *bytes.Buffer) stri
 func listX(t *testing.T, model ui.Model) int {
 	t.Helper()
 	output := &bytes.Buffer{}
-	model = model.WithDragOutput(output)
+	model = model.WithDragOutput(output, nil)
 	for x := 0; x < 100; x++ {
 		output.Reset()
 		model.Update(kittydnd.Event{Kind: kittydnd.DragOffer, X: x, Y: 3})
@@ -259,5 +260,107 @@ func TestDragForgetsPressedEntryReleasedUnderDialog(t *testing.T) {
 func TestDragStartsFromPressedEntry(t *testing.T) {
 	if !dragsAfter(t, func(model ui.Model) ui.Model { return model }) {
 		t.Fatal("a drag before the release did not offer the pressed entry")
+	}
+}
+
+// fakeRemote stands in for kittydnd.Input's transfers with another machine.
+type fakeRemote struct {
+	drops []kittydnd.RemoteDrop
+	sent  []string
+	err   error
+}
+
+func (f *fakeRemote) FetchRemoteDrop(drop kittydnd.RemoteDrop) error {
+	f.drops = append(f.drops, drop)
+	return f.err
+}
+
+func (f *fakeRemote) SendDragEntry(index int, path string) {
+	f.sent = append(f.sent, fmt.Sprintf("%d %s", index, path))
+}
+
+// remoteDrop drops a file from another machine at cell (x, y) and returns the
+// model once nukri has asked for its contents.
+func remoteDrop(t *testing.T, model ui.Model, x, y int) ui.Model {
+	t.Helper()
+	updated, _ := model.Update(kittydnd.Event{Kind: kittydnd.DropOffer, X: x, Y: y, MIME: 1, Operation: kittydnd.Copy, Final: true})
+	remote := "/home/me/report.pdf"
+	updated, _ = updated.(ui.Model).Update(kittydnd.Event{Kind: kittydnd.DropData, MIME: 1, Remote: true,
+		Paths: []string{remote}, Entries: []kittydnd.DropEntry{{Index: 1, Path: remote}}})
+	return updated.(ui.Model)
+}
+
+func TestRemoteDropIsFetchedIntoFolderUnderPointer(t *testing.T) {
+	model, directory, output := dndModel(t, "sub/", "a.txt")
+	remote := &fakeRemote{}
+	model = model.WithDragOutput(output, remote)
+	model = remoteDrop(t, model, listX(t, model), 3) // over sub/
+
+	if len(remote.drops) != 1 {
+		t.Fatalf("fetches = %+v, want one", remote.drops)
+	}
+	drop := remote.drops[0]
+	if drop.Destination != filepath.Join(directory, "sub") || drop.MIME != 1 || len(drop.Entries) != 1 || drop.Entries[0].Index != 1 {
+		t.Fatalf("fetch = %+v, want the entry fetched into sub", drop)
+	}
+	if strings.Contains(output.String(), "t=r:o=") {
+		t.Fatal("remote drop finished before its files arrived")
+	}
+
+	// The files arrive and the session reports it.
+	output.Reset()
+	received := filepath.Join(directory, "sub", "report.pdf")
+	if err := os.WriteFile(received, []byte("pdf"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	updated, cmd := model.Update(kittydnd.Event{Kind: kittydnd.RemoteDropDone, Completed: 1, Paths: []string{received}})
+	model = settle(t, updated.(ui.Model), cmd)
+	if !strings.HasPrefix(output.String(), kittydnd.FinishDropSequence(kittydnd.Copy)) {
+		t.Fatalf("finished drop = %q, want the copy reported", output.String())
+	}
+	if !strings.Contains(model.View(), "Copied 1 item") {
+		t.Fatal("status does not report the received file")
+	}
+}
+
+func TestFailedRemoteDropIsReportedCanceled(t *testing.T) {
+	model, _, output := dndModel(t, "a.txt")
+	model = model.WithDragOutput(output, &fakeRemote{})
+	model = remoteDrop(t, model, listX(t, model), 20)
+
+	output.Reset()
+	updated, cmd := model.Update(kittydnd.Event{Kind: kittydnd.RemoteDropDone, Error: "report.pdf: permission denied"})
+	model = settle(t, updated.(ui.Model), cmd)
+	if !strings.HasPrefix(output.String(), kittydnd.FinishDropSequence(0)) {
+		t.Fatalf("failed drop = %q, want it reported canceled", output.String())
+	}
+	if !strings.Contains(model.View(), "permission denied") {
+		t.Fatal("status does not show why the drop failed")
+	}
+}
+
+func TestRemoteDropWithoutTransferIsRejected(t *testing.T) {
+	model, _, output := dndModel(t, "a.txt") // no remote: nukri can't fetch
+	model = remoteDrop(t, model, listX(t, model), 20)
+	if !strings.HasSuffix(output.String(), kittydnd.FinishDropSequence(0)) {
+		t.Fatalf("output = %q, want the drop refused", output.String())
+	}
+	if !strings.Contains(model.View(), "another machine") {
+		t.Fatal("status does not say why the drop failed")
+	}
+}
+
+// The terminal asks for a dragged entry's contents by its place in the drag.
+func TestDragEntryRequestSendsThatPath(t *testing.T) {
+	model, directory, output := dndModel(t, "a.txt", "b.txt", "c.txt")
+	remote := &fakeRemote{}
+	model = model.WithDragOutput(output, remote)
+	model, _ = press(t, model, "space", "space") // mark a.txt and b.txt
+	updated, _ := model.Update(kittydnd.Event{Kind: kittydnd.DragOffer, X: listX(t, model), Y: 3})
+	updated.(ui.Model).Update(kittydnd.Event{Kind: kittydnd.DragEntryRequested, Index: 2})
+
+	want := "2 " + filepath.Join(directory, "b.txt")
+	if len(remote.sent) != 1 || remote.sent[0] != want {
+		t.Fatalf("sent = %q, want %q", remote.sent, want)
 	}
 }

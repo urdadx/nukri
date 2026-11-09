@@ -57,8 +57,10 @@ func New(t theme.Theme) Model {
 	return Model{width: 120, height: 32, styles: NewStyles(t), previewPool: NewPreviewPool(svc, 2), searchPool: NewSearchPool(), visualState: &browser.VisualState{}, data: browser.Data{Selected: -1, PreviewSelected: -1}, archive: archiveState{progress: bar}}
 }
 
-func (m Model) WithDragOutput(output io.Writer) Model {
-	m.drag.output = output
+// WithDragOutput enables drag and drop, writing the protocol to output.
+// remote, normally the kittydnd.Input, moves files to and from another machine.
+func (m Model) WithDragOutput(output io.Writer, remote remoteFiles) Model {
+	m.drag.output, m.drag.remote = output, remote
 	return m
 }
 

@@ -57,7 +57,7 @@ func TestDropDataReportsRemoteAndUnsupportedURIs(t *testing.T) {
 }
 
 func TestDropResponseSequences(t *testing.T) {
-	if got := kittydnd.EnableSequence(); got != "\x1b]72;t=a;text/uri-list\x1b\\\x1b]72;t=o:x=1\x1b\\" {
+	if got := kittydnd.EnableSequence(""); got != "\x1b]72;t=a;text/uri-list\x1b\\\x1b]72;t=o:x=1\x1b\\" {
 		t.Fatalf("enable sequence = %q", got)
 	}
 	if got := kittydnd.AcceptDropSequence(kittydnd.Either); got != "\x1b]72;t=m:o=1;text/uri-list\x1b\\" {
@@ -182,5 +182,67 @@ func TestDropSizeLimitIsOnDecodedData(t *testing.T) {
 	event, ok = parseAll(dropOfSize(16<<20 + 1))
 	if !ok || event.Kind != kittydnd.DropDataError {
 		t.Fatalf("drop over 16 MiB = %v, want an error", event.Kind)
+	}
+}
+
+// With a machine id, the terminal is told it for both drops and drags.
+func TestEnableSequenceSendsMachineID(t *testing.T) {
+	want := "\x1b]72;t=a;text/uri-list\x1b\\\x1b]72;t=a:x=1;1:abc\x1b\\\x1b]72;t=o:x=1;1:abc\x1b\\"
+	if got := kittydnd.EnableSequence("1:abc"); got != want {
+		t.Fatalf("enable sequence = %q, want %q", got, want)
+	}
+}
+
+// The terminal marks a URI list from another machine with X=1. Entries keep
+// their index among the list's URIs, which requests for their contents use.
+func TestRemoteDropDataKeepsURIIndexes(t *testing.T) {
+	list := "# comment\r\nhttps://example.com/x\r\nfile://laptop/home/me/a.txt\r\nfile:///home/me/b%20c\r\n"
+	var parser kittydnd.Parser
+	parser.Parse([]byte("\x1b]72;t=r:x=2:X=1;" + base64.StdEncoding.EncodeToString([]byte(list)) + "\x1b\\"))
+	event, ok := parser.Parse([]byte("\x1b]72;t=r:x=2:m=0;\x1b\\"))
+	if !ok || event.Kind != kittydnd.DropData || !event.Remote || event.MIME != 2 {
+		t.Fatalf("remote drop data = %+v, %v", event, ok)
+	}
+	want := []kittydnd.DropEntry{{Index: 2, Path: "/home/me/a.txt"}, {Index: 3, Path: "/home/me/b c"}}
+	if !reflect.DeepEqual(event.Entries, want) {
+		t.Fatalf("entries = %+v, want %+v", event.Entries, want)
+	}
+
+	parser.Parse([]byte("\x1b]72;t=r:x=2;" + base64.StdEncoding.EncodeToString([]byte(list)) + "\x1b\\"))
+	event, _ = parser.Parse([]byte("\x1b]72;t=r:x=2:m=0;\x1b\\"))
+	if event.Remote || len(event.Entries) != 1 {
+		t.Fatalf("local drop = %+v, want only the file URI without a host", event)
+	}
+}
+
+func TestDragEntryRequest(t *testing.T) {
+	var parser kittydnd.Parser
+	event, ok := parser.Parse([]byte("\x1b]72;t=k:x=2\x1b\\"))
+	if !ok || event.Kind != kittydnd.DragEntryRequested || event.Index != 2 {
+		t.Fatalf("entry request = %+v, %v", event, ok)
+	}
+}
+
+// While file contents stream in, reads often end right after the escape that
+// starts the next sequence. That escape must wait for the rest, not pass as
+// an Esc keypress.
+func TestFilterInputKeepsSequenceSplitAfterEscape(t *testing.T) {
+	first, second := "\x1b]72;t=k:x=1\x1b\\", "\x1b]72;t=k:x=2\x1b\\"
+	src := io.MultiReader(strings.NewReader(first+"\x1b"), strings.NewReader(second[1:]+"q"))
+	var dst bytes.Buffer
+	events := make(chan kittydnd.Event, 4)
+	kittydnd.FilterInput(src, &dst, events)
+	if dst.String() != "q" || len(events) != 2 {
+		t.Fatalf("output = %q with %d events, want \"q\" and both sequences", dst.String(), len(events))
+	}
+}
+
+// An Esc keypress on its own is passed on at once.
+func TestFilterInputPassesLoneEscape(t *testing.T) {
+	src := io.MultiReader(strings.NewReader("a"), strings.NewReader("\x1b"), strings.NewReader("b"))
+	var dst bytes.Buffer
+	kittydnd.FilterInput(src, &dst, make(chan kittydnd.Event, 1))
+	if dst.String() != "a\x1bb" {
+		t.Fatalf("output = %q, want the escape kept", dst.String())
 	}
 }

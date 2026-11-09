@@ -7,9 +7,11 @@ import (
 	"io"
 )
 
-type Input struct{}
+type Input struct{ *Session }
 
-func OpenInput() (*Input, error) { return nil, errors.New("Kitty drag and drop requires Unix") }
+func OpenInput(io.Writer) (*Input, error) {
+	return nil, errors.New("Kitty drag and drop requires Unix")
+}
 
 func (*Input) Read([]byte) (int, error) { return 0, io.EOF }
 func (*Input) Close() error             { return nil }

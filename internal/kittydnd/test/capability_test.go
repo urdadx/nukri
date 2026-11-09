@@ -2,6 +2,7 @@ package test
 
 import (
 	"io"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -57,19 +58,30 @@ func TestProbeWithoutAnswerIsUnsupported(t *testing.T) {
 	}
 }
 
-func TestAllowedOnlyOutsideMultiplexersAndSSH(t *testing.T) {
-	for _, name := range []string{"TMUX", "ZELLIJ", "SSH_CONNECTION", "SSH_TTY"} {
+func TestAllowedOutsideMultiplexers(t *testing.T) {
+	for _, name := range []string{"TMUX", "ZELLIJ"} {
 		t.Setenv(name, "")
 	}
+	t.Setenv("SSH_CONNECTION", "10.0.0.1 22 10.0.0.2 22")
 	if !kittydnd.Allowed() {
-		t.Fatal("drag and drop not allowed in a local terminal")
+		t.Fatal("drag and drop not allowed over SSH")
 	}
-	for _, name := range []string{"TMUX", "ZELLIJ", "SSH_CONNECTION", "SSH_TTY"} {
+	for _, name := range []string{"TMUX", "ZELLIJ"} {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv(name, "1")
 			if kittydnd.Allowed() {
 				t.Fatalf("drag and drop allowed with %s set", name)
 			}
 		})
+	}
+}
+
+func TestHashMachineIDHasProtocolForm(t *testing.T) {
+	id := kittydnd.HashMachineID("0123456789abcdef0123456789abcdef")
+	if !regexp.MustCompile(`^1:[0-9a-f]{64}$`).MatchString(id) {
+		t.Fatalf("machine id = %q, want 1: and 64 hex digits", id)
+	}
+	if id != kittydnd.HashMachineID("0123456789abcdef0123456789abcdef") || id == kittydnd.HashMachineID("another") {
+		t.Fatal("machine id must depend only on the raw id")
 	}
 }

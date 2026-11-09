@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"io"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -9,19 +10,33 @@ import (
 	"github.com/urdadx/nukri/internal/kittydnd"
 )
 
+// remoteFiles moves file contents through the terminal when nukri runs on
+// another machine than the terminal, as over SSH (kittydnd.Input).
+type remoteFiles interface {
+	FetchRemoteDrop(kittydnd.RemoteDrop) error
+	SendDragEntry(index int, path string)
+}
+
 // dragState tracks Kitty drag-and-drop: files dragged out of nukri and drops
 // offered to it.
 type dragState struct {
-	output io.Writer // terminal the DnD protocol is written to; nil disables DnD
+	output io.Writer   // terminal the DnD protocol is written to; nil disables DnD
+	remote remoteFiles // nil: only files local to the terminal can be moved
 
 	candidate string // entry under the last left press, dragged if a drag starts
 	payload   []byte
-	active    bool // a drag out of nukri is in progress
+	active    bool     // a drag out of nukri is in progress
+	paths     []string // of the last drag; the terminal may ask for their contents
 
 	dropOperation kittydnd.Operation // negotiated for the drop being offered
 	dropMIME      int
 	dropTarget    string // directory under the pointer, where the drop lands
 	dropping      bool   // a drop's files are being transferred; see finishDrop
+
+	// A drop from another machine being received: where, and the operation
+	// to report when it is done.
+	remoteTarget    string
+	remoteOperation fileops.Operation
 }
 
 // end forgets the outgoing drag.
@@ -115,6 +130,9 @@ func (m Model) handleDndEvent(event kittydnd.Event) (tea.Model, tea.Cmd) {
 		}
 		operation, target := m.drag.dropOperation, m.drag.dropTarget
 		m.drag.resetDrop()
+		if event.Remote {
+			return m.fetchRemoteDrop(event, target, operation)
+		}
 		// The terminal is told what was done once the transfer ends.
 		m.drag.dropping = true
 		m.status = "Dropping files..."
@@ -143,14 +161,56 @@ func (m Model) handleDndEvent(event kittydnd.Event) (tea.Model, tea.Cmd) {
 		payload, sequence := kittydnd.StartSequence(paths, label)
 		_, _ = io.WriteString(m.drag.output, sequence)
 		if len(payload) > 0 {
-			m.drag.payload = payload
+			m.drag.payload, m.drag.paths = payload, paths
 			m.drag.active = true
 		}
+	case kittydnd.DragEntryRequested:
+		// The drop target is on another machine and needs the contents.
+		if m.drag.remote != nil && event.Index >= 1 && event.Index <= len(m.drag.paths) {
+			m.drag.remote.SendDragEntry(event.Index, m.drag.paths[event.Index-1])
+		}
+	case kittydnd.RemoteDropDone:
+		message := transferMsg{
+			destination: m.drag.remoteTarget, operation: m.drag.remoteOperation,
+			origin: transferDrop, completed: event.Completed,
+		}
+		if len(event.Paths) > 0 {
+			message.selectedPath = event.Paths[0]
+		}
+		if event.Error != "" {
+			message.err = errors.New(event.Error)
+		}
+		m.drag.remoteTarget = ""
+		return m.Update(message)
 	case kittydnd.DragDataRequested:
 		_, _ = io.WriteString(m.drag.output, kittydnd.DataSequence(event.MIME, m.drag.payload))
 	case kittydnd.DragEnded, kittydnd.DragError:
 		m.drag.end()
 	}
+	return m, nil
+}
+
+/*
+fetchRemoteDrop starts receiving a drop from another machine: its paths name
+files there, so their contents come through the terminal. The drop finishes
+when the RemoteDropDone event arrives.
+*/
+func (m Model) fetchRemoteDrop(event kittydnd.Event, target string, operation kittydnd.Operation) (tea.Model, tea.Cmd) {
+	err := errors.New("can't receive files from another machine")
+	if m.drag.remote != nil {
+		err = m.drag.remote.FetchRemoteDrop(kittydnd.RemoteDrop{MIME: event.MIME, Entries: event.Entries, Destination: target})
+	}
+	if err != nil {
+		_, _ = io.WriteString(m.drag.output, kittydnd.FinishDropSequence(0))
+		m.status = "Drop failed: " + err.Error()
+		return m, nil
+	}
+	m.drag.dropping = true
+	m.drag.remoteTarget, m.drag.remoteOperation = target, fileops.Copy
+	if operation == kittydnd.Move {
+		m.drag.remoteOperation = fileops.Move
+	}
+	m.status = "Receiving files..."
 	return m, nil
 }
 
