@@ -73,3 +73,11 @@ install. Everything else works without them.
 
 EPUB metadata, fonts, torrents, images (PNG, JPEG, GIF, WebP, BMP, TIFF), code, Markdown,
 CSV, ZIP and RAR archives, and tarballs (plain, gzip, bzip2) are previewed natively.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+[MIT](LICENSE)

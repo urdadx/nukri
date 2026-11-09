@@ -1,2 +1,0 @@
-- When writing tests, move them into a test folder. create one if it doesnt exist already in that directory.
-- Dont write test for UI based modifications via lipgloss, only logic/bussiness related code should be tested.
