@@ -122,4 +122,5 @@ func (t *Theme) resolveEmptyColors() {
 	if t.FooterBG == "" {
 		t.FooterBG = t.FullScreenBG
 	}
+	t.ensureReadableSelection()
 }

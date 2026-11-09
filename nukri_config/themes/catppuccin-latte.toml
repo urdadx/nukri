@@ -37,7 +37,7 @@ file_panel_border = "#9ca0b0"
 file_panel_border_active = "#7287fd"
 file_panel_top_directory_icon = "#40a02b"
 file_panel_top_path = "#89b5fa"
-file_panel_item_selected_fg = "#04a5e5"
+file_panel_item_selected_fg = "#1e66f5"
 file_panel_item_selected_bg = "#eff1f5"
 
 #-- Footer
@@ -52,7 +52,7 @@ sidebar_bg = "#eff1f5"
 sidebar_title = "#209fb5"
 sidebar_border = "#eff1f5"
 sidebar_border_active = "#40a02b"
-sidebar_item_selected_fg = "#04a5e5"
+sidebar_item_selected_fg = "#1e66f5"
 sidebar_item_selected_bg = "#eff1f5"
 sidebar_divider = "#7c7f93"
 

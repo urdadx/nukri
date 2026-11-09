@@ -93,3 +93,55 @@ func TestNamesListsBundledAndUserThemes(t *testing.T) {
 		t.Fatalf("names are not sorted: %v", names)
 	}
 }
+
+// A selected row whose text matches its background is unreadable; loading the
+// theme must swap in a readable text color, and leave readable pairs alone.
+func TestThemeKeepsSelectedRowsReadable(t *testing.T) {
+	directory := t.TempDir()
+	write := func(name, selectedFG, selectedBG string) theme.Theme {
+		t.Helper()
+		content := "full_screen_fg = \"#db7ddd\"\nfull_screen_bg = \"#111147\"\n" +
+			"file_panel_fg = \"#db7ddd\"\nfile_panel_bg = \"#111147\"\n" +
+			"file_panel_item_selected_fg = \"" + selectedFG + "\"\nfile_panel_item_selected_bg = \"" + selectedBG + "\"\n" +
+			"sidebar_item_selected_fg = \"" + selectedFG + "\"\nsidebar_item_selected_bg = \"" + selectedBG + "\"\n"
+		if err := os.WriteFile(filepath.Join(directory, name+".toml"), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		loaded, err := theme.Named(name, directory, nukriconfig.Themes)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return loaded
+	}
+	clash := write("clash", "#53b397", "#53b397")
+	if clash.FilePanelItemSelectedFG != "#111147" || clash.SidebarItemSelectedFG != "#111147" {
+		t.Fatalf("selected text = %q / %q, want the readable panel background #111147", clash.FilePanelItemSelectedFG, clash.SidebarItemSelectedFG)
+	}
+	fine := write("fine", "#ffffff", "#111147")
+	if fine.FilePanelItemSelectedFG != "#ffffff" {
+		t.Fatalf("a readable pair was changed to %q", fine.FilePanelItemSelectedFG)
+	}
+	// An unset background shows the panel's, so contrast is judged against it.
+	unset := write("unset", "#d65d0e", "")
+	if unset.FilePanelItemSelectedFG != "#d65d0e" {
+		t.Fatalf("a readable color on an unset background was changed to %q", unset.FilePanelItemSelectedFG)
+	}
+}
+
+// When the selected row shares the panel background, its text color is what
+// marks it; a replacement must not be the panel's normal text color.
+func TestThemeSelectionStaysDistinctFromNormalRows(t *testing.T) {
+	directory := t.TempDir()
+	content := "full_screen_fg = \"#4c4f69\"\nfull_screen_bg = \"#eff1f5\"\nfile_panel_fg = \"#4c4f69\"\nfile_panel_bg = \"#eff1f5\"\n" +
+		"file_panel_item_selected_fg = \"#e8eaef\"\nfile_panel_item_selected_bg = \"#eff1f5\"\n"
+	if err := os.WriteFile(filepath.Join(directory, "pale.toml"), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := theme.Named("pale", directory, nukriconfig.Themes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := loaded.FilePanelItemSelectedFG; got == "#e8eaef" || got == "#4c4f69" {
+		t.Fatalf("selected text = %q: unreadable, or the same as normal rows", got)
+	}
+}

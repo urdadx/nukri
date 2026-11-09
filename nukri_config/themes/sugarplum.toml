@@ -37,7 +37,7 @@ file_panel_border = "#a175d4"
 file_panel_border_active = "#53aaa1"
 file_panel_top_directory_icon = "#249a84"
 file_panel_top_path = "#249a84"
-file_panel_item_selected_fg = "#53b397"
+file_panel_item_selected_fg = "#111147"
 file_panel_item_selected_bg = "#53b397"
 
 #-- Footer
