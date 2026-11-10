@@ -4,9 +4,11 @@
 #   curl -fsSL https://nukri.urdadx.com/install.sh | sh
 #
 # Settings, passed as environment variables to `sh`:
-#   NUKRI_VERSION      version to install, such as 0.1.0 (default: latest)
-#   NUKRI_INSTALL_DIR  where to put the binary (default: /usr/local/bin when
-#                      writable, otherwise ~/.local/bin)
+#   NUKRI_VERSION        version to install, such as 0.1.0 (default: latest)
+#   NUKRI_INSTALL_DIR    where to put the binary (default: /usr/local/bin when
+#                        writable, otherwise ~/.local/bin)
+#   NUKRI_INSTALL_TOOLS  yes or no: install the optional preview tools without
+#                        asking (default: ask when run from a terminal)
 #
 #   curl -fsSL https://nukri.urdadx.com/install.sh | NUKRI_VERSION=0.1.0 sh
 #
@@ -113,6 +115,106 @@ main() {
 		say "  export PATH=\"$dir:\$PATH\""
 		;;
 	esac
+
+	offer_preview_tools
+}
+
+# Preview tools: "check|description|apt|pacman|dnf|zypper|apk". check lists
+# commands, any of which means the tool is present. The packages match
+# internal/preview/install_hint.go.
+PREVIEW_TOOLS='ffmpeg ffprobe|video and audio|ffmpeg|ffmpeg|ffmpeg-free|ffmpeg|ffmpeg
+rsvg-convert|SVG|librsvg2-bin|librsvg|librsvg2-tools|rsvg-convert|rsvg-convert
+pdftoppm|PDF|poppler-utils|poppler|poppler-utils|poppler-tools|poppler-utils
+magick convert|AVIF|imagemagick|imagemagick|ImageMagick|ImageMagick|imagemagick
+7zz 7z|7z and other archives|7zip|7zip|7zip|7zip|7zip
+xz|.tar.xz|xz-utils|xz|xz|xz|xz
+zstd|.tar.zst|zstd|zstd|zstd|zstd|zstd
+isoinfo|ISO images|genisoimage|cdrtools|genisoimage|genisoimage|cdrkit'
+# Large and rarely needed, so only mentioned.
+LARGE_TOOLS='libreoffice|office documents|libreoffice|libreoffice-fresh|libreoffice|libreoffice|libreoffice
+ebook-convert|ebooks|calibre|calibre|calibre|calibre|calibre'
+
+# package_manager prints "column|install command|assume-yes flag" for this
+# system's package manager, or nothing.
+package_manager() {
+	if has apt-get; then printf '3|apt install|-y'
+	elif has pacman; then printf '4|pacman -S|--noconfirm'
+	elif has dnf; then printf '5|dnf install|-y'
+	elif has zypper; then printf '6|zypper install|-y'
+	elif has apk; then printf '7|apk add|'
+	fi
+}
+
+# missing TOOLS COLUMN prints "package (description)" for each tool in TOOLS
+# that isn't installed, one per line.
+missing() {
+	printf '%s\n' "$1" | while IFS= read -r line; do
+		[ -n "$line" ] || continue
+		found=no
+		for command in $(printf '%s' "$line" | cut -d '|' -f 1); do
+			has "$command" && found=yes
+		done
+		[ "$found" = yes ] && continue
+		printf '%s (%s)\n' "$(printf '%s' "$line" | cut -d '|' -f "$2")" "$(printf '%s' "$line" | cut -d '|' -f 2)"
+	done
+}
+
+# offer_preview_tools lists the preview tools that aren't installed and, with
+# consent, installs them. nukri itself never installs anything; this asks
+# once, here. It reads answers from the terminal, since under `curl | sh`
+# standard input is the script.
+offer_preview_tools() {
+	manager=$(package_manager)
+	column=$(printf '%s' "$manager" | cut -d '|' -f 1)
+	install=$(printf '%s' "$manager" | cut -d '|' -f 2)
+	assume_yes=$(printf '%s' "$manager" | cut -d '|' -f 3)
+	if [ -z "$manager" ]; then
+		say ""
+		say "Some previews use external tools: ffmpeg, rsvg-convert, poppler, ImageMagick,"
+		say "7-Zip, xz, zstd and isoinfo. Install the ones you want with your package manager."
+		return
+	fi
+	tools=$(missing "$PREVIEW_TOOLS" "$column")
+	large=$(missing "$LARGE_TOOLS" "$column")
+	if [ -n "$tools" ]; then
+		say ""
+		say "These optional tools add previews:"
+		printf '%s\n' "$tools" | sed 's/^/  /'
+		packages=$(printf '%s\n' "$tools" | cut -d ' ' -f 1 | tr '\n' ' ')
+		command="$install ${packages% }"
+		[ "$(id -u)" = 0 ] || command="sudo $command"
+		answer=${NUKRI_INSTALL_TOOLS:-}
+		if [ -z "$answer" ] && (: </dev/tty) 2>/dev/null; then
+			printf 'Install them now with "%s"? [y/N] ' "$command" >/dev/tty
+			read -r answer </dev/tty || answer=no
+		fi
+		case $answer in
+		y | Y | yes | YES)
+			# From a terminal the package manager asks its own questions there;
+			# without one, nobody could answer them, so it is told to proceed.
+			if (: </dev/tty) 2>/dev/null; then
+				run_install() { sh -c "$command" </dev/tty; }
+			else
+				run_install() { sh -c "$command $assume_yes" </dev/null; }
+			fi
+			if run_install; then
+				say "Preview tools installed."
+			else
+				say "Installing the tools failed; you can run it yourself later:"
+				say "  $command"
+			fi
+			;;
+		*)
+			say "Skipped. To add them later, run:"
+			say "  $command"
+			;;
+		esac
+	fi
+	if [ -n "$large" ]; then
+		say ""
+		say "Large and optional, install if you want these previews:"
+		printf '%s\n' "$large" | sed 's/^/  /'
+	fi
 }
 
 # Everything runs from here, so a download cut off partway executes nothing.

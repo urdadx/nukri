@@ -12,10 +12,8 @@ On Linux (x86_64 or arm64):
 curl -fsSL https://nukri.urdadx.com/install.sh | sh
 ```
 
-The script downloads the latest release from GitHub, checks it against the
-release's checksums, and installs `nukri` to `/usr/local/bin`, or `~/.local/bin`
-when that isn't writable. Set `NUKRI_VERSION` to install a specific version, or
-`NUKRI_INSTALL_DIR` to choose the folder:
+It offers to install the optional tools previews use (ffmpeg, rsvg-convert, poppler
+and more). To pin a version:
 
 ```bash
 curl -fsSL https://nukri.urdadx.com/install.sh | NUKRI_VERSION=0.1.0 sh

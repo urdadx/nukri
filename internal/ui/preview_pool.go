@@ -406,7 +406,10 @@ func renderPreview(ctx context.Context, service *preview.Service, req previewReq
 		} else {
 			var toolErr *preview.ToolUnavailableError
 			if errors.As(err, &toolErr) {
-				err = fmt.Errorf("install %s to preview this file", toolErr.Tool)
+				return previewMsg{
+					path: req.entry.Entry.Path, err: fmt.Errorf("install %s to preview this file", toolErr.Tool),
+					missingTool: toolErr.Tool, installCommand: preview.InstallCommand(toolErr.Tool),
+				}
 			}
 		}
 		return previewMsg{path: req.entry.Entry.Path, err: err}

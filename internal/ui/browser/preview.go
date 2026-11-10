@@ -19,6 +19,8 @@ func RenderPreview(width, height, originX, originY int, visualState *VisualState
 		switch {
 		case data.PreviewLoading:
 			text = []string{muted.Render("Loading preview...")}
+		case data.PreviewMissingTool != "":
+			text = missingToolNotice(data.PreviewMissingTool, data.PreviewInstallCommand, bodyWidth, s)
 		case data.PreviewError != "":
 			text = []string{muted.Render(data.PreviewError)}
 		case data.PreviewIsDir:
@@ -107,4 +109,27 @@ func joinDetail(left, right string) string {
 		return left
 	}
 	return left + " • " + right
+}
+
+/*
+missingToolNotice is the preview for a file whose previewer isn't installed. It
+stands out from ordinary messages: a bold headline in the accent color, and the
+install command for this system set in the selection colors so it is easy to
+spot and copy.
+*/
+func missingToolNotice(tool, installCommand string, width int, s Styles) []string {
+	headline := lipgloss.NewStyle().Foreground(s.Path).Background(s.PanelBG).Bold(true)
+	muted := lipgloss.NewStyle().Foreground(s.Muted).Background(s.PanelBG)
+	lines := []string{
+		headline.Render(truncate("⚠ Install "+tool+" to preview this file", width)),
+		"",
+	}
+	if installCommand == "" {
+		return append(lines, muted.Render(truncate("Install it with your package manager.", width)))
+	}
+	command := lipgloss.NewStyle().Foreground(s.SelectedFG).Background(s.SelectedBG).Bold(true)
+	return append(lines,
+		muted.Render("Run:"),
+		command.Render(" "+truncate(installCommand, max(1, width-2))+" "),
+	)
 }

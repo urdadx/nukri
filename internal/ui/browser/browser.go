@@ -27,7 +27,11 @@ type Data struct {
 	PreviewOffset   int
 	PreviewLoading  bool
 	PreviewError    string
-	LoadError       string
+	// PreviewMissingTool names the tool the preview needs, which the pane
+	// highlights with PreviewInstallCommand, the command that installs it.
+	PreviewMissingTool    string
+	PreviewInstallCommand string
+	LoadError             string
 	// Clipboard reports whether a path is waiting to be pasted; nil for none.
 	Clipboard    func(path string) bool
 	OperationCut bool

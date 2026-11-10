@@ -68,6 +68,10 @@ type previewMsg struct {
 	entries   []browser.Entry
 	directory bool
 	err       error
+	// missingTool names the external tool the preview needs, and
+	// installCommand how to install it here ("" when unknown).
+	missingTool    string
+	installCommand string
 	// cancelled marks a render that was superseded; it carries no preview.
 	cancelled bool
 }

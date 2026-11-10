@@ -127,6 +127,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			if message.err != nil {
 				m.data.PreviewError = message.err.Error()
 			}
+			m.data.PreviewMissingTool, m.data.PreviewInstallCommand = message.missingTool, message.installCommand
 			if message.directory {
 				return m, loadItemCounts(message.path, message.entries, true)
 			}
@@ -518,6 +519,7 @@ func (m *Model) resetPreview(loading bool) {
 	m.data.PreviewSelected = -1
 	m.data.PreviewOffset = 0
 	m.data.PreviewError = ""
+	m.data.PreviewMissingTool, m.data.PreviewInstallCommand = "", ""
 	m.data.PreviewLoading = loading
 }
 
