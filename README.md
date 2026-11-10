@@ -1,10 +1,8 @@
 <p align="center">
-  <img src="assets/logo.png" alt="nukri" width="280">
+  <img src="assets/logo.png" alt="nukri: fast and elegant terminal file manager for Linux" width="600">
 </p>
 
-<p align="center">A fast terminal file manager for Linux, written in Go. Nukri is a work in progress.</p>
-
-![Nukri with the Places sidebar, the file list of a home folder, and a preview of the selected folder](demo.png)
+![Nukri with the Places sidebar, the file list of a home folder, and a preview of the selected folder](assets/demo.png)
 
 ## Install
 
