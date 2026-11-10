@@ -1,6 +1,6 @@
-<p align="center">
-  <img src="assets/logo-tagline.png" alt="nukri: fast and elegant terminal file manager for Linux" width="600">
-</p>
+## Nukri
+
+A fast and elegant terminal file manager for linux
 
 ![Nukri with the Places sidebar, the file list of a home folder, and a preview of the selected folder](assets/demo.png)
 
@@ -12,8 +12,7 @@ On Linux (x86_64 or arm64):
 curl -fsSL https://nukri.urdadx.com/install.sh | sh
 ```
 
-It offers to install the optional tools previews use (ffmpeg, rsvg-convert, poppler
-and more). To pin a version:
+To pin a version:
 
 ```bash
 curl -fsSL https://nukri.urdadx.com/install.sh | NUKRI_VERSION=0.1.0 sh
