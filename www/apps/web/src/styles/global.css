@@ -3,6 +3,98 @@
 /* Add your theme customizations here. */
 /* See the TailwindCSS v4 docs for more info: https://tailwindcss.com/docs/v4-beta */
 
-@theme {
-  --font-sans: "Inter", sans-serif;
+/* Dark mode follows the .dark class on <html>, set in Layout.astro. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Same latin subsets the docs app commits, so nothing is fetched from Google Fonts. */
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/Inter-latin-wght-normal.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Geist Mono Nerd Font Mono, cut down to the text and icons Nukri draws, for the demo. */
+@font-face {
+  font-family: "Geist Mono Nerd";
+  src: url("/fonts/GeistMonoNerd-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Geist Mono Nerd";
+  src: url("/fonts/GeistMonoNerd-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("/fonts/IBMPlexMono-latin-400-normal.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --bg: #ffffff;
+  --fg: #0a0a0a;
+  --heading: #0a0a0a;
+  --heading-muted: #6b6b6b;
+  --muted: #555555;
+  --line: #e5e5e5;
+  --accent: oklch(0.52 0.16 262);
+  --window-border: oklch(0.87 0 0);
+  --window-shadow: 0 4px 24px oklch(0.87 0 0 / 0.4);
+}
+
+.dark {
+  --bg: #000000;
+  --fg: #f0f0f0;
+  --heading: #f0f0f0;
+  --muted: #a3a3a3;
+  --line: rgb(255 255 255 / 0.15);
+  --accent: oklch(0.62 0.13 266);
+  --heading-muted: oklch(0.556 0 0);
+  --window-border: oklch(0.283 0 0);
+  --window-shadow: 0 1px 3px oklch(0.145 0 0 / 0.4), 0 2px 12px oklch(0.145 0 0 / 0.7);
+}
+
+/* Key chips, as in the hint under the demo. */
+kbd {
+  display: inline-flex;
+  min-width: 1.4em;
+  height: 1.4em;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.3em;
+  border: 1px solid var(--line);
+  border-radius: 0.3em;
+  background: color-mix(in oklch, var(--fg) 5%, transparent);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  line-height: 1;
+}
+
+/* In-page links, like the navbar's Features, glide to their section. */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@theme inline {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --color-bg: var(--bg);
+  --color-fg: var(--fg);
+  --color-heading: var(--heading);
+  --color-heading-muted: var(--heading-muted);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
 }

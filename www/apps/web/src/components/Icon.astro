@@ -1,0 +1,33 @@
+---
+import type { IconSvgObject } from "@hugeicons/core-free-icons";
+
+interface Props {
+  icon: IconSvgObject;
+  size?: number;
+  class?: string;
+  [attr: `data-${string}`]: string;
+}
+
+const { icon, size = 16, class: className, ...rest } = Astro.props;
+
+// Hugeicons ship React-style attributes (strokeWidth, key); turn them into SVG ones.
+const toSvgAttrs = (attrs: Record<string, string | number>) =>
+  Object.fromEntries(
+    Object.entries(attrs)
+      .filter(([name]) => name !== "key")
+      .map(([name, value]) => [name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`), value]),
+  );
+---
+
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width={size}
+  height={size}
+  viewBox="0 0 24 24"
+  fill="none"
+  class={className}
+  aria-hidden="true"
+  {...rest}
+>
+  {icon.map(([Tag, attrs]) => <Tag {...toSvgAttrs(attrs)} />)}
+</svg>

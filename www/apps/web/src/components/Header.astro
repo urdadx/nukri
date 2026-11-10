@@ -1,25 +1,95 @@
 ---
-const links = [
-  { to: "/", label: "Home" },
+import { Moon02Icon, Sun03Icon } from "@hugeicons/core-free-icons";
+import GithubMark from "./GithubMark.astro";
+import Icon from "./Icon.astro";
+import Logo from "./Logo.astro";
+import { siteLinks } from "../links";
+
+interface Props {
+  /**
+   * Keep the header out of sight until the page scrolls past the element marked
+   * data-header-trigger, as on Shiori's landing page.
+   */
+  reveal?: boolean;
+}
+
+const { reveal = false } = Astro.props;
+
+const nav = [
+  { href: siteLinks.features, label: "Features" },
+  { href: siteLinks.install, label: "Install" },
+  { href: siteLinks.docs, label: "Docs" },
+  { href: siteLinks.github, label: "GitHub" },
+  { href: siteLinks.releases, label: "Releases" },
 ];
 ---
 
-<div>
-  <div class="flex flex-row items-center justify-between px-4 py-2 md:px-6">
-    <a href="/" class="flex items-center gap-2 text-lg font-semibold text-white">
-      <img src="/logo-mark.png" alt="" width="48" height="24" />
-      nukri
-    </a>
-    <nav class="flex gap-4 text-lg">
-      {links.map((link) => (
-        <a href={link.to} class="text-white hover:text-neutral-400 transition-colors">
-          {link.label}
-        </a>
-      ))}
-    </nav>
-    <div class="flex items-center gap-2" id="user-menu-container">
-    </div>
-  </div>
-  <hr class="border-neutral-800" />
-</div>
+<header
+  id="site-header"
+  class:list={[
+    "top-0 z-50 flex h-14 items-center justify-between bg-bg/80 px-4 backdrop-blur-md transition duration-300 md:px-5",
+    "data-hidden:pointer-events-none data-hidden:-translate-y-2 data-hidden:opacity-0",
+    reveal ? "fixed inset-x-0" : "sticky",
+  ]}
+  data-hidden={reveal ? "" : undefined}
+  inert={reveal}
+>
+  <a href="/" aria-label="Nukri home" class="-ml-1.5 grid size-9 place-items-center rounded-md">
+    <Logo size={24} />
+  </a>
 
+  <nav
+    class="absolute left-1/2 hidden -translate-x-1/2 items-center gap-7 text-[15px] md:flex"
+  >
+    {nav.map((item) => (
+      <a href={item.href} class="text-fg/80 transition-colors hover:text-fg">
+        {item.label}
+      </a>
+    ))}
+  </nav>
+
+  <div class="flex items-center gap-1">
+    <a
+      href={siteLinks.install}
+      class="rounded-md px-2 py-1.5 text-[15px] text-fg/80 transition-colors hover:bg-fg/5 hover:text-fg md:hidden"
+    >
+      Install
+    </a>
+    <a
+      href={siteLinks.github}
+      aria-label="nukri on GitHub"
+      class="grid size-9 place-items-center rounded-md text-fg/80 transition-colors hover:bg-fg/5 hover:text-fg md:hidden"
+    >
+      <GithubMark size={20} />
+    </a>
+    <button
+      type="button"
+      id="theme-toggle"
+      aria-label="Toggle dark mode"
+      class="grid size-9 place-items-center rounded-md text-fg/80 transition-colors hover:bg-fg/5 hover:text-fg"
+    >
+      <Icon icon={Moon02Icon} size={20} class="dark:hidden" />
+      <Icon icon={Sun03Icon} size={20} class="hidden dark:block" />
+    </button>
+  </div>
+</header>
+
+<script>
+  const header = document.getElementById("site-header");
+  const trigger = document.querySelector("[data-header-trigger]");
+  if (header?.hasAttribute("data-hidden") && trigger) {
+    // Shown once the trigger has scrolled off the top of the page.
+    new IntersectionObserver(([entry]) => {
+      const show = !entry.isIntersecting && entry.boundingClientRect.top < 0;
+      header.toggleAttribute("data-hidden", !show);
+      header.inert = !show;
+    }).observe(trigger);
+  }
+
+  document.getElementById("theme-toggle")?.addEventListener("click", () => {
+    const dark = document.documentElement.classList.toggle("dark");
+    try {
+      localStorage.setItem("theme", dark ? "dark" : "light");
+    } catch {}
+  });
+</script>

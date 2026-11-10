@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@astrojs/node": "^11.1.5",
+    "@fontsource-variable/caveat": "^5.3.0",
+    "@hugeicons/core-free-icons": "^4.4.0",
     "@varlock/astro-integration": "1.4.4",
     "astro": "^7.3.1",
     "varlock": "catalog:",

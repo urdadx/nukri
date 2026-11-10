@@ -1,0 +1,119 @@
+---
+import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
+import CopyButton from "./CopyButton.astro";
+import Icon from "./Icon.astro";
+
+/*
+Answers follow the README, install.sh and the code; keep them in step. Text in
+backticks is shown as code, and commands are listed below the answer, each
+with a button to copy it.
+*/
+const questions: { question: string; answer: string; commands?: string[] }[] = [
+  {
+    question: "Does Nukri work on macOS or Windows?",
+    answer: "Not yet. This version is built for Linux, on x86_64 and arm64.",
+  },
+  {
+    question: "Why do I see boxes instead of icons?",
+    answer: "Nukri's icons come from a Nerd Font. Install one from nerdfonts.com and set it as your terminal's font.",
+  },
+  {
+    question: "Which terminals show image previews?",
+    answer:
+      "Terminals that support the kitty graphics protocol, such as kitty and Ghostty, or sixel, such as foot and WezTerm. In other terminals the preview still shows the file's details.",
+  },
+  {
+    question: "Why does a preview ask me to install something?",
+    answer:
+      "Previews of video, PDFs, archives and office documents use tools you install yourself, such as ffmpeg and poppler. Nukri names the one a file needs and the command to install it, and the install script offers to add them all.",
+  },
+  {
+    question: "Can I make my own theme?",
+    answer:
+      "Yes. Copy any bundled theme to `~/.config/nukri/themes/<name>.toml` and change its colors. It shows up in the theme picker (press `T`), or start Nukri with `--theme <name>`.",
+  },
+  {
+    question: "How do I update Nukri?",
+    answer:
+      "Run the install script again: it installs the latest release. To install a particular version, set `NUKRI_VERSION`.",
+    commands: ["curl -fsSL https://nukri.urdadx.com/install.sh | NUKRI_VERSION=0.2.0 sh"],
+  },
+  {
+    question: "How do I uninstall Nukri?",
+    answer:
+      "Delete the `nukri` binary, with `sudo` if it's in `/usr/local/bin`. To remove your settings, themes and cached previews too, delete Nukri's config and cache folders. Preview tools the script installed are ordinary packages; remove them with your package manager if you no longer want them.",
+    commands: ['rm "$(command -v nukri)"', "rm -rf ~/.config/nukri ~/.cache/nukri"],
+  },
+  {
+    question: "Does drag and drop work over SSH?",
+    answer: "Yes, in kitty 0.47 and later, in both directions.",
+  },
+];
+---
+
+<section id="faq" class="mx-auto flex w-full max-w-2xl scroll-mt-14 flex-col gap-6 px-4 py-8 sm:py-12">
+  <h2 class="text-2xl font-medium text-heading">FAQs</h2>
+  <div class="flex flex-col">
+    {questions.map(({ question, answer, commands }) => (
+      <details class="faq group border-b border-line">
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-4 py-4 text-heading">
+          <span class="font-medium">{question}</span>
+          <Icon icon={ArrowDown01Icon} size={18} class="shrink-0 text-muted transition-transform group-open:rotate-180" />
+        </summary>
+        <div class="flex flex-col gap-3 pb-5">
+          <p class="text-muted text-pretty">
+            {answer.split("`").map((part, index) =>
+              index % 2 ? <code class="rounded bg-fg/8 px-1 py-0.5 font-mono text-[0.85em] text-fg">{part}</code> : part,
+            )}
+          </p>
+          {commands?.map((command) => (
+            <div class="flex items-center gap-2 rounded-lg border border-line bg-fg/[0.03] py-1.5 pr-1.5 pl-3">
+              <code class="min-w-0 flex-1 overflow-x-auto font-mono text-[13px] whitespace-nowrap text-fg [scrollbar-width:none]">
+                <span class="text-muted select-none">$ </span>{command}
+              </code>
+              <CopyButton
+                command={command}
+                label="Copy"
+                class="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted hover:bg-fg/5 hover:text-fg"
+              />
+            </div>
+          ))}
+        </div>
+      </details>
+    ))}
+  </div>
+</section>
+
+<style>
+  /* Hide the default disclosure triangle in Safari. */
+  .faq summary::-webkit-details-marker {
+    display: none;
+  }
+
+  /* Answers slide open and fade in. Browsers without ::details-content or
+     interpolate-size just open them at once. */
+  .faq {
+    interpolate-size: allow-keywords;
+  }
+
+  .faq::details-content {
+    block-size: 0;
+    opacity: 0;
+    overflow: clip;
+    transition:
+      block-size 240ms cubic-bezier(0.2, 0, 0, 1),
+      opacity 200ms ease,
+      content-visibility 240ms allow-discrete;
+  }
+
+  .faq[open]::details-content {
+    block-size: auto;
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .faq::details-content {
+      transition: none;
+    }
+  }
+</style>

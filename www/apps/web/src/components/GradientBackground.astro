@@ -1,0 +1,74 @@
+---
+/*
+A soft pastel mesh: cyan with a lavender band across the top left, pink down
+the left edge, a cream wave at the bottom and violet in the bottom right. Drawn
+as blurred SVG shapes so it scales to any size without an image. It fills and
+sits behind its parent, which needs `relative isolate`.
+*/
+interface Props {
+  class?: string;
+}
+
+const { class: className } = Astro.props;
+// Filter ids must be unique when the page shows more than one.
+const id = `mesh-${Math.random().toString(36).slice(2, 8)}`;
+const soft = `url(#${id}-soft)`;
+const softer = `url(#${id}-softer)`;
+const softest = `url(#${id}-softest)`;
+---
+
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 2000 1500"
+  preserveAspectRatio="xMidYMid slice"
+  class:list={["pointer-events-none absolute inset-0 -z-10 size-full", className]}
+  aria-hidden="true"
+>
+  <defs>
+    <filter id={`${id}-soft`} x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="28" />
+    </filter>
+    <filter id={`${id}-softer`} x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="80" />
+    </filter>
+    <filter id={`${id}-softest`} x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="150" />
+    </filter>
+    <linearGradient id={`${id}-band`} x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#d1bcfe" />
+      <stop offset="0.75" stop-color="#ccccfe" />
+      <stop offset="1" stop-color="#bdf1ff" />
+    </linearGradient>
+  </defs>
+
+  <rect x="-200" y="-200" width="2400" height="1900" fill="#bdf1ff" />
+
+  <!-- Right side: periwinkle rising to violet in the corner. -->
+  <ellipse cx="2000" cy="650" rx="260" ry="650" fill="#b6ccff" filter={softest} />
+  <ellipse cx="2050" cy="1400" rx="420" ry="520" fill="#a28afd" filter={softest} />
+
+  <!-- The deeper cyan pool in the middle. -->
+  <ellipse cx="1180" cy="930" rx="460" ry="330" fill="#abe9fe" filter={softer} />
+
+  <!-- Pink wash on the left, with a curved edge into the cyan. -->
+  <path
+    d="M-200 20 C220 170 420 220 640 250 C760 280 830 380 800 480 C760 600 560 650 540 820 C525 960 600 1080 760 1180 L-200 1240 Z"
+    fill="#fcd6f5"
+    filter={soft}
+  />
+  <ellipse cx="-40" cy="620" rx="230" ry="620" fill="#feb2e5" filter={softer} />
+  <ellipse cx="560" cy="430" rx="300" ry="230" fill="#fbe9fe" filter={softer} />
+
+  <!-- Lavender band across the top left. -->
+  <!-- Shapes on an edge run past it, so the blur doesn't fade them out there. -->
+  <path d="M-200 -200 H1150 V0 C900 120 700 200 340 210 C220 190 100 140 -200 40 Z" fill={`url(#${id}-band)`} filter={soft} />
+
+  <!-- Cream wave at the bottom left, fading into lavender at the corners. -->
+  <path
+    d="M-200 1150 C250 1020 480 1030 600 1150 C700 1250 820 1320 1010 1340 C1150 1360 1250 1420 1300 1500 L1350 1700 H-200 Z"
+    fill="#fff6e8"
+    filter={soft}
+  />
+  <ellipse cx="-60" cy="1520" rx="260" ry="300" fill="#d5c4ff" filter={softer} />
+  <ellipse cx="1420" cy="1560" rx="380" ry="200" fill="#d6cbfe" filter={softer} />
+</svg>

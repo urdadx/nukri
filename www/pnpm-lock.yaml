@@ -54,6 +54,12 @@ importers:
       '@astrojs/node':
         specifier: ^11.1.5
         version: 11.1.11(astro@7.4.7(@types/node@26.6.6)(@vercel/functions@3.11.0)(jiti@2.7.0)(yaml@2.9.1))
+      '@fontsource-variable/caveat':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@hugeicons/core-free-icons':
+        specifier: ^4.4.0
+        version: 4.4.0
       '@varlock/astro-integration':
         specifier: 1.4.4
         version: 1.4.4(astro@7.4.7(@types/node@26.6.6)(@vercel/functions@3.11.0)(jiti@2.7.0)(yaml@2.9.1))(varlock@1.23.0)
@@ -453,11 +459,17 @@ packages:
   '@emnapi/wasi-threads@2.2.0':
     resolution: {integrity: sha512-JP7OYH38Q7+pyTAe14raZHLQIK7BDKbdwji+Xi3pcd/6QkJYQH3SX4wu6EplGrGJWRepoNzedfm0G3B9Z4e9Rw==}
 
+  '@fontsource-variable/caveat@5.3.0':
+    resolution: {integrity: sha512-Q3mjghoYIlXgwqBPJKZ4q6f3zu921Gq7UU76r9Z+NAmhapHfX130GIFpOCYf8vt2SIcgCi9RHDT7anfJKg/kiA==}
+
   '@hono/node-server@2.1.6':
     resolution: {integrity: sha512-p/KH9MnfNcsm3sR6x4lNgm5j+QN4Et8srKredl9DZfXiyZ1UQ3aQ2YVpFLbqktYN5JI+DB+VZFKM2PqE5hLKjQ==}
     engines: {node: '>=20'}
     peerDependencies:
       hono: ^4 || ^5.0.0-0
+
+  '@hugeicons/core-free-icons@4.4.0':
+    resolution: {integrity: sha512-7Mz8bmGoY6tZ6l3C2TXwNMLVSr0I8HPwjjFIERAuJFj3rWwLxdF2ZLkDqdrVuEE1dx5b/VXyIsP4WoSU6Q40KQ==}
 
   '@iconify-json/lucide@1.2.152':
     resolution: {integrity: sha512-OQTsOaQ+kD8yhy5EATMD5QHe5O+XJVibExdaRCaXP3hvNPNkn6wVUcTrGA16yU2luqe0ImE4qP74WBK8JuwwNA==}
@@ -4771,9 +4783,13 @@ snapshots:
       tslib: 2.9.1
     optional: true
 
+  '@fontsource-variable/caveat@5.3.0': {}
+
   '@hono/node-server@2.1.6(hono@4.13.17)':
     dependencies:
       hono: 4.13.17
+
+  '@hugeicons/core-free-icons@4.4.0': {}
 
   '@iconify-json/lucide@1.2.152':
     dependencies:

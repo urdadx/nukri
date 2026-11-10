@@ -1,0 +1,111 @@
+---
+/*
+A hand-drawn arrow, with a note to try it, that points down into the demo. It draws itself
+when it scrolls into view, then bobs gently. Put it inside a positioned parent
+marked data-try-area that also holds the demo: once the demo is clicked, the
+arrow fades out for good.
+*/
+import "@fontsource-variable/caveat";
+
+interface Props {
+  class?: string;
+}
+
+const { class: className } = Astro.props;
+---
+
+<div class:list={["try-arrow pointer-events-none select-none", className]} aria-hidden="true">
+  <svg viewBox="0 0 120 80" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <path class="stroke" pathLength="1" d="M114 12 C 76 -2, 24 6, 18 52" />
+    <path class="head" pathLength="1" d="M30 42 L18 54 L8 40" />
+  </svg>
+  <span class="label">it's live, click in and press j</span>
+</div>
+
+<script>
+  for (const arrow of document.querySelectorAll<HTMLElement>(".try-arrow")) {
+    new IntersectionObserver(
+      ([entry], observer) => {
+        if (!entry.isIntersecting) return;
+        arrow.dataset.shown = "";
+        observer.disconnect();
+      },
+      { threshold: 0.5 },
+    ).observe(arrow);
+
+    // Once the demo has been tried, the arrow has done its job.
+    const area = arrow.closest("[data-try-area]");
+    area?.addEventListener("focusin", () => arrow.setAttribute("data-tried", ""), { once: true });
+  }
+</script>
+
+<style>
+  /* Display comes from the caller's classes, so it can hide the arrow on small screens. */
+  .try-arrow {
+    gap: 2px;
+    align-items: flex-start;
+    transition: opacity 300ms;
+  }
+
+  .try-arrow[data-tried] {
+    opacity: 0;
+  }
+
+  .label {
+    margin-top: -4px;
+    font-family: "Caveat Variable", cursive;
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 300ms 700ms;
+  }
+
+  svg {
+    width: 96px;
+    height: 64px;
+  }
+
+  .stroke,
+  .head {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+  }
+
+  [data-shown] .label {
+    opacity: 1;
+  }
+
+  [data-shown] .stroke {
+    transition: stroke-dashoffset 700ms ease-out;
+    stroke-dashoffset: 0;
+  }
+
+  [data-shown] .head {
+    transition: stroke-dashoffset 250ms ease-out 650ms;
+    stroke-dashoffset: 0;
+  }
+
+  [data-shown] svg {
+    animation: bob 1.6s ease-in-out 1.2s infinite;
+  }
+
+  @keyframes bob {
+    50% {
+      translate: 0 4px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .label,
+    .stroke,
+    .head {
+      transition: none !important;
+    }
+
+    [data-shown] svg {
+      animation: none;
+    }
+  }
+</style>

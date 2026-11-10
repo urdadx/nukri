@@ -5,11 +5,13 @@ import Header from "../components/Header.astro";
 interface Props {
   title?: string;
   description?: string;
+  revealHeader?: boolean;
 }
 
 const {
-  title = "Nukri",
+  title = "Nukri - Fast terminal file manager for Linux",
   description = "A fast terminal file manager for Linux, written in Go.",
+  revealHeader = false,
 } = Astro.props;
 const image = new URL("/og.jpg", Astro.url);
 ---
@@ -19,7 +21,8 @@ const image = new URL("/og.jpg", Astro.url);
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="generator" content={Astro.generator} />
     <title>{title}</title>
@@ -30,9 +33,20 @@ const image = new URL("/og.jpg", Astro.url);
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
+    <script is:inline>
+      // Set the theme before first paint: the visitor's saved choice, else dark.
+      (() => {
+        let theme = null;
+        try {
+          theme = localStorage.getItem("theme");
+        } catch {}
+        const dark = theme !== "light";
+        document.documentElement.classList.toggle("dark", dark);
+      })();
+    </script>
   </head>
-  <body class="min-h-screen bg-neutral-950 text-white">
-    <Header />
+  <body class="min-h-screen bg-bg text-fg antialiased">
+    <Header reveal={revealHeader} />
     <slot />
   </body>
 </html>

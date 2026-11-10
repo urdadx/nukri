@@ -1,8 +1,44 @@
 ---
 title: Introduction
-description: Welcome to your new documentation site. Edit this page or add Markdown files beside it, and Blume turns each file into a page.
+description: Nukri is a fast terminal file manager for Linux, with a places sidebar, a file list and a live preview of whatever you select.
 ---
 
-Welcome to **Blume**, the open-source docs framework for humans and agents.
+Nukri is a fast terminal file manager for Linux, written in Go. You browse, preview and manage files from the keyboard or the mouse, without leaving your terminal.
 
-Edit `docs/index.mdx` and save: this page reloads with your changes.
+![Nukri with the Places sidebar, the file list of a home folder, and a preview of the selected folder](./images/demo.png)
+
+## Install
+
+```bash
+curl -fsSL https://nukri.urdadx.com/install.sh | sh
+```
+
+Then run `nukri` in any folder. [Getting started](/getting-started) covers other ways to install, what you need, and the keys to use.
+
+## Features
+
+- **Three panes.** Places and mounted devices on the left, the file list in the middle, and a live preview on the right. The layout fits the size of your terminal, and `P` hides the preview.
+- **Rich previews.** Syntax-highlighted code, Markdown, CSV, images, video frames, audio waveforms, PDF pages, office documents, ebooks, fonts, torrents, ISO images, and the contents of folders and archives.
+- **File operations.** Mark several items, then copy, cut and paste, create, rename inline or in your editor, move to the trash and restore, or delete permanently.
+- **Archives.** Create zip, tar and tar.gz archives, and extract them.
+- **Fuzzy find** across the current folder tree.
+- **Duplicate finder** that shows how much space you can get back.
+- **Drag and drop** in kitty 0.47 and newer, in both directions, including over SSH.
+- **Open** files with their default app or one you pick, and copy names or paths to the clipboard.
+- **21 themes**, previewed live as you choose, plus your own.
+- **Mouse support** for clicking, double-clicking and scrolling.
+
+:::note
+Nukri is a work in progress and runs on Linux only for now.
+:::
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Getting started" href="/getting-started" icon="rocket">
+    Install Nukri, open it, and learn the keys.
+  </Card>
+  <Card title="Source on GitHub" href="https://github.com/urdadx/nukri" icon="github">
+    Report bugs, request features, or contribute.
+  </Card>
+</CardGroup>

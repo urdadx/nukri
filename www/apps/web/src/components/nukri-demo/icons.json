@@ -1,0 +1,747 @@
+{
+  "icons": {
+    "ai": {
+      "icon": "",
+      "color": "#ce6f14"
+    },
+    "android": {
+      "icon": "",
+      "color": "#a7c83f"
+    },
+    "apple": {
+      "icon": "",
+      "color": "#78909c"
+    },
+    "asm": {
+      "icon": "󰘚",
+      "color": "#ff7844"
+    },
+    "audio": {
+      "icon": "",
+      "color": "#ee524f"
+    },
+    "binary": {
+      "icon": "",
+      "color": "#ff7844"
+    },
+    "c": {
+      "icon": "",
+      "color": "#0188d2"
+    },
+    "cfg": {
+      "icon": "",
+      "color": "#8B8B8B"
+    },
+    "clj": {
+      "icon": "",
+      "color": "#68b338"
+    },
+    "conf": {
+      "icon": "",
+      "color": "#8B8B8B"
+    },
+    "cpp": {
+      "icon": "",
+      "color": "#0188d2"
+    },
+    "css": {
+      "icon": "",
+      "color": "#2d53e5"
+    },
+    "dart": {
+      "icon": "",
+      "color": "#03589b"
+    },
+    "db": {
+      "icon": "",
+      "color": "#FF8400"
+    },
+    "deb": {
+      "icon": "",
+      "color": "#ab0836"
+    },
+    "doc": {
+      "icon": "",
+      "color": "#295394"
+    },
+    "dockerfile": {
+      "icon": "󰡨",
+      "color": "#099cec"
+    },
+    "ebook": {
+      "icon": "",
+      "color": "#67b500"
+    },
+    "env": {
+      "icon": "",
+      "color": "#eed645"
+    },
+    "f": {
+      "icon": "󱈚",
+      "color": "#8e44ad"
+    },
+    "file": {
+      "icon": "",
+      "color": "NONE"
+    },
+    "font": {
+      "icon": "",
+      "color": "#3498db"
+    },
+    "fs": {
+      "icon": "",
+      "color": "#2ecc71"
+    },
+    "gb": {
+      "icon": "",
+      "color": "#f1c40f"
+    },
+    "gform": {
+      "icon": "",
+      "color": "#9b59b6"
+    },
+    "git": {
+      "icon": "",
+      "color": "#e67e22"
+    },
+    "go": {
+      "icon": "",
+      "color": "#6ed8e5"
+    },
+    "graphql": {
+      "icon": "",
+      "color": "#e74c3c"
+    },
+    "glp": {
+      "icon": "󰆧",
+      "color": "#3498db"
+    },
+    "groovy": {
+      "icon": "",
+      "color": "#2ecc71"
+    },
+    "gruntfile.js": {
+      "icon": "",
+      "color": "#3498db"
+    },
+    "gulpfile.js": {
+      "icon": "",
+      "color": "#e67e22"
+    },
+    "gv": {
+      "icon": "",
+      "color": "#9b59b6"
+    },
+    "h": {
+      "icon": "",
+      "color": "#3498db"
+    },
+    "haml": {
+      "icon": "",
+      "color": "#9b59b6"
+    },
+    "hs": {
+      "icon": "",
+      "color": "#2980b9"
+    },
+    "html": {
+      "icon": "",
+      "color": "#e67e22"
+    },
+    "hx": {
+      "icon": "",
+      "color": "#e74c3c"
+    },
+    "ics": {
+      "icon": "",
+      "color": "#f1c40f"
+    },
+    "image": {
+      "icon": "",
+      "color": "#e74c3c"
+    },
+    "iml": {
+      "icon": "",
+      "color": "#3498db"
+    },
+    "ini": {
+      "icon": "󰅪",
+      "color": "#f1c40f"
+    },
+    "ino": {
+      "icon": "",
+      "color": "#2ecc71"
+    },
+    "iso": {
+      "icon": "󰋊",
+      "color": "#f1c40f"
+    },
+    "jade": {
+      "icon": "",
+      "color": "#9b59b6"
+    },
+    "java": {
+      "icon": "",
+      "color": "#e67e22"
+    },
+    "jenkinsfile": {
+      "icon": "",
+      "color": "#e74c3c"
+    },
+    "jl": {
+      "icon": "",
+      "color": "#2ecc71"
+    },
+    "js": {
+      "icon": "",
+      "color": "#f39c12"
+    },
+    "json": {
+      "icon": "",
+      "color": "#f1c40f"
+    },
+    "jsx": {
+      "icon": "",
+      "color": "#e67e22"
+    },
+    "key": {
+      "icon": "",
+      "color": "#f1c40f"
+    },
+    "ko": {
+      "icon": "",
+      "color": "#9b59b6"
+    },
+    "kt": {
+      "icon": "",
+      "color": "#2980b9"
+    },
+    "less": {
+      "icon": "",
+      "color": "#3498db"
+    },
+    "link_file": {
+      "icon": "",
+      "color": "NONE"
+    },
+    "lock": {
+      "icon": "",
+      "color": "#f1c40f"
+    },
+    "log": {
+      "icon": "",
+      "color": "#7f8c8d"
+    },
+    "lua": {
+      "icon": "",
+      "color": "#e74c3c"
+    },
+    "maintainers": {
+      "icon": "",
+      "color": "#7f8c8d"
+    },
+    "makefile": {
+      "icon": "",
+      "color": "#3498db"
+    },
+    "md": {
+      "icon": "",
+      "color": "#7f8c8d"
+    },
+    "mjs": {
+      "icon": "",
+      "color": "#f39c12"
+    },
+    "ml": {
+      "icon": "󰘧",
+      "color": "#2ecc71"
+    },
+    "mustache": {
+      "icon": "",
+      "color": "#e67e22"
+    },
+    "nc": {
+      "icon": "󰋁",
+      "color": "#f1c40"
+    },
+    "nim": {
+      "icon": "",
+      "color": "#3498db"
+    },
+    "nix": {
+      "icon": "",
+      "color": "#f39c12"
+    },
+    "npmignore": {
+      "icon": "",
+      "color": "#e74c3c"
+    },
+    "package": {
+      "icon": "󰏗",
+      "color": "#9b59b6"
+    },
+    "passwd": {
+      "icon": "",
+      "color": "#f1c40f"
+    },
+    "patch": {
+      "icon": "",
+      "color": "#e67e22"
+    },
+    "pdf": {
+      "icon": "",
+      "color": "#d35400"
+    },
+    "php": {
+      "icon": "",
+      "color": "#9b59b6"
+    },
+    "pl": {
+      "icon": "",
+      "color": "#3498db"
+    },
+    "prisma": {
+      "icon": "",
+      "color": "#9b59b6"
+    },
+    "ppt": {
+      "icon": "",
+      "color": "#c0392b"
+    },
+    "ps": {
+      "icon": "󱔗",
+      "color": "#d35400"
+    },
+    "psd": {
+      "icon": "",
+      "color": "#3498db"
+    },
+    "py": {
+      "icon": "",
+      "color": "#3498db"
+    },
+    "r": {
+      "icon": "",
+      "color": "#9b59b6"
+    },
+    "rb": {
+      "icon": "",
+      "color": "#9b59b6"
+    },
+    "rdb": {
+      "icon": "",
+      "color": "#9b59b6"
+    },
+    "rpm": {
+      "icon": "",
+      "color": "#d35400"
+    },
+    "rs": {
+      "icon": "",
+      "color": "#f39c12"
+    },
+    "rss": {
+      "icon": "",
+      "color": "#c0392b"
+    },
+    "rst": {
+      "icon": "󰅫",
+      "color": "#2ecc71"
+    },
+    "rubydoc": {
+      "icon": "",
+      "color": "#e67e22"
+    },
+    "sass": {
+      "icon": "",
+      "color": "#e74c3c"
+    },
+    "scala": {
+      "icon": "",
+      "color": "#e67e22"
+    },
+    "shell": {
+      "icon": "",
+      "color": "#2ecc71"
+    },
+    "shp": {
+      "icon": "󰙞",
+      "color": "#f1c40f"
+    },
+    "sol": {
+      "icon": "󰡪",
+      "color": "#3498db"
+    },
+    "sqlite": {
+      "icon": "",
+      "color": "#27ae60"
+    },
+    "styl": {
+      "icon": "",
+      "color": "#e74c3c"
+    },
+    "svelte": {
+      "icon": "",
+      "color": "#ff3e00"
+    },
+    "swift": {
+      "icon": "",
+      "color": "#ff6f61"
+    },
+    "tex": {
+      "icon": "∫",
+      "color": "#9b59b6"
+    },
+    "tf": {
+      "icon": "",
+      "color": "#2ecc71"
+    },
+    "toml": {
+      "icon": "󰅪",
+      "color": "#f39c12"
+    },
+    "ts": {
+      "icon": "󰛦",
+      "color": "#2980b9"
+    },
+    "twig": {
+      "icon": "",
+      "color": "#9b59b6"
+    },
+    "txt": {
+      "icon": "",
+      "color": "#7f8c8d"
+    },
+    "vagrantfile": {
+      "icon": "",
+      "color": "#3498db"
+    },
+    "video": {
+      "icon": "",
+      "color": "#c0392b"
+    },
+    "vim": {
+      "icon": "",
+      "color": "#019833"
+    },
+    "vue": {
+      "icon": "",
+      "color": "#41b883"
+    },
+    "windows": {
+      "icon": "",
+      "color": "#4a90e2"
+    },
+    "xls": {
+      "icon": "",
+      "color": "#27ae60"
+    },
+    "xml": {
+      "icon": "",
+      "color": "#3498db"
+    },
+    "yml": {
+      "icon": "",
+      "color": "#f39c12"
+    },
+    "zig": {
+      "icon": "",
+      "color": "#9b59b6"
+    },
+    "zip": {
+      "icon": "",
+      "color": "#e74c3c"
+    }
+  },
+  "aliases": {
+    "apk": "android",
+    "gradle": "android",
+    "ds_store": "apple",
+    "localized": "apple",
+    "m": "apple",
+    "mm": "apple",
+    "s": "asm",
+    "aac": "audio",
+    "alac": "audio",
+    "flac": "audio",
+    "m4a": "audio",
+    "mka": "audio",
+    "mp3": "audio",
+    "ogg": "audio",
+    "opus": "audio",
+    "wav": "audio",
+    "wma": "audio",
+    "bson": "binary",
+    "feather": "binary",
+    "mat": "binary",
+    "o": "binary",
+    "pb": "binary",
+    "pickle": "binary",
+    "pkl": "binary",
+    "tfrecord": "binary",
+    "conf": "cfg",
+    "config": "cfg",
+    "cljc": "clj",
+    "cljs": "clj",
+    "editorconfig": "conf",
+    "rc": "conf",
+    "c++": "cpp",
+    "cc": "cpp",
+    "cxx": "cpp",
+    "scss": "css",
+    "sql": "db",
+    "docx": "doc",
+    "gdoc": "doc",
+    "dockerignore": "dockerfile",
+    "epub": "ebook",
+    "ipynb": "ebook",
+    "mobi": "ebook",
+    "env": "env",
+    ".env.local": "env",
+    "local": "env",
+    "f03": "f",
+    "f77": "f",
+    "f90": "f",
+    "f95": "f",
+    "for": "f",
+    "fpp": "f",
+    "ftn": "f",
+    "eot": "font",
+    "otf": "font",
+    "ttf": "font",
+    "woff": "font",
+    "woff2": "font",
+    "fsi": "fs",
+    "fsscript": "fs",
+    "fsx": "fs",
+    "dna": "gb",
+    "gitattributes": "git",
+    "gitconfig": "git",
+    "gitignore": "git",
+    "gitignore_global": "git",
+    "gitmirrorall": "git",
+    "gitmodules": "git",
+    "gltf": "glp",
+    "gsh": "groovy",
+    "gvy": "groovy",
+    "gy": "groovy",
+    "h++": "h",
+    "hh": "h",
+    "hpp": "h",
+    "hxx": "h",
+    "lhs": "hs",
+    "htm": "html",
+    "xhtml": "html",
+    "bmp": "image",
+    "cbr": "image",
+    "cbz": "image",
+    "dvi": "image",
+    "eps": "image",
+    "gif": "image",
+    "ico": "image",
+    "jpeg": "image",
+    "jpg": "image",
+    "nef": "image",
+    "orf": "image",
+    "pbm": "image",
+    "pgm": "image",
+    "png": "image",
+    "pnm": "image",
+    "ppm": "image",
+    "pxm": "image",
+    "sixel": "image",
+    "stl": "image",
+    "svg": "image",
+    "tif": "image",
+    "tiff": "image",
+    "webp": "image",
+    "xpm": "image",
+    "disk": "iso",
+    "dmg": "iso",
+    "img": "iso",
+    "ipsw": "iso",
+    "smi": "iso",
+    "vhd": "iso",
+    "vhdx": "iso",
+    "vmdk": "iso",
+    "jar": "java",
+    "kts": "kt",
+    "cjs": "js",
+    "properties": "json",
+    "webmanifest": "json",
+    "tsx": "jsx",
+    "cjsx": "jsx",
+    "cer": "key",
+    "crt": "key",
+    "der": "key",
+    "gpg": "key",
+    "p7b": "key",
+    "pem": "key",
+    "pfx": "key",
+    "pgp": "key",
+    "license": "key",
+    "codeowners": "maintainers",
+    "credits": "maintainers",
+    "cmake": "makefile",
+    "justfile": "makefile",
+    "markdown": "md",
+    "mkd": "md",
+    "rdoc": "md",
+    "readme": "md",
+    "mli": "ml",
+    "sml": "ml",
+    "netcdf": "nc",
+    "brewfile": "package",
+    "cargo.toml": "package",
+    "cargo.lock": "package",
+    "go.mod": "package",
+    "go.sum": "package",
+    "pyproject.toml": "package",
+    "poetry.lock": "package",
+    "package.json": "package",
+    "pipfile": "package",
+    "pipfile.lock": "package",
+    "php3": "php",
+    "php4": "php",
+    "php5": "php",
+    "phpt": "php",
+    "phtml": "php",
+    "gslides": "ppt",
+    "pptx": "ppt",
+    "pxd": "py",
+    "pyc": "py",
+    "pyx": "py",
+    "whl": "py",
+    "rdata": "r",
+    "rds": "r",
+    "rmd": "r",
+    "gemfile": "rb",
+    "gemspec": "rb",
+    "guardfile": "rb",
+    "procfile": "rb",
+    "rakefile": "rb",
+    "rspec": "rb",
+    "rspec_parallel": "rb",
+    "rspec_status": "rb",
+    "ru": "rb",
+    "erb": "rubydoc",
+    "slim": "rubydoc",
+    "awk": "shell",
+    "bash": "shell",
+    "bash_history": "shell",
+    "bash_profile": "shell",
+    "bashrc": "shell",
+    "csh": "shell",
+    "fish": "shell",
+    "ksh": "shell",
+    "sh": "shell",
+    "zsh": "shell",
+    "zsh-theme": "shell",
+    "zshrc": "shell",
+    "plpgsql": "sql",
+    "plsql": "sql",
+    "psql": "sql",
+    "tsql": "sql",
+    "sl3": "sqlite",
+    "sqlite3": "sqlite",
+    "stylus": "styl",
+    "cls": "tex",
+    "avi": "video",
+    "flv": "video",
+    "m2v": "video",
+    "mkv": "video",
+    "mov": "video",
+    "mp4": "video",
+    "mpeg": "video",
+    "mpg": "video",
+    "ogm": "video",
+    "ogv": "video",
+    "vob": "video",
+    "webm": "video",
+    "vimrc": "vim",
+    "bat": "windows",
+    "cmd": "windows",
+    "exe": "windows",
+    "csv": "xls",
+    "gsheet": "xls",
+    "xlsx": "xls",
+    "plist": "xml",
+    "xul": "xml",
+    "yaml": "yml",
+    "7z": "zip",
+    "Z": "zip",
+    "bz2": "zip",
+    "gz": "zip",
+    "lzma": "zip",
+    "par": "zip",
+    "rar": "zip",
+    "tar": "zip",
+    "tc": "zip",
+    "tgz": "zip",
+    "txz": "zip",
+    "xz": "zip",
+    "z": "zip"
+  },
+  "folders": {
+    ".atom": {
+      "icon": "",
+      "color": "#66595c"
+    },
+    ".aws": {
+      "icon": "",
+      "color": "#ff9900"
+    },
+    ".docker": {
+      "icon": "",
+      "color": "#0db7ed"
+    },
+    ".gem": {
+      "icon": "",
+      "color": "#e9573f"
+    },
+    ".git": {
+      "icon": "",
+      "color": "#f14e32"
+    },
+    ".git-credential-cache": {
+      "icon": "",
+      "color": "#f14e32"
+    },
+    ".github": {
+      "icon": "",
+      "color": "#000000"
+    },
+    ".npm": {
+      "icon": "",
+      "color": "#cb3837"
+    },
+    ".nvm": {
+      "icon": "",
+      "color": "#cb3837"
+    },
+    ".rvm": {
+      "icon": "",
+      "color": "#e9573f"
+    },
+    ".Trash": {
+      "icon": "",
+      "color": "#7f8c8d"
+    },
+    ".vscode": {
+      "icon": "",
+      "color": "#007acc"
+    },
+    ".vim": {
+      "icon": "",
+      "color": "#019833"
+    },
+    "config": {
+      "icon": "",
+      "color": "#ffb86c"
+    },
+    "node_modules": {
+      "icon": "",
+      "color": "#cb3837"
+    }
+  }
+}

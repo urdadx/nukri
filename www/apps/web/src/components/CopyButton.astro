@@ -1,0 +1,86 @@
+---
+/*
+A button that copies a command, labelled with a short form of it. Once copied,
+the check pops in and the label says so for a moment.
+*/
+import { Copy01Icon } from "@hugeicons/core-free-icons";
+import CheckCircle from "./CheckCircle.astro";
+import Icon from "./Icon.astro";
+
+interface Props {
+  command: string;
+  label: string;
+  class?: string;
+}
+
+const { command, label, class: className } = Astro.props;
+---
+
+<button
+  type="button"
+  data-copy={command}
+  title={command}
+  class:list={["copy-button", className]}
+>
+  <Icon icon={Copy01Icon} data-icon="copy" />
+  <CheckCircle data-icon="check" class="hidden size-4 text-green-600 dark:text-green-500" />
+  <span data-label={label}>{label}</span>
+</button>
+
+<script>
+  for (const button of document.querySelectorAll<HTMLButtonElement>(".copy-button")) {
+    let reset: ReturnType<typeof setTimeout> | undefined;
+    const copy = button.querySelector('[data-icon="copy"]');
+    const check = button.querySelector('[data-icon="check"]');
+    const text = button.querySelector<HTMLElement>("[data-label]");
+    button.addEventListener("click", async () => {
+      await navigator.clipboard.writeText(button.dataset.copy ?? "");
+      copy?.classList.add("hidden");
+      check?.classList.remove("hidden");
+      if (text) text.textContent = "Copied";
+      clearTimeout(reset);
+      reset = setTimeout(() => {
+        copy?.classList.remove("hidden");
+        check?.classList.add("hidden");
+        if (text) text.textContent = text.dataset.label ?? "";
+      }, 1500);
+    });
+  }
+</script>
+
+<style>
+  .copy-button {
+    transition:
+      background-color 150ms,
+      transform 120ms;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .copy-button:active {
+      transform: scale(0.97);
+    }
+
+    .copy-button :global([data-icon="check"]:not(.hidden)) {
+      animation: pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .copy-button :global([data-icon="copy"]:not(.hidden)) {
+      animation: fade-in 200ms ease-out;
+    }
+  }
+
+  @keyframes pop {
+    from {
+      opacity: 0;
+      scale: 0.4;
+      rotate: -20deg;
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      scale: 0.8;
+    }
+  }
+</style>

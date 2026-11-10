@@ -1,0 +1,16 @@
+<!-- The Nukri logo, copied from apps/web/public/favicon.svg. Keep the two in step. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="nukri-logo-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e5e5e5" />
+      <stop offset="0.5" stop-color="#9a9a9a" />
+      <stop offset="1" stop-color="#4d4d4d" />
+    </linearGradient>
+    <radialGradient id="nukri-logo-shine" cx="0.38" cy="0.28" r="0.45">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.18" />
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <circle cx="50" cy="50" r="50" fill="url(#nukri-logo-fill)" />
+  <circle cx="50" cy="50" r="50" fill="url(#nukri-logo-shine)" />
+</svg>

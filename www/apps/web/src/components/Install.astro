@@ -1,0 +1,50 @@
+---
+
+import { ArrowUpRight01Icon, CommandLineIcon, PackageIcon, SourceCodeIcon } from "@hugeicons/core-free-icons";
+import CopyButton from "./CopyButton.astro";
+import Icon from "./Icon.astro";
+import { siteLinks } from "../links";
+
+const button =
+  "inline-flex h-8 w-full items-center justify-center gap-2 rounded-md bg-fg/10 px-3 text-sm font-medium text-fg hover:bg-fg/15";
+---
+
+<section id="install" class="flex scroll-mt-14 flex-col gap-10 py-8 sm:gap-16 sm:py-12">
+  <div class="mx-auto flex w-full max-w-2xl flex-col gap-1 px-4">
+    <h2 class="max-w-2xl text-3xl font-medium text-balance text-heading md:mx-auto md:text-center">Install in one line, then run <kbd>nukri</kbd> in any terminal.</h2>
+  </div>
+
+  <div class="px-4">
+    <div class="mx-auto grid w-full max-w-3xl divide-y divide-line rounded-xl border border-line sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+      <div class="flex flex-col gap-4 p-6">
+        <Icon icon={CommandLineIcon} size={24} class="text-fg/80" />
+        <div>
+          <h3 class="font-medium text-heading">Install script</h3>
+          <p class="text-muted">The latest release, plus optional preview tools</p>
+        </div>
+        <CopyButton command="curl -fsSL https://nukri.urdadx.com/install.sh | sh" label="curl | sh" class={`mt-auto ${button}`} />
+      </div>
+
+      <div class="flex flex-col gap-4 p-6">
+        <Icon icon={SourceCodeIcon} size={24} class="text-fg/80" />
+        <div>
+          <h3 class="font-medium text-heading">Go</h3>
+          <p class="text-muted">Build from source into ~/go/bin</p>
+        </div>
+        <CopyButton command="go install github.com/urdadx/nukri/cmd/nukri@latest" label="go install" class={`mt-auto ${button}`} />
+      </div>
+
+      <div class="flex flex-col gap-4 p-6">
+        <Icon icon={PackageIcon} size={24} class="text-fg/80" />
+        <div>
+          <h3 class="font-medium text-heading">Binary</h3>
+          <p class="text-muted">Download for x86_64 or arm64</p>
+        </div>
+        <a href={siteLinks.releases} class={`mt-auto ${button}`}>
+          Releases
+          <Icon icon={ArrowUpRight01Icon} size={14} />
+        </a>
+      </div>
+    </div>
+  </div>
+</section>

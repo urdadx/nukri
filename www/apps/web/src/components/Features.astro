@@ -1,0 +1,95 @@
+---
+import {
+  CursorPointer01Icon,
+  DragDropIcon,
+  FileSearchIcon,
+  FileZipIcon,
+  FolderTransferIcon,
+  LayoutThreeColumnIcon,
+  LinkSquare02Icon,
+  PaintBoardIcon,
+  Search01Icon,
+  ViewIcon,
+} from "@hugeicons/core-free-icons";
+import Icon from "./Icon.astro";
+
+// From the feature list in the README; keep the two in step.
+const features = [
+  {
+    icon: LayoutThreeColumnIcon,
+    title: "Three panes layout",
+    text: "Places, your files and a live preview, laid out to fit your terminal.",
+  },
+  {
+    icon: ViewIcon,
+    title: "Rich previews",
+    text: "Code, Markdown, images, video, PDFs, office documents, fonts and archives.",
+  },
+  {
+    icon: FolderTransferIcon,
+    title: "File operations",
+    text: "Copy, cut, paste, rename, trash and restore, on one file or many.",
+  },
+  {
+    icon: FileZipIcon,
+    title: "Archives",
+    text: "Create zip, tar and tar.gz archives, and extract them.",
+  },
+  {
+    icon: Search01Icon,
+    title: "Fuzzy find",
+    text: "Jump to any file across the current folder tree.",
+  },
+  {
+    icon: FileSearchIcon,
+    title: "Duplicate finder",
+    text: "Spot duplicate files and see how much space you can reclaim.",
+  },
+  {
+    icon: DragDropIcon,
+    title: "Drag and drop",
+    text: "Drag files in and out of kitty 0.47+, even over SSH.",
+  },
+  {
+    icon: LinkSquare02Icon,
+    title: "Open anything",
+    text: "Open files in their default app or one you pick, and copy names or paths.",
+  },
+  {
+    icon: PaintBoardIcon,
+    title: "21 themes",
+    text: "Previewed live as you pick, plus any theme of your own.",
+  },
+  {
+    icon: CursorPointer01Icon,
+    title: "Mouse support",
+    text: "Click, double-click and scroll, right alongside the keyboard.",
+  },
+];
+---
+
+<section id="features" class="mx-auto scroll-mt-14 flex w-full max-w-2xl flex-col gap-10 px-4 py-8 sm:gap-16 sm:py-12">
+  <div class="flex flex-col gap-1">
+    <h2 class="max-w-2xl text-3xl font-medium text-balance text-heading">
+      Everything you need, right in the terminal.
+    </h2>
+    
+  </div>
+
+  <div class="grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2 sm:gap-y-16">
+    {features.map((feature) => (
+      <div class="flex flex-col gap-4">
+        <div class="flex size-8 flex-none items-center justify-center text-fg/80">
+          <Icon icon={feature.icon} size={26} />
+        </div>
+        <div class="flex flex-col">
+          <h3 class="text-lg font-medium text-heading">{feature.title}</h3>
+          <p class="text-lg leading-[1.4] font-medium text-pretty text-heading-muted">
+            {feature.text}
+          </p>
+        </div>
+      </div>
+    ))}
+  </div>
+</section>
+

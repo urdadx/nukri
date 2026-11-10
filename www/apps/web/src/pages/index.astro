@@ -1,14 +1,148 @@
 ---
+import { Copy01Icon } from "@hugeicons/core-free-icons";
+import CheckCircle from "../components/CheckCircle.astro";
+import GithubMark from "../components/GithubMark.astro";
+import Icon from "../components/Icon.astro";
+import Logo from "../components/Logo.astro";
+import Install from "../components/Install.astro";
+import Faq from "../components/Faq.astro";
+import Features from "../components/Features.astro";
+import Footer from "../components/Footer.astro";
+import GradientBackground from "../components/GradientBackground.astro";
+import Bolt from "../components/Bolt.astro";
+import TryArrow from "../components/TryArrow.astro";
+import Tux from "../components/Tux.astro";
+import NukriDemo from "../components/nukri-demo/NukriDemo.astro";
 import Layout from "../layouts/Layout.astro";
+import { siteLinks } from "../links";
+
+const installCommand = "curl -fsSL https://nukri.urdadx.com/install.sh | sh";
+const button =
+  "inline-flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-medium whitespace-nowrap transition-colors";
 ---
 
-<Layout>
-  <div class="container mx-auto max-w-3xl px-4 py-16 text-center">
-    <img src="/logo-mark.png" alt="" width="190" height="96" class="mx-auto" />
-    <h1 class="mt-6 text-5xl font-bold">nukri</h1>
-    <p class="mt-4 text-lg text-neutral-400">
-      Fast and elegant terminal file manager for Linux
-    </p>
-  </div>
+<Layout revealHeader>
+  <main>
+    <section class="pb-12">
+      <div class="mx-auto max-w-3xl px-4 pt-16 pb-14 md:pt-24">
+        <div class="w-fit" data-header-trigger><Logo size={44} /></div>
+        <h1
+          class="mt-8 max-w-lg text-3xl font-medium tracking-[-0.5px] text-pretty text-heading xl:text-4xl xl:tracking-[-0.7px]"
+        >
+          <span class="whitespace-nowrap">Fast <Bolt class="inline-block size-[0.9em] align-[-0.08em] text-[#eab308] dark:text-[#facc15]" /></span>{" "}
+          and elegant terminal file manager for{" "}
+          <span class="whitespace-nowrap"><Tux class="inline-block align-[-0.12em]" /> Linux.</span>
+        </h1>
+        <p class="mt-4 text-3xl leading-9 font-medium tracking-[-0.4px] text-pretty text-heading-muted">
+          Browse, preview and manage your files without leaving the terminal.
+        </p>
+
+        <div class="mt-8 flex flex-wrap items-center gap-2">
+          <a href={siteLinks.getStarted} class:list={[button, "bg-fg text-bg hover:bg-fg/85"]}>Get started</a>
+          <a href={siteLinks.github} class:list={[button, "bg-fg/10 text-fg hover:bg-fg/15"]}>
+            <GithubMark size={16} />
+            GitHub
+          </a>
+          <button
+            type="button"
+            id="copy-install"
+            data-command={installCommand}
+            class:list={[button, "bg-fg/10 text-fg hover:bg-fg/15"]}
+          >
+            <Icon icon={Copy01Icon} data-icon="copy" />
+            <CheckCircle data-icon="check" class="hidden size-4 text-green-600 dark:text-green-500" />
+            Copy install command
+          </button>
+        </div>
+      </div>
+
+      <div class="relative mx-auto w-full max-w-7xl px-3 sm:px-4 lg:px-6" data-try-area>
+        <TryArrow class="absolute right-10 bottom-full z-10 -mb-1 hidden text-fg/70 sm:flex lg:right-20" />
+        <div class="relative isolate overflow-hidden rounded-xl px-3 py-8 sm:px-6 sm:py-10 lg:px-10 lg:py-12">
+          <GradientBackground />
+          <!-- Phones get a screenshot: the terminal is too small to use there. -->
+          <img
+            src="/demo.png"
+            alt="Nukri with the Places sidebar, the file list of a home folder, and a preview of the selected folder"
+            width="1159"
+            height="744"
+            class="block w-full rounded-lg shadow-lg sm:hidden"
+          />
+          <div class="hidden sm:block">
+            <NukriDemo />
+          </div>
+        </div>
+        <p class="mt-4 hidden text-center text-md text-muted sm:block">
+          <span class="pointer-coarse:hidden">
+            Click the terminal, then use <kbd>j</kbd> <kbd>k</kbd> to move, <kbd>↵</kbd> to open,{" "}
+            <kbd>h</kbd> to go back, <kbd>T</kbd> to switch theme
+          </span>
+          <span class="hidden pointer-coarse:inline">Tap a file or folder to explore</span>
+        </p>
+      </div>
+    </section>
+
+    <Features />
+
+    <Install />
+
+    <Faq />
+  </main>
+
+  <Footer />
 </Layout>
 
+<script>
+  const button = document.getElementById("copy-install");
+  let reset: ReturnType<typeof setTimeout> | undefined;
+  button?.addEventListener("click", async () => {
+    await navigator.clipboard.writeText(button.dataset.command ?? "");
+    const copy = button.querySelector('[data-icon="copy"]');
+    const check = button.querySelector('[data-icon="check"]');
+    copy?.classList.add("hidden");
+    check?.classList.remove("hidden");
+    clearTimeout(reset);
+    reset = setTimeout(() => {
+      copy?.classList.remove("hidden");
+      check?.classList.add("hidden");
+    }, 1500);
+  });
+</script>
+
+<style>
+  /* The copy button gives a little: it presses in, and the tick pops in when copied. */
+  #copy-install {
+    transition:
+      background-color 150ms,
+      transform 120ms;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    #copy-install:active {
+      transform: scale(0.97);
+    }
+
+    #copy-install :global([data-icon="check"]:not(.hidden)) {
+      animation: pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    #copy-install :global([data-icon="copy"]:not(.hidden)) {
+      animation: fade-in 200ms ease-out;
+    }
+  }
+
+  @keyframes pop {
+    from {
+      opacity: 0;
+      scale: 0.4;
+      rotate: -20deg;
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      scale: 0.8;
+    }
+  }
+</style>
