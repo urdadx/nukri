@@ -84,6 +84,8 @@ func TestKittyValidation(t *testing.T) {
 }
 
 func TestIsKittyTerminal(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("TERM_PROGRAM", "")
 	t.Setenv("KITTY_WINDOW_ID", "1")
 	t.Setenv("TERM", "xterm-256color")
 	if !imageproto.IsKittyTerminal() {
@@ -93,6 +95,30 @@ func TestIsKittyTerminal(t *testing.T) {
 	t.Setenv("TERM", "xterm-kitty")
 	if !imageproto.IsKittyTerminal() {
 		t.Fatal("TERM=xterm-kitty should identify Kitty")
+	}
+	t.Setenv("TERM", "xterm-256color")
+	if imageproto.IsKittyTerminal() {
+		t.Fatal("plain xterm should not identify Kitty")
+	}
+}
+
+func TestIsKittyTerminalGhostty(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("KITTY_WINDOW_ID", "")
+	t.Setenv("TERM", "xterm-ghostty")
+	t.Setenv("TERM_PROGRAM", "")
+	if !imageproto.IsKittyTerminal() {
+		t.Fatal("TERM=xterm-ghostty should use kitty graphics")
+	}
+	t.Setenv("TERM", "XTERM-GHOSTTY")
+	if !imageproto.IsKittyTerminal() {
+		t.Fatal("TERM match should be case-insensitive")
+	}
+	// Inside tmux or screen, TERM is rewritten but TERM_PROGRAM is kept.
+	t.Setenv("TERM", "screen-256color")
+	t.Setenv("TERM_PROGRAM", "Ghostty")
+	if !imageproto.IsKittyTerminal() {
+		t.Fatal("TERM_PROGRAM=ghostty should use kitty graphics")
 	}
 }
 

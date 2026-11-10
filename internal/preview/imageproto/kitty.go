@@ -67,7 +67,14 @@ func NewKittyWithSupport(writer io.Writer, supported bool) *Kitty {
 }
 
 func IsKittyTerminal() bool {
-	return os.Getenv("KITTY_WINDOW_ID") != "" || strings.EqualFold(os.Getenv("TERM"), "xterm-kitty")
+	if os.Getenv("KITTY_WINDOW_ID") != "" {
+		return true
+	}
+	term := os.Getenv("TERM")
+	// Ghostty implements the kitty graphics protocol.
+	return strings.EqualFold(term, "xterm-kitty") ||
+		strings.EqualFold(term, "xterm-ghostty") ||
+		strings.EqualFold(os.Getenv("TERM_PROGRAM"), "ghostty")
 }
 
 func (*Kitty) Persistent() bool { return true }
