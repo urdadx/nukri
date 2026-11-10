@@ -24,6 +24,13 @@ export default defineConfig({
   logo: {
     image: "/logo.svg",
   },
+  // Every page shares the landing page's social card (apps/web/public/og.jpg)
+  // instead of a generated one.
+  seo: {
+    og: {
+      image: "https://nukri.urdadx.com/og.jpg",
+    },
+  },
   theme: {
     fonts: {
       display: inter,

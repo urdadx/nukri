@@ -13,7 +13,7 @@ const {
   description = "A fast terminal file manager for Linux, written in Go.",
   revealHeader = false,
 } = Astro.props;
-const image = new URL("/og.jpg", Astro.url);
+const image = new URL("/og.jpg", Astro.site ?? Astro.url);
 ---
 
 <!doctype html>
