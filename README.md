@@ -6,7 +6,22 @@ A fast terminal file manager for Linux, written in Go. Nukri is a work in progre
 
 ## Install
 
-With Go installed:
+On Linux (x86_64 or arm64):
+
+```bash
+curl -fsSL https://nukri.urdadx.com/install.sh | sh
+```
+
+The script downloads the latest release from GitHub, checks it against the
+release's checksums, and installs `nukri` to `/usr/local/bin`, or `~/.local/bin`
+when that isn't writable. Set `NUKRI_VERSION` to install a specific version, or
+`NUKRI_INSTALL_DIR` to choose the folder:
+
+```bash
+curl -fsSL https://nukri.urdadx.com/install.sh | NUKRI_VERSION=0.1.0 sh
+```
+
+Or, with Go installed:
 
 ```bash
 go install github.com/urdadx/nukri/cmd/nukri@latest
