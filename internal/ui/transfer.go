@@ -22,6 +22,7 @@ type transferMsg struct {
 	operation    fileops.Operation
 	origin       transferOrigin
 	completed    int
+	failed       []string // sources that were not transferred
 	err          error
 }
 
@@ -35,7 +36,7 @@ func applyTransfer(destination string, sources []string, operation fileops.Opera
 		return transferMsg{
 			destination: destination, selectedPath: selectedPath, sources: sources,
 			operation: operation, origin: origin, completed: len(result.Destinations),
-			err: errors.Join(result.Errors...),
+			failed: result.Failed, err: errors.Join(result.Errors...),
 		}
 	}
 }

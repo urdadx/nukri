@@ -30,18 +30,48 @@ func TestClipboardKeepsItsOwnCopyOfSources(t *testing.T) {
 	}
 }
 
-func TestClipboardClearIfDoesNotClearNewerSelection(t *testing.T) {
+// A paste that finishes after a newer copy or cut leaves the newer one alone.
+func TestClipboardPastedDoesNotClearNewerSelection(t *testing.T) {
 	clipboard := appfileops.Clipboard{}
 	clipboard.Cut([]string{"/tmp/old"})
 	clipboard.Copy([]string{"/tmp/new", "/tmp/other"})
-	clipboard.ClearIf([]string{"/tmp/old"}, fsfileops.Move)
+	clipboard.Pasted([]string{"/tmp/old"}, fsfileops.Move, nil)
 	if clipboard.Empty() || !clipboard.Contains("/tmp/new") || clipboard.Operation != fsfileops.Copy {
 		t.Fatalf("clipboard was unexpectedly cleared: %+v", clipboard)
 	}
 
-	clipboard.ClearIf([]string{"/tmp/new", "/tmp/other"}, fsfileops.Copy)
+	clipboard.Pasted([]string{"/tmp/new", "/tmp/other"}, fsfileops.Copy, nil)
 	if !clipboard.Empty() {
 		t.Fatalf("clipboard was not cleared: %+v", clipboard)
+	}
+}
+
+// Items that failed to paste stay on the clipboard so they can be retried.
+func TestClipboardKeepsFailedItemsAfterPaste(t *testing.T) {
+	clipboard := appfileops.Clipboard{}
+	sources := []string{"/tmp/a", "/tmp/b", "/tmp/c"}
+	clipboard.Cut(sources)
+	clipboard.Pasted(sources, fsfileops.Move, []string{"/tmp/b"})
+	if len(clipboard.Sources) != 1 || !clipboard.Contains("/tmp/b") || clipboard.Operation != fsfileops.Move {
+		t.Fatalf("clipboard = %+v, want only the failed item, still cut", clipboard)
+	}
+}
+
+// Only one paste runs at a time, even if the clipboard is cleared meanwhile.
+func TestClipboardRunsOnePasteAtATime(t *testing.T) {
+	clipboard := appfileops.Clipboard{}
+	clipboard.Copy([]string{"/tmp/a"})
+	if !clipboard.BeginPaste() {
+		t.Fatal("the first paste was refused")
+	}
+	clipboard.Clear()
+	clipboard.Copy([]string{"/tmp/b"})
+	if clipboard.BeginPaste() {
+		t.Fatal("a second paste started while the first was running")
+	}
+	clipboard.Pasted([]string{"/tmp/a"}, fsfileops.Copy, nil)
+	if !clipboard.BeginPaste() {
+		t.Fatal("a paste was refused after the first one finished")
 	}
 }
 

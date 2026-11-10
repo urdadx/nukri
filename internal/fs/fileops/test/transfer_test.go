@@ -126,3 +126,52 @@ func TestApplyTransferRejectsMovingFileBesideItself(t *testing.T) {
 		t.Fatalf("unexpected result: %+v", result)
 	}
 }
+
+// A read-only folder is copied with its contents, and keeps its permissions.
+func TestApplyTransferCopiesReadOnlyFolder(t *testing.T) {
+	source := filepath.Join(t.TempDir(), "locked")
+	if err := os.MkdirAll(filepath.Join(source, "inner"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "inner", "a.txt"), []byte("a"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, folder := range []string{filepath.Join(source, "inner"), source} {
+		if err := os.Chmod(folder, 0o555); err != nil {
+			t.Fatal(err)
+		}
+	}
+	destination := t.TempDir()
+	t.Cleanup(func() {
+		for _, folder := range []string{source, filepath.Join(source, "inner"), filepath.Join(destination, "locked"), filepath.Join(destination, "locked", "inner")} {
+			_ = os.Chmod(folder, 0o755)
+		}
+	})
+
+	result := fileops.ApplyTransfer(destination, []string{source}, fileops.Copy)
+	if len(result.Errors) != 0 {
+		t.Fatalf("copy failed: %v", result.Errors)
+	}
+	copied := filepath.Join(destination, "locked")
+	if data, err := os.ReadFile(filepath.Join(copied, "inner", "a.txt")); err != nil || string(data) != "a" {
+		t.Fatalf("copied file = %q, %v", data, err)
+	}
+	for _, folder := range []string{copied, filepath.Join(copied, "inner")} {
+		if info, err := os.Stat(folder); err != nil || info.Mode().Perm() != 0o555 {
+			t.Fatalf("%s permissions = %v, %v; want 0555", folder, info.Mode().Perm(), err)
+		}
+	}
+}
+
+func TestApplyTransferReportsFailedSources(t *testing.T) {
+	directory := t.TempDir()
+	present := filepath.Join(directory, "present.txt")
+	if err := os.WriteFile(present, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	missing := filepath.Join(directory, "missing.txt")
+	result := fileops.ApplyTransfer(t.TempDir(), []string{present, missing}, fileops.Move)
+	if len(result.Destinations) != 1 || len(result.Failed) != 1 || result.Failed[0] != missing {
+		t.Fatalf("result = %+v, want present moved and missing failed", result)
+	}
+}

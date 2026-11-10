@@ -66,6 +66,10 @@ func (m Model) pasteClipboard() (tea.Model, tea.Cmd) {
 		m.status = "Paste destination is unavailable"
 		return m, nil
 	}
+	if !m.clipboard.BeginPaste() {
+		m.status = "Still pasting; wait for it to finish"
+		return m, nil
+	}
 	verb := "Copying"
 	if m.clipboard.Operation == fileops.Move {
 		verb = "Moving"

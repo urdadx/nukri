@@ -147,8 +147,8 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.status = message.statusText()
 		}
-		if message.origin == transferClipboard && message.completed > 0 {
-			m.clipboard.ClearIf(message.sources, message.operation)
+		if message.origin == transferClipboard {
+			m.clipboard.Pasted(message.sources, message.operation, message.failed)
 		}
 		if message.destination == m.data.CWD {
 			return m, loadDirectory(message.destination, message.selectedPath)

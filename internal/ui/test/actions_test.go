@@ -309,3 +309,22 @@ func TestCutAndPasteMovesMarkedEntries(t *testing.T) {
 		t.Fatal("the clipboard should be empty after the move")
 	}
 }
+
+// Pressing paste again while a paste runs must not paste everything twice.
+func TestSecondPasteWaitsForTheFirst(t *testing.T) {
+	model, directory := actionModel(t, "a.txt", "sub/")
+	model, _ = press(t, model, "y") // copy the focused entry
+	model, first := press(t, model, "p")
+	model, second := press(t, model, "p")
+	if first == nil || second != nil {
+		t.Fatal("the second paste should wait for the first")
+	}
+	model = settle(t, model, first)
+	entries, _ := os.ReadDir(directory)
+	if len(entries) != 3 {
+		t.Fatalf("folder has %d entries after one paste, want 3", len(entries))
+	}
+	if _, cmd := press(t, model, "y", "p"); cmd == nil {
+		t.Fatal("a paste after the first finished should run")
+	}
+}

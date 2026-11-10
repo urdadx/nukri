@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 )
@@ -20,6 +21,7 @@ const (
 type Result struct {
 	Destinations []string
 	Errors       []error
+	Failed       []string // sources that were not transferred
 }
 
 func ApplyTransfer(destination string, sources []string, operation Operation) Result {
@@ -27,21 +29,25 @@ func ApplyTransfer(destination string, sources []string, operation Operation) Re
 	info, err := os.Stat(destination)
 	if err != nil || !info.IsDir() {
 		result.Errors = append(result.Errors, fmt.Errorf("drop destination is not a directory"))
+		result.Failed = slices.Clone(sources)
 		return result
 	}
 	for _, source := range sources {
 		info, err := os.Lstat(source)
 		if err != nil {
 			result.Errors = append(result.Errors, fmt.Errorf("%s: %w", filepath.Base(source), err))
+			result.Failed = append(result.Failed, source)
 			continue
 		}
 		baseDestination := filepath.Join(destination, filepath.Base(source))
 		if operation == Move && samePath(source, baseDestination) {
 			result.Errors = append(result.Errors, fmt.Errorf("%s is already here", filepath.Base(source)))
+			result.Failed = append(result.Failed, source)
 			continue
 		}
 		if info.IsDir() && pathInside(source, destination) {
 			result.Errors = append(result.Errors, fmt.Errorf("cannot drop %s into itself", filepath.Base(source)))
+			result.Failed = append(result.Failed, source)
 			continue
 		}
 		target := AvailablePath(baseDestination)
@@ -52,6 +58,7 @@ func ApplyTransfer(destination string, sources []string, operation Operation) Re
 		}
 		if err != nil {
 			result.Errors = append(result.Errors, fmt.Errorf("%s: %w", filepath.Base(source), err))
+			result.Failed = append(result.Failed, source)
 			continue
 		}
 		result.Destinations = append(result.Destinations, target)
@@ -88,11 +95,12 @@ func copyPath(source, destination string) error {
 		return os.Symlink(target, destination)
 	}
 	if info.IsDir() {
-		if err := os.Mkdir(destination, info.Mode().Perm()); err != nil {
+		// The folder stays writable while its contents are copied in, and gets
+		// the source's permissions last, so a read-only folder can be copied.
+		if err := os.Mkdir(destination, info.Mode().Perm()|0o700); err != nil {
 			return err
 		}
 		entries, err := os.ReadDir(source)
-
 		if err != nil {
 			_ = os.RemoveAll(destination)
 			return err
@@ -102,6 +110,10 @@ func copyPath(source, destination string) error {
 				_ = os.RemoveAll(destination)
 				return err
 			}
+		}
+		if err := os.Chmod(destination, info.Mode().Perm()); err != nil {
+			_ = os.RemoveAll(destination)
+			return err
 		}
 		return nil
 	}

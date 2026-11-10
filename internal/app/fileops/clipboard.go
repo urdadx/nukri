@@ -10,6 +10,7 @@ import (
 type Clipboard struct {
 	Sources   []string
 	Operation fsfileops.Operation
+	pasting   bool // a paste is running; see BeginPaste
 }
 
 func (c *Clipboard) Copy(sources []string) {
@@ -31,14 +32,34 @@ func (c Clipboard) Contains(path string) bool {
 	return slices.Contains(c.Sources, path)
 }
 
+// Clear empties the clipboard. A paste already running still finishes.
 func (c *Clipboard) Clear() {
-	*c = Clipboard{}
+	c.Sources, c.Operation = nil, 0
 }
 
-// ClearIf clears the clipboard only if it still holds sources for operation,
-// so a paste that finishes late doesn't drop a newer copy or cut.
-func (c *Clipboard) ClearIf(sources []string, operation fsfileops.Operation) {
-	if c.Operation == operation && slices.Equal(c.Sources, sources) {
-		*c = Clipboard{}
+// BeginPaste marks a paste as running and reports whether one may start: only
+// one runs at a time, so pressing paste twice doesn't paste everything twice.
+func (c *Clipboard) BeginPaste() bool {
+	if c.pasting {
+		return false
 	}
+	c.pasting = true
+	return true
+}
+
+/*
+Pasted ends the paste of sources for operation. The items that failed stay on
+the clipboard so the paste can be retried; when none failed it is emptied. A
+newer copy or cut made while the paste ran is left alone.
+*/
+func (c *Clipboard) Pasted(sources []string, operation fsfileops.Operation, failed []string) {
+	c.pasting = false
+	if c.Operation != operation || !slices.Equal(c.Sources, sources) {
+		return
+	}
+	if len(failed) == 0 {
+		c.Clear()
+		return
+	}
+	c.Sources = slices.Clone(failed)
 }
