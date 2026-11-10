@@ -1,0 +1,14 @@
+# Only the website (www/) and the install script it serves go into the build
+# context of www/Dockerfile; the Go sources and everything built or installed
+# locally stay out.
+*
+!install.sh
+!www
+www/Dockerfile
+www/**/node_modules
+www/**/dist
+www/**/.astro
+www/**/.blume
+www/**/.env
+www/**/.env.*
+!www/**/.env.schema

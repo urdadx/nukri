@@ -13,11 +13,16 @@ const inter = {
 export default defineConfig({
   title: "Nukri",
   description: "A fast terminal file manager for Linux, written in Go.",
-  // The mark's white frame needs a dark backdrop, so light mode shows it on its
-  // black tile. The favicon and home screen icon come from public/icon.png and
-  // public/apple-icon.png.
+  // The docs are served at nukri.urdadx.com/docs, beside the landing page
+  // (apps/web), which serves this build's files from its own server.
+  deployment: {
+    site: "https://nukri.urdadx.com",
+    base: "/docs",
+  },
+  // The same mark as the landing page (apps/web). The favicon and home screen
+  // icon come from public/favicon.svg and public/apple-icon.png.
   logo: {
-    image: { light: "/logo-light.png", dark: "/logo-dark.png", alt: "Nukri" },
+    image: "/logo.svg",
   },
   theme: {
     fonts: {
