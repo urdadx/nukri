@@ -19,7 +19,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/urdadx/nukri/internal/config/icons"
 	"github.com/urdadx/nukri/internal/core"
-	fileinfo "github.com/urdadx/nukri/internal/file_info"
+	"github.com/urdadx/nukri/internal/fileinfo"
 	"github.com/urdadx/nukri/internal/fs/places"
 	"github.com/urdadx/nukri/internal/preview"
 	"github.com/urdadx/nukri/internal/ui/browser"

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"unicode"
 
-	fileinfo "github.com/urdadx/nukri/internal/file_info"
+	"github.com/urdadx/nukri/internal/fileinfo"
 )
 
 func (s *Service) renderText(ctx context.Context, path string, facts fileinfo.FileFacts) (*TextPreview, error) {

@@ -24,8 +24,8 @@ type DocumentFormat int
 const (
 	Doc DocumentFormat = iota
 	Docx
-	Pdf
-	Html
+	PDF
+	HTML
 	Odt
 	Xls
 	Xlsx
@@ -37,7 +37,7 @@ const (
 	Ods
 	Odp
 	Document
-	Epub
+	EPUB
 	Mobi
 	Docm
 )
@@ -48,9 +48,9 @@ func (d DocumentFormat) DetailLabel() string {
 		return "Microsoft Word Document"
 	case Docx:
 		return "Microsoft Word Open XML Document"
-	case Pdf:
+	case PDF:
 		return "PDF Document"
-	case Html:
+	case HTML:
 		return "HTML Document"
 	case Odt:
 		return "OpenDocument Text Document"
@@ -74,7 +74,7 @@ func (d DocumentFormat) DetailLabel() string {
 		return "OpenDocument Presentation"
 	case Document:
 		return "Document File"
-	case Epub:
+	case EPUB:
 		return "EPUB eBook"
 	case Mobi:
 		return "Mobipocket eBook"
@@ -91,19 +91,6 @@ const (
 	Plain CodeBackend = iota
 	Chroma
 	Custom
-)
-
-type CustomCodeKind int
-
-const (
-	DirectiveConf CustomCodeKind = iota
-	Ini
-	DesktopEntry
-	Json
-	Jsonc
-	Toml
-	Yaml
-	Log
 )
 
 type StructuredFormat string

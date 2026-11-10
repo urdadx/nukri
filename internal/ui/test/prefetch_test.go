@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/urdadx/nukri/internal/core"
-	fileinfo "github.com/urdadx/nukri/internal/file_info"
+	"github.com/urdadx/nukri/internal/fileinfo"
 	"github.com/urdadx/nukri/internal/ui"
 	"github.com/urdadx/nukri/internal/ui/browser"
 )
@@ -87,7 +87,7 @@ func TestPrefetchNeighborsEmptyResult(t *testing.T) {
 }
 
 func TestIsExpensivePreview(t *testing.T) {
-	pdf := fileinfo.Pdf
+	pdf := fileinfo.PDF
 	tests := []struct {
 		name  string
 		facts fileinfo.FileFacts

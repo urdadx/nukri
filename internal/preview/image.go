@@ -18,7 +18,7 @@ import (
 	_ "golang.org/x/image/tiff"
 	_ "golang.org/x/image/webp"
 
-	fileinfo "github.com/urdadx/nukri/internal/file_info"
+	"github.com/urdadx/nukri/internal/fileinfo"
 )
 
 /*

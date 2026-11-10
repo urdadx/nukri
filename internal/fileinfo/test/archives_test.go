@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/urdadx/nukri/internal/core"
-	. "github.com/urdadx/nukri/internal/file_info"
+	"github.com/urdadx/nukri/internal/fileinfo"
 )
 
 func TestInspectArchiveName(t *testing.T) {
@@ -21,7 +21,7 @@ func TestInspectArchiveName(t *testing.T) {
 
 	for name, wantLabel := range tests {
 		t.Run(name, func(t *testing.T) {
-			facts := InspectPath(name, core.File)
+			facts := fileinfo.InspectPath(name, core.File)
 			if facts.BuiltinClass != core.FileClassArchive {
 				t.Fatalf("BuiltinClass = %v, want archive", facts.BuiltinClass)
 			}
@@ -33,12 +33,12 @@ func TestInspectArchiveName(t *testing.T) {
 }
 
 func TestCompressedDiskImageKind(t *testing.T) {
-	kind, ok := CompressedDiskImageKind("disk.qcow2.zst", ".zst", Zstd)
-	if !ok || kind.Kind != CompressedDiskImage || kind.Image != Qcow2 || kind.Compression != Zstd {
+	kind, ok := fileinfo.CompressedDiskImageKind("disk.qcow2.zst", ".zst", fileinfo.Zstd)
+	if !ok || kind.Kind != fileinfo.CompressedDiskImage || kind.Image != fileinfo.Qcow2 || kind.Compression != fileinfo.Zstd {
 		t.Fatalf("CompressedDiskImageKind() = (%+v, %t), want a Zstd-compressed QCOW2 image", kind, ok)
 	}
 
-	if _, ok := CompressedDiskImageKind("notes.txt", ".zst", Zstd); ok {
+	if _, ok := fileinfo.CompressedDiskImageKind("notes.txt", ".zst", fileinfo.Zstd); ok {
 		t.Fatal("plain text file was classified as a disk image")
 	}
 }

@@ -9,12 +9,12 @@ import (
 
 	"github.com/adrg/xdg"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/urdadx/nukri/configs"
 	"github.com/urdadx/nukri/internal/config"
 	"github.com/urdadx/nukri/internal/config/icons"
 	"github.com/urdadx/nukri/internal/kittydnd"
 	"github.com/urdadx/nukri/internal/theme"
 	"github.com/urdadx/nukri/internal/ui"
-	nukriconfig "github.com/urdadx/nukri/nukri_config"
 )
 
 const defaultTheme = "catppuccin-mocha"
@@ -61,11 +61,11 @@ func run() int {
 	}
 	// The flag wins, then the saved choice, then the default.
 	themeName := firstNonEmpty(*themeFlag, settings.Theme, defaultTheme)
-	selectedTheme, err := theme.Named(themeName, userThemes, nukriconfig.Themes)
+	selectedTheme, err := theme.Named(themeName, userThemes, configs.Themes)
 	if err != nil && *themeFlag == "" && themeName != defaultTheme {
 		// A saved theme that no longer exists shouldn't stop nukri starting.
 		themeName = defaultTheme
-		selectedTheme, err = theme.Named(themeName, userThemes, nukriconfig.Themes)
+		selectedTheme, err = theme.Named(themeName, userThemes, configs.Themes)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "nukri:", err)
@@ -74,8 +74,8 @@ func run() int {
 	icons.InitIcon(true, selectedTheme.DirectoryIconColor)
 	model := ui.New(selectedTheme).WithThemes(ui.ThemeCatalog{
 		Current: themeName,
-		Names:   func() []string { return theme.Names(userThemes, nukriconfig.Themes) },
-		Load:    func(name string) (theme.Theme, error) { return theme.Named(name, userThemes, nukriconfig.Themes) },
+		Names:   func() []string { return theme.Names(userThemes, configs.Themes) },
+		Load:    func(name string) (theme.Theme, error) { return theme.Named(name, userThemes, configs.Themes) },
 		Save:    func(name string) error { return config.SaveTheme(configPath, name) },
 	}).WithPreview(settings.PreviewShown(), func(shown bool) error { return config.SavePreview(configPath, shown) })
 	output := model.TerminalOutput(os.Stdout)

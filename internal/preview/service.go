@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/urdadx/nukri/internal/core"
-	"github.com/urdadx/nukri/internal/file_info"
+	"github.com/urdadx/nukri/internal/fileinfo"
 )
 
 type Service struct {
@@ -121,9 +121,9 @@ func (s *Service) Render(ctx context.Context, request Request) (Preview, error) 
 	if request.Facts.Preview.DocumentFormat != nil {
 		format := *request.Facts.Preview.DocumentFormat
 		switch {
-		case format == fileinfo.Pdf:
+		case format == fileinfo.PDF:
 			return s.renderPDF(ctx, path, request.Width)
-		case format == fileinfo.Epub:
+		case format == fileinfo.EPUB:
 			return s.renderEPUB(ctx, path)
 		case isOfficeDocument(format):
 			return s.renderOfficeDocument(ctx, path, format, request.Width)

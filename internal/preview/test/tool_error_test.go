@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/urdadx/nukri/internal/core"
-	"github.com/urdadx/nukri/internal/file_info"
+	"github.com/urdadx/nukri/internal/fileinfo"
 	"github.com/urdadx/nukri/internal/preview"
 )
 
@@ -17,7 +17,7 @@ import (
 // which binary needs to be installed, while still matching ErrToolUnavailable.
 func TestToolUnavailableNamesTool(t *testing.T) {
 	service := preview.NewServiceWithTools(preview.Tools{})
-	facts := file_infoForDocument(fileinfo.Pdf)
+	facts := fileInfoForDocument(fileinfo.PDF)
 
 	_, err := service.Render(context.Background(), preview.Request{Path: "book.pdf", Facts: facts})
 	if !errors.Is(err, preview.ErrToolUnavailable) {
@@ -37,7 +37,7 @@ func TestToolUnavailableNamesTool(t *testing.T) {
 // preview without any external archive tool.
 func TestNativeZipListingWithoutTool(t *testing.T) {
 	service := preview.NewServiceWithTools(preview.Tools{})
-	path := filepath.Join("file_samples", "roobert-font-family.zip")
+	path := filepath.Join("testdata", "roobert-font-family.zip")
 	facts := fileinfo.InspectPath(path, core.File)
 
 	result, err := service.Render(context.Background(), preview.Request{Path: path, Facts: facts})
@@ -70,7 +70,7 @@ func TestImageFormatsNameMissingTool(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.sample, func(t *testing.T) {
-			data, err := os.ReadFile(filepath.Join("file_samples", test.sample))
+			data, err := os.ReadFile(filepath.Join("testdata", test.sample))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -126,9 +126,9 @@ func TestPDFPageFromPPMOutput(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			tools.PDFToPPM = fakePDFToPPM(t, test.output)
-			path := filepath.Join("file_samples", "session_history.pdf")
+			path := filepath.Join("testdata", "session_history.pdf")
 			result, err := preview.NewServiceWithTools(tools).Render(context.Background(), preview.Request{
-				Path: copyToTemp(t, path), Facts: file_infoForDocument(fileinfo.Pdf), Width: 40,
+				Path: copyToTemp(t, path), Facts: fileInfoForDocument(fileinfo.PDF), Width: 40,
 			})
 			if !test.ok {
 				if err == nil {
@@ -168,7 +168,7 @@ func TestZipListingPrefersStandardLibrary(t *testing.T) {
 	if err := os.WriteFile(failing, []byte("#!/bin/sh\nexit 1\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join("file_samples", "roobert-font-family.zip")
+	path := filepath.Join("testdata", "roobert-font-family.zip")
 	service := preview.NewServiceWithTools(preview.Tools{SevenZip: failing})
 	result, err := service.Render(context.Background(), preview.Request{Path: path, Facts: fileinfo.InspectPath(path, core.File)})
 	if err != nil {
@@ -234,7 +234,7 @@ func TestSVGFallsBackToImageMagick(t *testing.T) {
 		t.Skip("requires ImageMagick")
 	}
 	service := preview.NewServiceWithTools(preview.Tools{ImageMagick: imageMagick})
-	good := copyToTemp(t, filepath.Join("file_samples", "diamond.svg"))
+	good := copyToTemp(t, filepath.Join("testdata", "diamond.svg"))
 	result, err := service.Render(context.Background(), preview.Request{Path: good, Facts: fileinfo.InspectPath(good, core.File), Width: 30})
 	if err != nil {
 		t.Fatalf("render through ImageMagick: %v", err)

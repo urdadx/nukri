@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/urdadx/nukri/internal/core"
-	"github.com/urdadx/nukri/internal/file_info"
+	"github.com/urdadx/nukri/internal/fileinfo"
 	"github.com/urdadx/nukri/internal/preview"
 )
 
@@ -43,7 +43,7 @@ func TestPDFPreviewIgnoresSourceByteSize(t *testing.T) {
 // temp path so tests can mutate it without touching the repo fixture.
 func copyPDFSample(t *testing.T) string {
 	t.Helper()
-	src := filepath.Join("file_samples", "session_history.pdf")
+	src := filepath.Join("testdata", "session_history.pdf")
 	in, err := os.Open(src)
 	if err != nil {
 		t.Fatal(err)
@@ -164,7 +164,7 @@ func orderedDims(a, b int) (int, int) {
 func TestOfficePreviewServesFromDiskCache(t *testing.T) {
 	service := preview.NewService()
 	requireCapability(t, service.Capabilities().Documents, "libreoffice, pdfinfo, and pdftocairo")
-	data, err := os.ReadFile(filepath.Join("file_samples", "Third Party.xlsx"))
+	data, err := os.ReadFile(filepath.Join("testdata", "Third Party.xlsx"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,7 +283,7 @@ func TestAudioPreviewServesFromDiskCache(t *testing.T) {
 func TestSVGPreviewServesFromDiskCache(t *testing.T) {
 	service := preview.NewService()
 	requireCapability(t, service.Capabilities().SVG, "rsvg-convert or imagemagick")
-	data, err := os.ReadFile(filepath.Join("file_samples", "diamond.svg"))
+	data, err := os.ReadFile(filepath.Join("testdata", "diamond.svg"))
 	if err != nil {
 		t.Fatal(err)
 	}

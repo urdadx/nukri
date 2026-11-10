@@ -254,7 +254,7 @@ func normalizeLicenseText(text string) string {
 	var normalized strings.Builder
 	normalized.Grow(len(text))
 
-	var previousSpace bool = true
+	previousSpace := true
 
 	for _, char := range text {
 		lower := unicode.ToLower(char)
@@ -275,7 +275,7 @@ func normalizeHighSignalText(text string) string {
 	var normalized strings.Builder
 	normalized.Grow(len(text))
 
-	var previousSpace bool = true
+	previousSpace := true
 
 	for _, char := range text {
 		lower := unicode.ToLower(char)
@@ -346,7 +346,7 @@ func normalizeSpdxExpression(value string) string {
 	var normalized strings.Builder
 	normalized.Grow(len(value))
 
-	var previousSpace bool = true
+	previousSpace := true
 	for _, ch := range strings.TrimSpace(strings.Trim(value, "()")) {
 		if ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' {
 			if !previousSpace {

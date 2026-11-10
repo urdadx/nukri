@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode"
 
-	fileinfo "github.com/urdadx/nukri/internal/file_info"
+	"github.com/urdadx/nukri/internal/fileinfo"
 )
 
 var (

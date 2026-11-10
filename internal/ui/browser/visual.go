@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/urdadx/nukri/internal/preview"
-	"github.com/urdadx/nukri/internal/preview/image_protocols"
+	"github.com/urdadx/nukri/internal/preview/imageproto"
 )
 
 /*
@@ -20,17 +20,17 @@ moved one is re-placed rather than re-transmitted where the protocol allows.
 */
 type VisualState struct {
 	mu       sync.Mutex
-	renderer image_protocols.ImageRenderer
+	renderer imageproto.ImageRenderer
 
 	// What the last render asked for.
 	want      *preview.Image
-	wantPlace image_protocols.Placement
+	wantPlace imageproto.Placement
 
 	// What is on screen.
-	last   image_protocols.RenderedImage
+	last   imageproto.RenderedImage
 	data   *byte // identity of the placed image's bytes; see sameImageData
 	size   int
-	place  image_protocols.Placement
+	place  imageproto.Placement
 	placed bool
 }
 
@@ -39,7 +39,7 @@ func (s *VisualState) Show(image *preview.Image, x, y, columns, rows int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.want = image
-	s.wantPlace = image_protocols.Placement{X: x, Y: y, Columns: columns, Rows: rows}
+	s.wantPlace = imageproto.Placement{X: x, Y: y, Columns: columns, Rows: rows}
 }
 
 // Clear asks for the image to be removed on the next flush.
@@ -59,7 +59,7 @@ func (s *VisualState) Flush(terminal io.Writer) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.renderer == nil {
-		s.renderer = image_protocols.NewRenderer(terminal)
+		s.renderer = imageproto.NewRenderer(terminal)
 	}
 	if !s.renderer.Supported() {
 		return
@@ -96,7 +96,7 @@ func (s *VisualState) Flush(terminal io.Writer) {
 }
 
 func (s *VisualState) forget() {
-	s.last = image_protocols.RenderedImage{}
+	s.last = imageproto.RenderedImage{}
 	s.data, s.size = nil, 0
 	s.placed = false
 }

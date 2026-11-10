@@ -3,7 +3,7 @@ package test
 import (
 	"testing"
 
-	"github.com/urdadx/nukri/internal/file_info"
+	"github.com/urdadx/nukri/internal/fileinfo"
 	"github.com/urdadx/nukri/internal/preview"
 )
 

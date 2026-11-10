@@ -21,7 +21,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/urdadx/nukri/internal/core"
-	"github.com/urdadx/nukri/internal/file_info"
+	"github.com/urdadx/nukri/internal/fileinfo"
 	"github.com/urdadx/nukri/internal/preview"
 )
 
@@ -41,7 +41,7 @@ func TestRenderPDFFirstPage(t *testing.T) {
 
 func TestRenderMarkdown(t *testing.T) {
 	service := preview.NewService()
-	path := filepath.Join("file_samples", "minimal.md")
+	path := filepath.Join("testdata", "minimal.md")
 	facts := fileinfo.InspectPath(path, core.File)
 	result, err := service.Render(context.Background(), preview.Request{Path: path, Facts: facts, Width: 60})
 	if err != nil {
@@ -516,7 +516,7 @@ func TestParseEPUB(t *testing.T) {
 
 func TestUnavailableToolAndCancellation(t *testing.T) {
 	service := preview.NewServiceWithTools(preview.Tools{})
-	facts := file_infoForDocument(fileinfo.Pdf)
+	facts := fileInfoForDocument(fileinfo.PDF)
 	_, err := service.Render(context.Background(), preview.Request{Path: "book.pdf", Facts: facts})
 	if !errors.Is(err, preview.ErrToolUnavailable) {
 		t.Fatalf("error = %v, want ErrToolUnavailable", err)
@@ -532,7 +532,7 @@ func TestUnavailableToolAndCancellation(t *testing.T) {
 
 func renderSample(t *testing.T, service *preview.Service, name string) preview.Preview {
 	t.Helper()
-	path := filepath.Join("file_samples", name)
+	path := filepath.Join("testdata", name)
 	facts := fileinfo.InspectPath(path, core.File)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -561,13 +561,13 @@ func requireCapability(t *testing.T, available bool, tools string) {
 	}
 }
 
-func file_infoForDocument(format fileinfo.DocumentFormat) fileinfo.FileFacts {
+func fileInfoForDocument(format fileinfo.DocumentFormat) fileinfo.FileFacts {
 	return fileinfo.FileFacts{BuiltinClass: core.FileClassDocument, Preview: fileinfo.DocumentPreview(format)}
 }
 
 func extractFontSample(t *testing.T) string {
 	t.Helper()
-	archive, err := zip.OpenReader(filepath.Join("file_samples", "roobert-font-family.zip"))
+	archive, err := zip.OpenReader(filepath.Join("testdata", "roobert-font-family.zip"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -767,7 +767,7 @@ func TestRenderCSVCountsRowsPastThePreview(t *testing.T) {
 // The parser decodes without a separate validation pass, so every prefix of a
 // valid torrent, and data trailing one, must fail cleanly instead of panicking.
 func TestRenderTorrentRejectsTruncatedMetainfo(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("file_samples", "hybrid.torrent"))
+	data, err := os.ReadFile(filepath.Join("testdata", "hybrid.torrent"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -6,16 +6,16 @@ import (
 	"testing"
 
 	"github.com/urdadx/nukri/internal/core"
-	. "github.com/urdadx/nukri/internal/file_info"
+	"github.com/urdadx/nukri/internal/fileinfo"
 )
 
-func inspectTemporaryFile(t *testing.T, name string, content []byte) FileFacts {
+func inspectTemporaryFile(t *testing.T, name string, content []byte) fileinfo.FileFacts {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), name)
 	if err := os.WriteFile(path, content, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	return InspectPath(path, core.File)
+	return fileinfo.InspectPath(path, core.File)
 }
 
 func TestInspectPathSniffsExtensionlessShebang(t *testing.T) {
@@ -37,7 +37,7 @@ func TestInspectEntryFastDoesNotReadExtensionlessContent(t *testing.T) {
 	if err := os.WriteFile(path, []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a}, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	facts := InspectEntryFast(&core.Entry{Name: "image", Path: path, Kind: core.File})
+	facts := fileinfo.InspectEntryFast(&core.Entry{Name: "image", Path: path, Kind: core.File})
 	if facts.BuiltinClass == core.FileClassImage {
 		t.Fatalf("BuiltinClass = %v, want fast name-only classification", facts.BuiltinClass)
 	}
@@ -48,7 +48,7 @@ func TestInspectEntryPerformsFullContentInspection(t *testing.T) {
 	if err := os.WriteFile(path, []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a}, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	facts := InspectEntry(&core.Entry{Name: "image", Path: path, Kind: core.File})
+	facts := fileinfo.InspectEntry(&core.Entry{Name: "image", Path: path, Kind: core.File})
 	if facts.BuiltinClass != core.FileClassImage {
 		t.Fatalf("BuiltinClass = %v, want full image classification", facts.BuiltinClass)
 	}

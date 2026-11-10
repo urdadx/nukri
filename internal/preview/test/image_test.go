@@ -17,7 +17,7 @@ import (
 	"testing"
 
 	"github.com/urdadx/nukri/internal/core"
-	"github.com/urdadx/nukri/internal/file_info"
+	"github.com/urdadx/nukri/internal/fileinfo"
 	"github.com/urdadx/nukri/internal/preview"
 )
 
@@ -26,7 +26,7 @@ func TestRenderAVIFImagePreview(t *testing.T) {
 	service := preview.NewService()
 	requireCapability(t, service.Capabilities().AVIF, "imagemagick or ffmpeg")
 	// Copy to a fresh path so the on-disk image cache can't answer.
-	data, err := os.ReadFile("file_samples/gradient.avif")
+	data, err := os.ReadFile("testdata/gradient.avif")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestRenderAVIFImagePreview(t *testing.T) {
 }
 
 func TestRenderPNGImagePreview(t *testing.T) {
-	path := "file_samples/shopping.png"
+	path := "testdata/shopping.png"
 	f := fileinfo.InspectPath(path, core.File)
 	result, err := preview.NewService().Render(context.Background(), preview.Request{Path: path, Facts: f, Width: 40})
 	if err != nil {

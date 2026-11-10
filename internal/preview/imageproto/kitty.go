@@ -1,4 +1,4 @@
-package image_protocols
+package imageproto
 
 import (
 	"encoding/base64"

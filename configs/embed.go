@@ -1,5 +1,5 @@
-// Package nukriconfig holds the configuration files bundled into the binary.
-package nukriconfig
+// Package configs holds the configuration files bundled into the binary.
+package configs
 
 import "embed"
 

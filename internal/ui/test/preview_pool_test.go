@@ -10,7 +10,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/urdadx/nukri/internal/core"
-	fileinfo "github.com/urdadx/nukri/internal/file_info"
+	"github.com/urdadx/nukri/internal/fileinfo"
 	"github.com/urdadx/nukri/internal/preview"
 	"github.com/urdadx/nukri/internal/ui"
 	"github.com/urdadx/nukri/internal/ui/browser"

@@ -9,13 +9,13 @@ import (
 	"testing"
 
 	"github.com/urdadx/nukri/internal/preview"
-	"github.com/urdadx/nukri/internal/preview/image_protocols"
+	"github.com/urdadx/nukri/internal/preview/imageproto"
 )
 
 func TestSixelPlaceAndDelete(t *testing.T) {
 	var output bytes.Buffer
-	renderer := image_protocols.NewSixelWithSupport(&output, true)
-	placed, err := renderer.Place(sixelTestImage(t), image_protocols.Placement{
+	renderer := imageproto.NewSixelWithSupport(&output, true)
+	placed, err := renderer.Place(sixelTestImage(t), imageproto.Placement{
 		X: 3, Y: 2, Columns: 8, Rows: 4,
 	})
 	if err != nil {
@@ -43,15 +43,15 @@ func TestSixelDetectionAndRendererSelection(t *testing.T) {
 	t.Setenv("KITTY_WINDOW_ID", "")
 	t.Setenv("TERM_PROGRAM", "WezTerm")
 	t.Setenv("TERM", "xterm-256color")
-	if !image_protocols.IsSixelTerminal() {
+	if !imageproto.IsSixelTerminal() {
 		t.Fatal("WezTerm should enable Sixel detection")
 	}
-	if _, ok := image_protocols.NewRenderer(&bytes.Buffer{}).(*image_protocols.Sixel); !ok {
+	if _, ok := imageproto.NewRenderer(&bytes.Buffer{}).(*imageproto.Sixel); !ok {
 		t.Fatal("renderer selection should choose Sixel")
 	}
 
 	t.Setenv("KITTY_WINDOW_ID", "1")
-	if _, ok := image_protocols.NewRenderer(&bytes.Buffer{}).(*image_protocols.Kitty); !ok {
+	if _, ok := imageproto.NewRenderer(&bytes.Buffer{}).(*imageproto.Kitty); !ok {
 		t.Fatal("renderer selection should prefer Kitty")
 	}
 }
@@ -84,9 +84,9 @@ func TestSixelScalesLargeImageToPlacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	var output bytes.Buffer
-	renderer := image_protocols.NewSixelWithSupport(&output, true)
+	renderer := imageproto.NewSixelWithSupport(&output, true)
 	// 10x5 cells of 8x16 pixels is an 80x80 box, so 1600x1000 scales to 80x50.
-	placed, err := renderer.Place(preview.Image{MediaType: "image/png", Data: data.Bytes()}, image_protocols.Placement{Columns: 10, Rows: 5})
+	placed, err := renderer.Place(preview.Image{MediaType: "image/png", Data: data.Bytes()}, imageproto.Placement{Columns: 10, Rows: 5})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestSixelScalesLargeImageToPlacement(t *testing.T) {
 	}
 
 	output.Reset()
-	if _, err := renderer.Move(placed, image_protocols.Placement{X: 4, Y: 2, Columns: 10, Rows: 5}); err != nil {
+	if _, err := renderer.Move(placed, imageproto.Placement{X: 4, Y: 2, Columns: 10, Rows: 5}); err != nil {
 		t.Fatal(err)
 	}
 	moved := output.String()

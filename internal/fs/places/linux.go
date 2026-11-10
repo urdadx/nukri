@@ -1,8 +1,7 @@
-/**
- * Discovers mounted Linux devices from /proc/mounts, filters system and hidden
- * mounts, resolves device labels and removability, and converts visible mounts
- * into sorted sidebar items without accessing potentially blocking mount paths.
- */
+// This file discovers mounted Linux devices from /proc/mounts, filters system
+// and hidden mounts, resolves device labels and removability, and converts
+// visible mounts into sorted sidebar items without accessing potentially
+// blocking mount paths.
 
 package places
 

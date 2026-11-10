@@ -1,11 +1,9 @@
 package icons
 
-/**
-This code is from https://github.com/yorukot/superfile/blob/main/src/config/icon/function.go
+// The icon tables are based on superfile:
+// https://github.com/yorukot/superfile/blob/main/src/config/icon/function.go
 
-**/
-
-// Style for icons
+// Style is an icon and its color.
 type Style struct {
 	Icon  string
 	Color string
@@ -16,8 +14,9 @@ THESE CODE BASE ON https://github.com/acarl005/ls-go
 thanks for the great work!!
 */
 
-// Icons, Aliases and Folders are read from preview workers and must not be
-// changed at runtime. Mode-dependent icons live in Set (see Current).
+// Icons maps a file kind to its icon. Icons, Aliases and Folders are read from
+// preview workers and must not be changed at runtime. Mode-dependent icons
+// live in Set (see Current).
 var Icons = map[string]Style{
 	"ai":           {Icon: "\ue669", Color: "#ce6f14"},     // Printable Rune : ""
 	"android":      {Icon: "\uf17b", Color: "#a7c83f"},     // Printable Rune : ""

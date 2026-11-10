@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/urdadx/nukri/internal/core"
-	fileinfo "github.com/urdadx/nukri/internal/file_info"
+	"github.com/urdadx/nukri/internal/fileinfo"
 	"github.com/urdadx/nukri/internal/preview"
 )
 

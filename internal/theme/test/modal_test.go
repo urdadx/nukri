@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/urdadx/nukri/configs"
 	"github.com/urdadx/nukri/internal/theme"
-	nukriconfig "github.com/urdadx/nukri/nukri_config"
 )
 
 // contrast is the WCAG contrast ratio of two "#rrggbb" colors.
@@ -34,8 +34,8 @@ func contrast(t *testing.T, first, second string) float64 {
 // Every bundled theme's pop-ups must be readable: secondary text and errors at
 // 4.5:1 or better, and titles at least as clear as the pop-up's text.
 func TestEveryThemeHasReadablePopups(t *testing.T) {
-	for _, name := range theme.Names("", nukriconfig.Themes) {
-		loaded, err := theme.Named(name, "", nukriconfig.Themes)
+	for _, name := range theme.Names("", configs.Themes) {
+		loaded, err := theme.Named(name, "", configs.Themes)
 		if err != nil {
 			t.Fatal(err)
 		}

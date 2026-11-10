@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/urdadx/nukri/internal/core"
-	. "github.com/urdadx/nukri/internal/file_info"
+	"github.com/urdadx/nukri/internal/fileinfo"
 )
 
 func TestInspectEntryFastDetectsCanonicalLicense(t *testing.T) {
@@ -14,7 +14,7 @@ func TestInspectEntryFastDetectsCanonicalLicense(t *testing.T) {
 	if err := os.WriteFile(path, []byte("Project legal notices."), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	facts := InspectEntryFast(&core.Entry{Name: "NOTICE", Path: path, Kind: core.File})
+	facts := fileinfo.InspectEntryFast(&core.Entry{Name: "NOTICE", Path: path, Kind: core.File})
 	if facts.BuiltinClass != core.FileClassLicense || facts.SpecificTypeLabel == nil || *facts.SpecificTypeLabel != "License Document" {
 		t.Fatalf("facts = %#v, want generic license", facts)
 	}
@@ -56,7 +56,7 @@ func TestDetectLicenseDocuments(t *testing.T) {
 			if err := os.WriteFile(path, []byte(test.text), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			facts := InspectPath(path, core.File)
+			facts := fileinfo.InspectPath(path, core.File)
 			if facts.BuiltinClass != core.FileClassLicense || facts.SpecificTypeLabel == nil || *facts.SpecificTypeLabel != test.want {
 				t.Fatalf("facts = %#v, want %q", facts, test.want)
 			}
@@ -70,7 +70,7 @@ func TestReadmeMentioningLicenseIsNotLicense(t *testing.T) {
 	if err := os.WriteFile(path, []byte(text), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	facts := InspectPath(path, core.File)
+	facts := fileinfo.InspectPath(path, core.File)
 	if facts.BuiltinClass == core.FileClassLicense {
 		t.Fatalf("facts = %#v, want a non-license README", facts)
 	}

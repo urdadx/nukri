@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 
 	tea "github.com/charmbracelet/bubbletea"
-	fileinfo "github.com/urdadx/nukri/internal/file_info"
+	"github.com/urdadx/nukri/internal/fileinfo"
 	"github.com/urdadx/nukri/internal/preview"
 	"github.com/urdadx/nukri/internal/ui/browser"
 )

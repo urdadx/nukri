@@ -179,8 +179,8 @@ var documentFormats = map[string]struct {
 	"doc": {Doc, "DOC document"}, "docx": {Docx, "DOCX document"}, "docm": {Docm, "DOCM document"},
 	"odt": {Odt, "ODT document"}, "ods": {Ods, "ODS spreadsheet"}, "odp": {Odp, "ODP presentation"},
 	"pptx": {Pptx, "PPTX presentation"}, "pptm": {Pptm, "PPTM presentation"}, "xls": {Xls, "XLS spreadsheet"}, "xlsx": {Xlsx, "XLSX spreadsheet"},
-	"xlsm": {Xlsm, "XLSM spreadsheet"}, "pages": {Pages, "Pages document"}, "epub": {Epub, "EPUB ebook"},
-	"mobi": {Mobi, "MOBI ebook"}, "azw3": {Azw3, "AZW3 ebook"}, "pdf": {Pdf, "PDF document"},
+	"xlsm": {Xlsm, "XLSM spreadsheet"}, "pages": {Pages, "Pages document"}, "epub": {EPUB, "EPUB ebook"},
+	"mobi": {Mobi, "MOBI ebook"}, "azw3": {Azw3, "AZW3 ebook"}, "pdf": {PDF, "PDF document"},
 }
 
 func inspectDataOrDocumentExtension(ext string) (FileFacts, bool) {

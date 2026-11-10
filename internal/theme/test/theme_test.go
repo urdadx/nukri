@@ -9,12 +9,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/urdadx/nukri/configs"
 	"github.com/urdadx/nukri/internal/theme"
-	nukriconfig "github.com/urdadx/nukri/nukri_config"
 )
 
 func TestBundledThemeLoads(t *testing.T) {
-	path := filepath.Join("..", "..", "..", "nukri_config", "themes", "catppuccin-mocha.toml")
+	path := filepath.Join("..", "..", "..", "configs", "themes", "catppuccin-mocha.toml")
 	loaded, err := theme.Load(path)
 	if err != nil {
 		t.Fatal(err)
@@ -29,7 +29,7 @@ func TestBundledThemeLoads(t *testing.T) {
 
 func TestNamedThemeUsesBundledThemeAnywhere(t *testing.T) {
 	t.Chdir(t.TempDir()) // themes must not depend on the working directory
-	loaded, err := theme.Named("nord", "", nukriconfig.Themes)
+	loaded, err := theme.Named("nord", "", configs.Themes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestNamedThemePrefersUserTheme(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(directory, "nord.toml"), []byte(custom), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	loaded, err := theme.Named("nord", directory, nukriconfig.Themes)
+	loaded, err := theme.Named("nord", directory, configs.Themes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,20 +55,20 @@ func TestNamedThemePrefersUserTheme(t *testing.T) {
 
 func TestNamedThemeRejectsPaths(t *testing.T) {
 	for _, name := range []string{"", "..", "../../etc/passwd", "a/b", "missing"} {
-		if _, err := theme.Named(name, t.TempDir(), nukriconfig.Themes); err == nil {
+		if _, err := theme.Named(name, t.TempDir(), configs.Themes); err == nil {
 			t.Errorf("Named(%q) succeeded", name)
 		}
 	}
 }
 
 func TestEveryBundledThemeLoads(t *testing.T) {
-	files, err := fs.Glob(nukriconfig.Themes, "themes/*.toml")
+	files, err := fs.Glob(configs.Themes, "themes/*.toml")
 	if err != nil || len(files) == 0 {
 		t.Fatalf("no bundled themes: %v", err)
 	}
 	for _, file := range files {
 		name := strings.TrimSuffix(path.Base(file), ".toml")
-		if _, err := theme.Named(name, "", nukriconfig.Themes); err != nil {
+		if _, err := theme.Named(name, "", configs.Themes); err != nil {
 			t.Errorf("theme %s: %v", name, err)
 		}
 	}
@@ -81,7 +81,7 @@ func TestNamesListsBundledAndUserThemes(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	names := theme.Names(directory, nukriconfig.Themes)
+	names := theme.Names(directory, configs.Themes)
 	count := map[string]int{}
 	for _, name := range names {
 		count[name]++
@@ -107,7 +107,7 @@ func TestThemeKeepsSelectedRowsReadable(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(directory, name+".toml"), []byte(content), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		loaded, err := theme.Named(name, directory, nukriconfig.Themes)
+		loaded, err := theme.Named(name, directory, configs.Themes)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -137,7 +137,7 @@ func TestThemeSelectionStaysDistinctFromNormalRows(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(directory, "pale.toml"), []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	loaded, err := theme.Named("pale", directory, nukriconfig.Themes)
+	loaded, err := theme.Named("pale", directory, configs.Themes)
 	if err != nil {
 		t.Fatal(err)
 	}
