@@ -1,0 +1,110 @@
+---
+title: Previews
+description: What Nukri can preview, which tools each type needs, and how images are shown.
+---
+
+The preview pane shows the selected item. Scroll it with `PgDn`/`Ctrl+D` and `PgUp`/`Ctrl+U`, or the mouse wheel. Press `P` to hide it.
+
+## What's previewed
+
+**Built in**, no extra tools:
+
+| Type | Shows |
+| --- | --- |
+| Folders | Contents, with item counts |
+| Code and text | Syntax-highlighted source |
+| Markdown | Highlighted source (not rendered) |
+| CSV, TSV | A table of the first 100 rows, plus row and column counts |
+| Images: PNG, JPEG, GIF, WebP | The image |
+| Fonts: TTF, OTF, WOFF, WOFF2 | A sample sheet, family, style and glyph count |
+| EPUB | Title, author, language |
+| Torrents | Name, size, file count, trackers, info hash |
+| Zip, tar, tar.gz, tar.bz2, rar, jar, cbz | File list |
+| `.deb` packages | Package details and file list |
+
+**Needs a tool:**
+
+| Type | Shows | Needs |
+| --- | --- | --- |
+| Video: MP4, MKV, MOV, WebM, AVI | A frame, duration, codec, resolution | `ffmpeg` |
+| Audio: MP3, WAV, FLAC, OGG, M4A | Cover art or waveform, tags, duration | `ffmpeg` |
+| PDF | First page, document info | `poppler` |
+| SVG | The image | `rsvg-convert` (or ImageMagick) |
+| AVIF | The image | ImageMagick (or `ffmpeg`) |
+| Office: DOCX, XLSX, PPTX, ODT, ODS, ODP, DOC, XLS | First page | LibreOffice and `poppler` |
+| Ebooks: MOBI, AZW3 | First page | Calibre and `poppler` |
+| 7z, AppImage file list, and other archives | File list | 7-Zip |
+| `.tar.xz` | File list | `xz` |
+| `.tar.zst` | File list | `zstd` |
+| ISO images | Volume info and file list | `isoinfo` |
+
+Anything else, such as binary files or databases, shows "preview is not available for this file type".
+
+## Tools
+
+When a tool is missing, the preview tells you which one and gives the exact install command for your distro. Nukri never installs anything itself.
+
+To install them all at once:
+
+<Tabs>
+  <Tab title="Debian / Ubuntu">
+    ```bash
+    sudo apt install ffmpeg poppler-utils librsvg2-bin imagemagick 7zip xz-utils zstd genisoimage
+    ```
+  </Tab>
+  <Tab title="Arch">
+    ```bash
+    sudo pacman -S ffmpeg poppler librsvg imagemagick 7zip xz zstd cdrtools
+    ```
+  </Tab>
+  <Tab title="Fedora">
+    ```bash
+    sudo dnf install ffmpeg-free poppler-utils librsvg2-tools ImageMagick 7zip xz zstd genisoimage
+    ```
+  </Tab>
+  <Tab title="openSUSE">
+    ```bash
+    sudo zypper install ffmpeg poppler-tools rsvg-convert ImageMagick 7zip xz zstd genisoimage
+    ```
+  </Tab>
+  <Tab title="Alpine">
+    ```bash
+    sudo apk add ffmpeg poppler-utils rsvg-convert imagemagick 7zip xz zstd cdrkit
+    ```
+  </Tab>
+</Tabs>
+
+Office documents and ebooks also need LibreOffice (`libreoffice`) and Calibre (`calibre`). They're large, so install them only if you want those previews.
+
+The [install script](/getting-started#install) offers to install the smaller tools for you.
+
+## Images
+
+Images need a terminal that can draw them. Nukri picks the method from your environment:
+
+| Terminal | Method | Setup |
+| --- | --- | --- |
+| kitty | kitty graphics | None |
+| WezTerm | sixel | None |
+| Other sixel terminals (foot, Konsole, xterm with sixel, …) | sixel | Set `NUKRI_SIXEL=1` |
+
+```bash
+NUKRI_SIXEL=1 nukri
+```
+
+In other terminals, image previews stay blank, but their details still show. Everything else works the same.
+
+## Large files
+
+Previews have limits so Nukri stays fast:
+
+- Text and code: 2 MB. Larger files show an error instead.
+- Images: 16 MB.
+- Archive and folder listings: the first 10,000 entries.
+- External tools time out after 15 seconds (60 for office documents and ebooks).
+
+Long code files load as you scroll.
+
+## Cache
+
+Image and code previews are cached in `~/.cache/nukri` (up to 256 MB each), so revisiting a file is instant. It's safe to delete.

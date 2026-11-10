@@ -1,0 +1,124 @@
+---
+title: Managing files
+description: Mark, copy, move, create, rename, trash, archive, open, and find duplicates.
+---
+
+## Marking several items
+
+Most actions work on the **marked** items, or on the selected item if nothing is marked.
+
+- `Space` marks the selected item and moves down, so holding it marks a run.
+- `Esc` clears all marks.
+- Marks clear when you change folder or finish an action.
+
+## Copy, cut and paste
+
+| Key | Action |
+| --- | --- |
+| `y` | Copy |
+| `x` | Cut |
+| `p` | Paste into the current folder |
+| `Esc` | Clear marks; press again to forget the copy or cut |
+
+- Copied and cut items are highlighted in different colors until you paste.
+- After a copy you can paste again elsewhere. After a cut, the items are gone from the clipboard once moved.
+- **Nothing is ever overwritten.** If a name is taken, the copy is renamed: `report.txt` becomes `report_1.txt`.
+- Progress shows in the status bar. A paste that has started runs to the end.
+
+This is Nukri's own clipboard. To copy a file's **path** to the system clipboard, use `c` (see [below](#copy-a-name-or-path)).
+
+## Create
+
+Press `a`, type one name per line, and press `Enter`.
+
+- End a name with `/` to make a folder: `notes/`.
+- `Alt+Enter` or `Ctrl+J` starts a new line.
+- Names can't contain `/` in the middle, so you can't create nested folders in one go.
+
+If any line has a problem (for example, the name already exists), nothing is created and the line is flagged.
+
+## Rename
+
+**Inline:** press `r` or `F2`. Each target gets a line, prefilled with its name. Edit and press `Enter`. Swapping two names works.
+
+**In your editor:** press `R` or `Shift+F2`. Nukri opens the names in `$VISUAL`, then `$EDITOR`, then `vi`.
+
+- One line per item. Keep the number of lines the same, or nothing is renamed.
+- Lines starting with `#` are ignored.
+- A path with `/` moves the item, creating missing folders.
+- Save and quit, then confirm.
+
+This is the quickest way to rename many files at once, for example with your editor's search and replace.
+
+## Trash and delete
+
+| Key | Action |
+| --- | --- |
+| `d` / `Delete` | Move to trash (no confirmation) |
+| `D` / `Shift+Delete` | Delete permanently (asks first) |
+
+Nukri uses the standard Linux trash (`~/.local/share/Trash`), so items show up in your desktop's trash too. Files on other drives go to that drive's own trash folder.
+
+**Restore:** open **Trash** in Places, select items and press `r`. They go back where they came from. If something already exists at the original location, that item stays in the trash.
+
+**Empty the trash:** open it, mark the items, and press `D`.
+
+## Archives
+
+**Create:** select one file or folder and press `C`. Type a name ending in `.zip`, `.tar`, `.tar.gz` or `.tgz`; the format follows the extension. The archive is saved in the current folder.
+
+**Extract:** select a `.zip`, `.tar`, `.tar.gz` or `.tgz` and press `e`. It extracts into a new folder named after the archive (`photos.zip` → `photos/`, or `photos (1)/` if that exists).
+
+- Only one archive job runs at a time. Progress shows in the status bar.
+- Extraction stops if it would fill the drive.
+- Other formats, such as 7z, rar or `.tar.xz`, can be [previewed](/previews#whats-previewed) but not extracted.
+
+## Open files
+
+| Key | Action |
+| --- | --- |
+| `Enter` or `o` | Open with the default app |
+| `O` | Choose an app |
+
+Nukri uses your desktop's file associations (`mimeapps.list`), the same ones your file manager uses. If none is set, it falls back to `xdg-open`.
+
+Terminal apps, like `vim`, take over the terminal until you quit them. Graphical apps open in their own window.
+
+## Copy a name or path
+
+Press `c`, then a letter:
+
+| Key | Copies |
+| --- | --- |
+| `n` | Name: `report.pdf` |
+| `s` | Name without extension: `report` |
+| `p` | Full path: `/home/you/report.pdf` |
+| `d` | Folder path: `/home/you` |
+
+With several items marked, you get one per line.
+
+Nukri copies with `wl-copy` on Wayland, or `xclip`/`xsel` on X11. Without those, it asks the terminal to copy, which also works over SSH in most modern terminals.
+
+## Find duplicates
+
+Press `Alt+D` to scan the current folder and everything under it for identical files. Files are compared by content, not name.
+
+The results are grouped, biggest savings first, with the space you can get back.
+
+| Key | Action |
+| --- | --- |
+| `j` `k` | Move |
+| `d` | Trash this copy |
+| `Enter` | Go to the file |
+| `Esc` | Close |
+
+Nukri won't let you trash the last copy of a file. Hidden and empty files are skipped.
+
+## Drag and drop
+
+In **kitty 0.47 or newer**, you can:
+
+- **Drag out:** drag files from Nukri into another app. Dragging a marked item drags all marked items.
+- **Drop in:** drop files onto Nukri to copy them into the folder under the pointer. If the other app asks for a move, they're moved.
+
+It works over SSH. It's off inside tmux and Zellij.

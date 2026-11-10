@@ -1,0 +1,54 @@
+---
+title: Browsing
+description: Move around folders, jump between places, go back and forward, and find files fast.
+---
+
+## Moving around
+
+| Key | Action |
+| --- | --- |
+| `j` / `↓` | Down |
+| `k` / `↑` | Up |
+| `Enter` | Open the folder, or open the file in its default app |
+| `h` / `←` / `Backspace` | Parent folder |
+| `Alt+←` / `Alt+→` | Back / forward in history |
+
+Going back restores the item you had selected.
+
+Folders are listed first, then files, sorted by name. Hidden files (names starting with `.`) are not shown.
+
+## Places
+
+The left pane lists:
+
+- **Home**, then **Desktop**, **Documents**, **Downloads**, **Pictures**, **Music** and **Videos**, when those folders exist.
+- **Root** (`/`).
+- **Trash**, once something has been trashed.
+- **Devices**: mounted drives such as USB sticks and other partitions. The list refreshes every few seconds, so a newly mounted drive shows up on its own.
+
+Press `Tab` / `Shift+Tab` to jump to the next / previous place, or click one.
+
+## Find a file
+
+Press `f` to fuzzy-find across the current folder and everything under it.
+
+- Type part of a name or path. Letters only need to appear in order: `dlrep` matches `downloads/report.pdf`.
+- `↑` `↓` to pick a result, `Enter` to go to it, `Esc` to close.
+- A folder opens. A file is selected in its folder, not opened.
+
+Hidden files and folders are skipped. Very large trees are indexed up to 200,000 entries.
+
+## Layout
+
+The panes adjust to your terminal's size:
+
+- **Wide:** places, files and preview side by side.
+- **Narrow:** the preview moves below the file list, then disappears.
+- **Very narrow** (under 34 columns): only the file list.
+- Below 24×10, Nukri shows "Terminal too small".
+
+Press `P` to hide or show the preview. Nukri remembers the choice.
+
+## Status bar
+
+The bottom line shows your position (`5/30`), the selected name, how many items are marked, and the progress of any running copy or archive job.

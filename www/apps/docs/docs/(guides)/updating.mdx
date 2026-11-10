@@ -1,0 +1,45 @@
+---
+title: Update and uninstall
+description: Get the latest version of Nukri, or remove it completely.
+---
+
+## Update
+
+Run the install command again. It replaces the old version, even while Nukri is running.
+
+<Tabs>
+  <Tab title="Install script">
+    ```bash
+    curl -fsSL https://nukri.urdadx.com/install.sh | sh
+    ```
+  </Tab>
+  <Tab title="Go">
+    ```bash
+    go install github.com/urdadx/nukri/cmd/nukri@latest
+    ```
+  </Tab>
+</Tabs>
+
+Check the version with `nukri -version`. Release notes are on [GitHub](https://github.com/urdadx/nukri/releases).
+
+## Uninstall
+
+Remove the program:
+
+```bash
+rm "$(command -v nukri)"
+```
+
+Remove the app menu entry, if you used the install script:
+
+```bash
+rm ~/.local/share/applications/nukri.desktop ~/.local/share/icons/hicolor/256x256/apps/nukri.png
+```
+
+Optionally, remove your settings, themes and preview cache:
+
+```bash
+rm -rf ~/.config/nukri ~/.cache/nukri
+```
+
+Preview tools you installed, such as `ffmpeg`, are regular system packages. Remove them with your package manager if you don't need them.

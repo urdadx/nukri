@@ -1,15 +1,13 @@
 ---
 title: Getting started
-description: Install Nukri on Linux, open it in your terminal, and learn the keys for moving around and working with files.
+description: Install Nukri, open it, and learn the handful of keys you need on day one.
 ---
-
-Nukri is a terminal file manager for Linux. This page takes you from installing it to moving, copying and previewing files.
 
 ## Requirements
 
-- **Linux** on x86_64 or arm64. Nukri doesn't run on macOS or Windows yet.
-- A terminal with a [Nerd Font](https://www.nerdfonts.com/) set as its font, so file and folder icons show up.
-- For image previews, a terminal that supports the kitty graphics protocol or sixel, such as kitty, Ghostty, WezTerm or foot. Other previews work in any terminal.
+- **Linux** on x86_64 or arm64.
+- A **[Nerd Font](https://www.nerdfonts.com/)** set as your terminal's font. Without one, icons show as boxes.
+- For image previews: **kitty**, **WezTerm**, or another terminal with sixel support. See [Previews](/previews#images).
 
 ## Install
 
@@ -19,141 +17,72 @@ Nukri is a terminal file manager for Linux. This page takes you from installing 
     curl -fsSL https://nukri.urdadx.com/install.sh | sh
     ```
 
-    The script downloads the latest release, checks it against the release's checksums, and installs `nukri` to `/usr/local/bin`, or to `~/.local/bin` when `/usr/local/bin` isn't writable. It also adds Nukri to your desktop's app menu.
+    This installs `nukri` to `/usr/local/bin`, or `~/.local/bin` if that isn't writable, and adds it to your app menu. It then offers to install the optional [preview tools](/previews#tools).
 
-    To install a specific version, set `NUKRI_VERSION`:
+    | Variable | Effect |
+    | --- | --- |
+    | `NUKRI_VERSION=0.1.0` | Install a specific version instead of the latest |
+    | `NUKRI_INSTALL_DIR=~/bin` | Install to this folder |
+    | `NUKRI_INSTALL_TOOLS=yes` or `no` | Install the preview tools, or skip them, without asking |
+
+    Set them before `sh`:
 
     ```bash
     curl -fsSL https://nukri.urdadx.com/install.sh | NUKRI_VERSION=0.1.0 sh
     ```
 
-    To install somewhere else, set `NUKRI_INSTALL_DIR`:
-
-    ```bash
-    curl -fsSL https://nukri.urdadx.com/install.sh | NUKRI_INSTALL_DIR=~/bin sh
-    ```
-
   </Tab>
   <Tab title="Go">
-    With Go 1.25 or newer:
+    Needs Go 1.25 or newer.
 
     ```bash
     go install github.com/urdadx/nukri/cmd/nukri@latest
     ```
 
-    This puts `nukri` in `~/go/bin`. Make sure that folder is on your `PATH`.
+    This installs to `~/go/bin`. Make sure it's on your `PATH`.
 
   </Tab>
 </Tabs>
 
-Check that it worked:
+Check it works:
 
 ```bash
 nukri -version
 ```
 
-### Preview tools
+## First run
 
-Nukri previews text, code, Markdown, images and archives on its own. Some file types need a separate program, which Nukri uses when it's installed:
+Run `nukri` in any folder. You get three panes:
 
-| Preview               | Program         | Debian or Ubuntu package |
-| --------------------- | --------------- | ------------------------ |
-| Video and audio       | `ffmpeg`        | `ffmpeg`                 |
-| SVG                   | `rsvg-convert`  | `librsvg2-bin`           |
-| PDF                   | `pdftoppm`      | `poppler-utils`          |
-| AVIF                  | `magick`        | `imagemagick`            |
-| 7z and other archives | `7zz` or `7z`   | `7zip`                   |
-| `.tar.xz`             | `xz`            | `xz-utils`               |
-| `.tar.zst`            | `zstd`          | `zstd`                   |
-| ISO images            | `isoinfo`       | `genisoimage`            |
-| Office documents      | `libreoffice`   | `libreoffice`            |
-| Ebooks                | `ebook-convert` | `calibre`                |
+- **Places** (left): your home folders, mounted drives, and the trash.
+- **Files** (middle): the current folder.
+- **Preview** (right): the selected file or folder.
 
-When you run the install script in a terminal, it lists the ones you're missing and offers to install them with your package manager. Nukri itself never installs anything. When a preview needs a program you don't have, the preview pane tells you which one to install.
+## The keys you need first
 
-## Open Nukri
+| Key | Action |
+| --- | --- |
+| `j` `k` or `↓` `↑` | Move |
+| `Enter` | Open a folder or file |
+| `h` or `←` | Go up a folder |
+| `Space` | Mark an item |
+| `y` `x` `p` | Copy, cut, paste |
+| `d` | Move to trash |
+| `f` | Find a file |
+| `T` | Change theme |
+| `q` | Quit |
 
-Run it from any folder:
+The mouse works too: click to select, double-click to open, scroll to move.
 
-```bash
-nukri
-```
+All keys are in [Keyboard shortcuts](/keys).
 
-Nukri opens in the current folder with three panes:
+## Next
 
-- **Places**, on the left: your home folder, common folders, the trash and mounted devices.
-- **The file list**, in the middle: the contents of the current folder.
-- **The preview**, on the right: the selected file or folder. Press `P` to hide or show it.
-
-The layout adapts to the size of your terminal. Press `q` to quit.
-
-## Move around
-
-You can use the arrow keys or vim-style keys. Mouse clicks, double-clicks and scrolling work too.
-
-| Key                     | Action                                      |
-| ----------------------- | ------------------------------------------- |
-| `↓` or `j`              | Move down                                   |
-| `↑` or `k`              | Move up                                     |
-| `Enter`                 | Open the selected folder or file            |
-| `←`, `h` or `Backspace` | Go to the parent folder                     |
-| `Alt+←` / `Alt+→`       | Go back / forward in your history           |
-| `Tab` / `Shift+Tab`     | Jump to the next / previous place           |
-| `PgDn` or `Ctrl+D`      | Scroll the preview down                     |
-| `PgUp` or `Ctrl+U`      | Scroll the preview up                       |
-| `f`                     | Fuzzy-find files in the current folder tree |
-
-## Work with files
-
-Most actions apply to the selected item. To act on several at once, press `Space` to mark each one first.
-
-| Key                   | Action                                                     |
-| --------------------- | ---------------------------------------------------------- |
-| `Space`               | Mark or unmark the selected item                           |
-| `y`                   | Copy                                                       |
-| `x`                   | Cut                                                        |
-| `p`                   | Paste into the current folder                              |
-| `Esc`                 | Cancel a copy or cut                                       |
-| `a`                   | Create files or folders                                    |
-| `r` or `F2`           | Rename inline (restores the item when you're in the trash) |
-| `R` or `Shift+F2`     | Rename in your editor                                      |
-| `d` or `Delete`       | Move to the trash                                          |
-| `D` or `Shift+Delete` | Delete permanently                                         |
-| `C`                   | Create an archive (zip, tar or tar.gz)                     |
-| `e`                   | Extract an archive                                         |
-| `o`                   | Open with the default app                                  |
-| `O`                   | Open with an app you choose                                |
-| `c`                   | Copy the name or path to the clipboard                     |
-| `Alt+D`               | Find duplicate files                                       |
-
-When you create with `a`, type one name per line. End a name with `/` to make a folder instead of a file.
-
-Renaming in your editor opens the names in `$VISUAL`, then `$EDITOR`, falling back to `vi`. Change the names, save and close the editor, and Nukri applies the changes. It's the fastest way to rename many files at once.
-
-:::tip
-In kitty 0.47 or newer, you can drag files out of Nukri into other apps, and drop files onto Nukri to copy them in. It works over SSH too, but not inside tmux or Zellij.
-:::
-
-## Pick a theme
-
-Press `T` to choose from 21 built-in themes. Each one previews live as you move through the list, and your choice is saved for next time. The default is `catppuccin-mocha`.
-
-To use a theme for a single session, pass it on the command line:
-
-```bash
-nukri -theme dracula
-```
-
-## Configuration
-
-Nukri saves its settings in `~/.config/nukri/config.toml`, or in `$XDG_CONFIG_HOME/nukri/config.toml` when `XDG_CONFIG_HOME` is set. It writes the file for you when you pick a theme or toggle the preview, so you don't need to create it:
-
-```toml title="~/.config/nukri/config.toml"
-theme = "gruvbox"
-preview = true
-```
-
-- `theme`: the theme to start with.
-- `preview`: whether the preview pane starts shown.
-
-To add your own theme, save it as `~/.config/nukri/themes/<name>.toml`. It then shows up in the `T` picker and works with `-theme <name>`. The [built-in themes](https://github.com/urdadx/nukri/tree/main/configs/themes) are good starting points to copy.
+<CardGroup cols={2}>
+  <Card title="Browsing" href="/browsing" icon="folder-open">
+    Places, history, find, and the layout.
+  </Card>
+  <Card title="Managing files" href="/files" icon="files">
+    Copy, rename, trash, archives, duplicates.
+  </Card>
+</CardGroup>

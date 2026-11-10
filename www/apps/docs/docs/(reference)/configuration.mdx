@@ -1,0 +1,53 @@
+---
+title: Configuration
+description: Nukri's settings file, command-line flags, environment variables, and where it keeps its files.
+---
+
+Nukri needs no setup. The few settings it has are saved for you as you use it.
+
+## config.toml
+
+Location: `~/.config/nukri/config.toml` (or `$XDG_CONFIG_HOME/nukri/config.toml`).
+
+```toml title="~/.config/nukri/config.toml"
+theme = "nord"
+preview = true
+```
+
+| Key | Default | Set by |
+| --- | --- | --- |
+| `theme` | `"catppuccin-mocha"` | Choosing a theme with `T` |
+| `preview` | `true` | Toggling the preview with `P` |
+
+You can also edit the file by hand. Nukri only rewrites the line it changes, so your comments stay.
+
+If the file isn't valid TOML, Nukri won't start and prints the error.
+
+## Command-line flags
+
+| Flag | Effect |
+| --- | --- |
+| `-theme <name>` | Use this theme for this session. Not saved. |
+| `-version` | Print the version and exit. |
+| `-help` | List the flags. |
+
+Nukri always opens in the folder you run it from.
+
+## Environment variables
+
+| Variable | Effect |
+| --- | --- |
+| `NUKRI_SIXEL=1` | Use sixel for image previews. See [Previews](/previews#images). |
+| `VISUAL`, `EDITOR` | Editor for `R` (rename in editor). Falls back to `vi`. |
+| `XDG_CONFIG_HOME` | Where settings and themes live. Default `~/.config`. |
+| `XDG_CACHE_HOME` | Where the preview cache lives. Default `~/.cache`. |
+| `XDG_DATA_HOME` | Where the trash lives. Default `~/.local/share`. |
+
+## Files Nukri uses
+
+| Path | Contents |
+| --- | --- |
+| `~/.config/nukri/config.toml` | Settings |
+| `~/.config/nukri/themes/` | Your [themes](/themes#make-your-own) |
+| `~/.cache/nukri/` | Preview cache. Safe to delete. |
+| `~/.local/share/Trash/` | The standard Linux trash, shared with your desktop |

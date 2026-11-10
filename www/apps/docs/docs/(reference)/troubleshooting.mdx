@@ -1,0 +1,82 @@
+---
+title: Troubleshooting
+description: Fixes for the most common problems.
+---
+
+## `nukri: command not found`
+
+The install folder isn't on your `PATH`. Add it to `~/.bashrc` or `~/.zshrc`, then open a new terminal:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Use `$HOME/go/bin` instead if you installed with `go install`.
+
+## Icons show as boxes or question marks
+
+Your terminal isn't using a Nerd Font. Install one from [nerdfonts.com](https://www.nerdfonts.com/), for example JetBrainsMono Nerd Font, and select it in your terminal's settings.
+
+## Images don't show
+
+Nukri only draws images in terminals it recognizes:
+
+- **kitty:** works with no setup.
+- **WezTerm:** works with no setup.
+- **Other sixel terminals** (foot, Konsole, xterm with sixel): start Nukri with `NUKRI_SIXEL=1 nukri`. To make it permanent, add `export NUKRI_SIXEL=1` to your shell config.
+- **Ghostty, Alacritty, GNOME Terminal and others:** image previews aren't supported yet.
+
+Inside **tmux**, images usually don't show, even in a supported terminal.
+
+## "Install … to preview this file"
+
+That file type needs an external tool. The message includes the command to install it. See [Previews](/previews#tools) for the full list.
+
+## "preview is not available for this file type"
+
+Nukri has no preview for that format, for example a binary file or a database. Text files over 2 MB also show an error instead of a preview.
+
+## Hidden files don't show
+
+Nukri doesn't show files starting with `.`, and there's no toggle yet. Open them from another tool, or run Nukri inside the hidden folder: `cd ~/.config && nukri`.
+
+## "Terminal too small"
+
+The window is smaller than 24 columns by 10 rows. Make it bigger.
+
+## "Copy failed" or the path isn't on the clipboard
+
+Install a clipboard tool:
+
+- **Wayland:** `wl-clipboard`
+- **X11:** `xclip` or `xsel`
+
+Without one, Nukri asks the terminal to copy. Some terminals block that, or need it turned on in their settings.
+
+## Open or Open with does nothing, or "No applications found"
+
+No app is set to open that file type. Set a default in your desktop's settings, or run:
+
+```bash
+xdg-mime default org.gnome.TextEditor.desktop text/plain
+```
+
+Replace the app and the file type with your own.
+
+## Drag and drop doesn't work
+
+It needs kitty 0.47 or newer, and doesn't work inside tmux or Zellij.
+
+## Nukri won't start: `parse … config.toml`
+
+`~/.config/nukri/config.toml` isn't valid TOML. Fix the line in the message, or delete the file to start fresh.
+
+## My theme isn't used
+
+- If Nukri starts with `catppuccin-mocha` instead of your saved theme, that theme file failed to load. Run `nukri -theme <name>` to see the error.
+- Check the file is in `~/.config/nukri/themes/` and ends in `.toml`.
+- Make sure it sets `full_screen_fg` and `full_screen_bg`.
+
+## Still stuck?
+
+[Open an issue](https://github.com/urdadx/nukri/issues) with your terminal, distro, and `nukri -version` output.
