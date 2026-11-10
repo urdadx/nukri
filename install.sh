@@ -129,6 +129,17 @@ install_menu_entry() {
 	mkdir -p "$data/applications" "$data/icons/hicolor/256x256/apps" 2>/dev/null &&
 		cp "$work/packaging/nukri.desktop" "$data/applications/nukri.desktop" &&
 		cp "$work/packaging/nukri.png" "$data/icons/hicolor/256x256/apps/nukri.png" || return 0
+	# GTK trusts an icon-theme.cache over the folder while the folder's own time
+	# is unchanged, so an icon added below an existing cache stays hidden until
+	# the cache is rebuilt. Touching the folder makes GTK skip a stale cache when
+	# the rebuild tool is missing.
+	touch "$data/icons/hicolor" 2>/dev/null || true
+	if has gtk-update-icon-cache; then
+		gtk-update-icon-cache --quiet --force --ignore-theme-index "$data/icons/hicolor" 2>/dev/null || true
+	fi
+	if has update-desktop-database; then
+		update-desktop-database --quiet "$data/applications" 2>/dev/null || true
+	fi
 	say "Added nukri to your app menu"
 }
 
