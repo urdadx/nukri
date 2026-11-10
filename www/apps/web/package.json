@@ -1,0 +1,28 @@
+{
+  "name": "web",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "check-types": "astro check",
+    "preview": "astro preview",
+    "astro": "astro",
+    "env:generate": "varlock codegen"
+  },
+  "dependencies": {
+    "@astrojs/node": "^11.1.5",
+    "@varlock/astro-integration": "1.4.4",
+    "astro": "^7.3.1",
+    "varlock": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@tailwindcss/vite": "^4.3.3",
+    "@www/config": "workspace:*",
+    "tailwindcss": "^4.3.3",
+    "typescript": "catalog:"
+  }
+}
