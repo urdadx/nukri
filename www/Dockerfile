@@ -38,6 +38,9 @@ COPY --from=build /www/apps/web/dist dist
 # goes in that folder of the files the server serves as they are.
 COPY --from=build /www/apps/docs/dist dist/client/docs
 COPY install.sh dist/client/install.sh
+# Loading the env also writes the schema's TypeScript types (@generateTsTypes,
+# to ./src/env.ts), so that folder must be writable by the server's user.
+RUN mkdir src && chown node:node src
 USER node
 EXPOSE 4321
 CMD ["node", "dist/server/entry.mjs"]
