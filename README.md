@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.png" alt="nukri: fast and elegant terminal file manager for Linux" width="600">
+  <img src="assets/logo-tagline.png" alt="nukri: fast and elegant terminal file manager for Linux" width="600">
 </p>
 
 ![Nukri with the Places sidebar, the file list of a home folder, and a preview of the selected folder](assets/demo.png)
