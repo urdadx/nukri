@@ -9,6 +9,8 @@ import (
 	"slices"
 	"strings"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 type Operation uint8
@@ -92,7 +94,11 @@ func copyPath(source, destination string) error {
 		if err != nil {
 			return err
 		}
-		return os.Symlink(target, destination)
+		if err := os.Symlink(target, destination); err != nil {
+			return err
+		}
+		keepModTime(destination, info)
+		return nil
 	}
 	if info.IsDir() {
 		// The folder stays writable while its contents are copied in, and gets
@@ -115,6 +121,7 @@ func copyPath(source, destination string) error {
 			_ = os.RemoveAll(destination)
 			return err
 		}
+		keepModTime(destination, info) // last, as copying in changed it
 		return nil
 	}
 	if !info.Mode().IsRegular() {
@@ -138,7 +145,19 @@ func copyPath(source, destination string) error {
 		}
 		return closeErr
 	}
+	keepModTime(destination, info)
 	return nil
+}
+
+/*
+keepModTime gives a copy its source's modification time, as cp -p does, so
+copied files don't all look new. It doesn't follow a symlink, and leaves the
+access time alone. It is best effort: a filesystem that refuses still has a
+good copy.
+*/
+func keepModTime(destination string, source os.FileInfo) {
+	times := []unix.Timespec{{Nsec: unix.UTIME_OMIT}, unix.NsecToTimespec(source.ModTime().UnixNano())}
+	_ = unix.UtimesNanoAt(unix.AT_FDCWD, destination, times, unix.AT_SYMLINK_NOFOLLOW)
 }
 
 func movePath(source, destination string) error {

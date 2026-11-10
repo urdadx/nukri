@@ -48,13 +48,15 @@ func (c *Clipboard) BeginPaste() bool {
 }
 
 /*
-Pasted ends the paste of sources for operation. The items that failed stay on
-the clipboard so the paste can be retried; when none failed it is emptied. A
-newer copy or cut made while the paste ran is left alone.
+Pasted ends the paste of sources for operation. Copied items stay on the
+clipboard, so they can be pasted into more folders. After a cut, the items
+that failed to move stay so the move can be retried, and the clipboard is
+emptied when none failed. A newer copy or cut made while the paste ran is
+left alone.
 */
 func (c *Clipboard) Pasted(sources []string, operation fsfileops.Operation, failed []string) {
 	c.pasting = false
-	if c.Operation != operation || !slices.Equal(c.Sources, sources) {
+	if operation == fsfileops.Copy || c.Operation != operation || !slices.Equal(c.Sources, sources) {
 		return
 	}
 	if len(failed) == 0 {

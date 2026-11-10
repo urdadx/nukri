@@ -34,15 +34,26 @@ func TestClipboardKeepsItsOwnCopyOfSources(t *testing.T) {
 func TestClipboardPastedDoesNotClearNewerSelection(t *testing.T) {
 	clipboard := appfileops.Clipboard{}
 	clipboard.Cut([]string{"/tmp/old"})
-	clipboard.Copy([]string{"/tmp/new", "/tmp/other"})
+	clipboard.Cut([]string{"/tmp/new", "/tmp/other"})
 	clipboard.Pasted([]string{"/tmp/old"}, fsfileops.Move, nil)
-	if clipboard.Empty() || !clipboard.Contains("/tmp/new") || clipboard.Operation != fsfileops.Copy {
+	if clipboard.Empty() || !clipboard.Contains("/tmp/new") || clipboard.Operation != fsfileops.Move {
 		t.Fatalf("clipboard was unexpectedly cleared: %+v", clipboard)
 	}
 
-	clipboard.Pasted([]string{"/tmp/new", "/tmp/other"}, fsfileops.Copy, nil)
+	clipboard.Pasted([]string{"/tmp/new", "/tmp/other"}, fsfileops.Move, nil)
 	if !clipboard.Empty() {
-		t.Fatalf("clipboard was not cleared: %+v", clipboard)
+		t.Fatalf("clipboard was not cleared after the move: %+v", clipboard)
+	}
+}
+
+// Copied items stay on the clipboard after pasting, to paste them elsewhere too.
+func TestClipboardKeepsCopiedItemsAfterPaste(t *testing.T) {
+	clipboard := appfileops.Clipboard{}
+	sources := []string{"/tmp/a", "/tmp/b"}
+	clipboard.Copy(sources)
+	clipboard.Pasted(sources, fsfileops.Copy, nil)
+	if len(clipboard.Sources) != 2 || clipboard.Operation != fsfileops.Copy {
+		t.Fatalf("clipboard = %+v, want both items still copied", clipboard)
 	}
 }
 

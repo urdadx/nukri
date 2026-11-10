@@ -4,8 +4,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/urdadx/nukri/internal/fs/fileops"
+	"golang.org/x/sys/unix"
 )
 
 func TestApplyTransferCopiesRecursivelyAndAddsCollisionSuffix(t *testing.T) {
@@ -173,5 +175,45 @@ func TestApplyTransferReportsFailedSources(t *testing.T) {
 	result := fileops.ApplyTransfer(t.TempDir(), []string{present, missing}, fileops.Move)
 	if len(result.Destinations) != 1 || len(result.Failed) != 1 || result.Failed[0] != missing {
 		t.Fatalf("result = %+v, want present moved and missing failed", result)
+	}
+}
+
+// Copies keep their source's modification time, as cp -p does, for files,
+// folders and symlinks.
+func TestApplyTransferKeepsModificationTimes(t *testing.T) {
+	source := filepath.Join(t.TempDir(), "project")
+	if err := os.MkdirAll(filepath.Join(source, "docs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "docs", "notes.txt"), []byte("notes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("docs/notes.txt", filepath.Join(source, "link")); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Date(2020, 1, 2, 3, 4, 5, 0, time.UTC)
+	// Deepest first: setting a child's time doesn't change its folder's.
+	for _, path := range []string{filepath.Join(source, "docs", "notes.txt"), filepath.Join(source, "docs"), source} {
+		if err := os.Chtimes(path, old, old); err != nil {
+			t.Fatal(err)
+		}
+	}
+	linkTime := time.Date(2021, 6, 7, 8, 9, 10, 0, time.UTC)
+	if err := unix.UtimesNanoAt(unix.AT_FDCWD, filepath.Join(source, "link"), []unix.Timespec{unix.NsecToTimespec(linkTime.UnixNano()), unix.NsecToTimespec(linkTime.UnixNano())}, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+		t.Fatal(err)
+	}
+
+	destination := t.TempDir()
+	if result := fileops.ApplyTransfer(destination, []string{source}, fileops.Copy); len(result.Errors) != 0 {
+		t.Fatalf("copy failed: %v", result.Errors)
+	}
+	copied := filepath.Join(destination, "project")
+	for _, path := range []string{copied, filepath.Join(copied, "docs"), filepath.Join(copied, "docs", "notes.txt")} {
+		if info, err := os.Stat(path); err != nil || !info.ModTime().Equal(old) {
+			t.Fatalf("%s modified %v, want %v", path, info.ModTime(), old)
+		}
+	}
+	if info, err := os.Lstat(filepath.Join(copied, "link")); err != nil || !info.ModTime().Equal(linkTime) {
+		t.Fatalf("symlink modified %v, want %v", info.ModTime(), linkTime)
 	}
 }

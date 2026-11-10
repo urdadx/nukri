@@ -298,6 +298,23 @@ func TestCopyAndPasteMarkedEntries(t *testing.T) {
 	}
 }
 
+// Copied items can be pasted again, into another folder.
+func TestCopiedItemsCanBePastedTwice(t *testing.T) {
+	model, directory := pasteMarkedInto(t, "y")
+	model, cmd := press(t, model, "backspace") // back up to the parent
+	model = settle(t, model, cmd)
+	model, cmd = press(t, model, "p")
+	if cmd == nil {
+		t.Fatal("the copied items should still be on the clipboard")
+	}
+	settle(t, model, cmd)
+	for _, name := range []string{"a_1.txt", "b_1.txt"} {
+		if !exists(filepath.Join(directory, name)) {
+			t.Fatalf("second paste did not create %s", name)
+		}
+	}
+}
+
 func TestCutAndPasteMovesMarkedEntries(t *testing.T) {
 	model, directory := pasteMarkedInto(t, "x")
 	for _, name := range []string{"a.txt", "b.txt"} {
