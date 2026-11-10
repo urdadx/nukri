@@ -1,7 +1,7 @@
 ---
 /*
 A hand-drawn arrow, with a note to try it, that points down into the demo. It draws itself
-when it scrolls into view, then bobs gently. Put it inside a positioned parent
+when it scrolls into view. Put it inside a positioned parent
 marked data-try-area that also holds the demo: once the demo is clicked, the
 arrow fades out for good.
 */
@@ -87,25 +87,11 @@ const { class: className } = Astro.props;
     stroke-dashoffset: 0;
   }
 
-  [data-shown] svg {
-    animation: bob 1.6s ease-in-out 1.2s infinite;
-  }
-
-  @keyframes bob {
-    50% {
-      translate: 0 4px;
-    }
-  }
-
   @media (prefers-reduced-motion: reduce) {
     .label,
     .stroke,
     .head {
       transition: none !important;
-    }
-
-    [data-shown] svg {
-      animation: none;
     }
   }
 </style>
