@@ -30,7 +30,9 @@ func RenderPreview(width, height, originX, originY int, visualState *VisualState
 			}
 		default:
 			text = append([]string{muted.Render(joinDetail(data.Preview.Title, data.Preview.Detail)), ""}, data.Preview.Lines...)
-			if data.Preview.Visual != nil && visualState != nil {
+			if data.Preview.Visual != nil && visualState != nil && !visualState.ImagesSupported() {
+				text = append(imagesUnsupportedNotice(bodyWidth, s), text...)
+			} else if data.Preview.Visual != nil && visualState != nil {
 				showingVisual = true
 				columns, rows := fitImageToPane(data.Preview.Visual.Width, data.Preview.Visual.Height, max(1, bodyWidth), max(1, height-4), defaultCellAspect)
 				visualState.Show(data.Preview.Visual, originX, originY, columns, rows)
@@ -109,6 +111,30 @@ func joinDetail(left, right string) string {
 		return left
 	}
 	return left + " • " + right
+}
+
+/*
+imagesUnsupportedNotice takes the place of a picture the terminal can't draw,
+so the pane says why it shows only the file's details. It reads like
+missingToolNotice: a headline in the accent color, then how to see images.
+*/
+func imagesUnsupportedNotice(width int, s Styles) []string {
+	headline := lipgloss.NewStyle().Foreground(s.Path).Background(s.PanelBG).Bold(true)
+	muted := lipgloss.NewStyle().Foreground(s.Muted).Background(s.PanelBG)
+	wrap := func(text string) []string {
+		return strings.Split(lipgloss.NewStyle().Width(width).Render(text), "\n")
+	}
+	lines := []string{headline.Render(truncate("⚠ This terminal can't show images", width)), ""}
+	for _, paragraph := range []string{
+		"Images need the kitty graphics protocol or sixel, as in kitty, Ghostty, WezTerm or foot.",
+		"If your terminal has sixel, start Nukri with NUKRI_SIXEL=1.",
+	} {
+		for _, line := range wrap(paragraph) {
+			lines = append(lines, muted.Render(strings.TrimRight(line, " ")))
+		}
+		lines = append(lines, "")
+	}
+	return lines
 }
 
 /*

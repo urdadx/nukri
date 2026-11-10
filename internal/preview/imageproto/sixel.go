@@ -60,6 +60,7 @@ func IsSixelTerminal() bool {
 	term := strings.ToLower(os.Getenv("TERM"))
 	program := strings.ToLower(os.Getenv("TERM_PROGRAM"))
 	return strings.Contains(term, "sixel") || strings.Contains(term, "mlterm") ||
+		strings.HasPrefix(term, "foot") ||
 		strings.Contains(term, "yaft") || strings.Contains(term, "wezterm") ||
 		strings.Contains(program, "wezterm")
 }

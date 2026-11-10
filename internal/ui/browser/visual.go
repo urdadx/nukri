@@ -34,6 +34,13 @@ type VisualState struct {
 	placed bool
 }
 
+// ImagesSupported reports whether this terminal can draw preview images, with
+// the kitty graphics protocol or sixel. It goes by the environment, so it is
+// known before anything is drawn.
+func (s *VisualState) ImagesSupported() bool {
+	return imageproto.IsKittyTerminal() || imageproto.IsSixelTerminal()
+}
+
 // Show asks for image to be drawn at the given cells on the next flush.
 func (s *VisualState) Show(image *preview.Image, x, y, columns, rows int) {
 	s.mu.Lock()

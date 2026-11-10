@@ -56,6 +56,23 @@ func TestSixelDetectionAndRendererSelection(t *testing.T) {
 	}
 }
 
+// foot draws sixel and says so only through TERM (foot or foot-extra).
+func TestSixelDetectsFoot(t *testing.T) {
+	t.Setenv("KITTY_WINDOW_ID", "")
+	t.Setenv("NUKRI_SIXEL", "")
+	t.Setenv("TERM_PROGRAM", "")
+	for _, term := range []string{"foot", "foot-extra"} {
+		t.Setenv("TERM", term)
+		if !imageproto.IsSixelTerminal() {
+			t.Fatalf("TERM=%s should enable Sixel detection", term)
+		}
+	}
+	t.Setenv("TERM", "xterm-256color")
+	if imageproto.IsSixelTerminal() {
+		t.Fatal("a plain xterm-256color terminal should not be taken for Sixel")
+	}
+}
+
 func sixelTestImage(t *testing.T) preview.Image {
 	t.Helper()
 	value := image.NewRGBA(image.Rect(0, 0, 2, 2))
