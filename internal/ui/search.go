@@ -339,6 +339,15 @@ func (m Model) activateSearchResult() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleSearchMouse(message tea.MouseMsg) (tea.Model, tea.Cmd) {
+	// The wheel moves through the results, like the arrow keys.
+	switch message.Button {
+	case tea.MouseButtonWheelUp:
+		m.search.selected = max(0, m.search.selected-1)
+		return m, nil
+	case tea.MouseButtonWheelDown:
+		m.search.selected = max(0, min(m.search.selected+1, len(m.search.matches)-1))
+		return m, nil
+	}
 	if message.Button != tea.MouseButtonLeft || message.Action != tea.MouseActionPress {
 		return m, nil
 	}

@@ -169,6 +169,17 @@ func (m Model) handleDuplicateKey(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// handleDuplicateMouse moves through the copies with the wheel, like the arrow keys.
+func (m Model) handleDuplicateMouse(message tea.MouseMsg) (tea.Model, tea.Cmd) {
+	switch message.Button {
+	case tea.MouseButtonWheelUp:
+		m.duplicates.move(-1)
+	case tea.MouseButtonWheelDown:
+		m.duplicates.move(1)
+	}
+	return m, nil
+}
+
 /*
 trashDuplicate moves the selected copy to the trash. The last copy in a group
 is kept, so the finder can never remove the only remaining one.

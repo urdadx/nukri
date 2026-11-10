@@ -41,9 +41,16 @@ type Model struct {
 	savePreview    func(shown bool) error // remembers the preview toggle; may be nil
 	placesStarted  bool
 	archive        archiveState
+	wheelSeq       uint64 // the last wheel move in the file list; see wheelSelection
 }
 
 const doubleClickWindow = 500 * time.Millisecond
+
+// wheelSettle is how long the wheel rests before the selection's preview loads.
+const wheelSettle = 80 * time.Millisecond
+
+// wheelSettledMsg says the wheel has rested since wheel move seq.
+type wheelSettledMsg struct{ seq uint64 }
 
 type historyEntry struct {
 	path         string
@@ -138,6 +145,10 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleSearchEvent(message)
 	case searchRefreshMsg:
 		return m.handleSearchRefresh(message)
+	case wheelSettledMsg:
+		if message.seq == m.wheelSeq && m.data.PreviewLoading && m.data.Selected >= 0 && m.data.Selected < len(m.data.Entries) {
+			return m.requestPreview()
+		}
 	case transferMsg:
 		if message.origin == transferDrop {
 			m.finishDrop(message)
@@ -171,7 +182,10 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if message.Action == tea.MouseActionRelease || message.Action == tea.MouseActionPress && message.Button == tea.MouseButtonLeft {
 			m.drag.candidate = ""
 		}
-		if m.archive.promptOpen || m.dialog != nil || m.duplicates.open {
+		if m.duplicates.open {
+			return m.handleDuplicateMouse(message)
+		}
+		if m.archive.promptOpen || m.dialog != nil {
 			return m, nil
 		}
 		if m.search.open {
@@ -189,9 +203,9 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if m.mouseOverEntries(message.X, message.Y) {
 			switch message.Button {
 			case tea.MouseButtonWheelUp:
-				return m.moveSelection(-1)
+				return m.wheelSelection(-1)
 			case tea.MouseButtonWheelDown:
-				return m.moveSelection(1)
+				return m.wheelSelection(1)
 			}
 		}
 		if m.mouseOverPreview(message.X, message.Y) {
@@ -483,8 +497,33 @@ func (m Model) moveSelection(delta int) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.data.Selected = next
+	m.wheelSeq++ // a preview a wheel move left waiting is no longer wanted
 	m.resetPreview(true)
 	return m.requestPreview()
+}
+
+/*
+wheelSelection moves the selection for a wheel notch over the file list. A
+spinning wheel or a trackpad sends notches far faster than previews render, so
+the preview is not loaded for every entry passed: it loads once the wheel has
+rested for wheelSettle. Keys still load it at once (moveSelection).
+*/
+func (m Model) wheelSelection(delta int) (tea.Model, tea.Cmd) {
+	if len(m.data.Entries) == 0 {
+		return m, nil
+	}
+	next := min(max(m.data.Selected+delta, 0), len(m.data.Entries)-1)
+	if next == m.data.Selected {
+		return m, nil
+	}
+	m.data.Selected = next
+	m.resetPreview(!m.data.HidePreview)
+	if m.data.HidePreview {
+		return m, nil
+	}
+	m.wheelSeq++
+	seq := m.wheelSeq
+	return m, tea.Tick(wheelSettle, func(time.Time) tea.Msg { return wheelSettledMsg{seq: seq} })
 }
 
 // WithPreview starts with the preview pane shown or hidden, and remembers each
