@@ -1,28 +1,14 @@
 ---
 import Layout from "../layouts/Layout.astro";
-
-const TITLE_TEXT = `
- ██████╗ ███████╗████████╗████████╗███████╗██████╗
- ██╔══██╗██╔════╝╚══██╔══╝╚══██╔══╝██╔════╝██╔══██╗
- ██████╔╝█████╗     ██║      ██║   █████╗  ██████╔╝
- ██╔══██╗██╔══╝     ██║      ██║   ██╔══╝  ██╔══██╗
- ██████╔╝███████╗   ██║      ██║   ███████╗██║  ██║
- ╚═════╝ ╚══════╝   ╚═╝      ╚═╝   ╚══════╝╚═╝  ╚═╝
-
- ████████╗    ███████╗████████╗ █████╗  ██████╗██╗  ██╗
- ╚══██╔══╝    ██╔════╝╚══██╔══╝██╔══██╗██╔════╝██║ ██╔╝
-    ██║       ███████╗   ██║   ███████║██║     █████╔╝
-    ██║       ╚════██║   ██║   ██╔══██║██║     ██╔═██╗
-    ██║       ███████║   ██║   ██║  ██║╚██████╗██║  ██╗
-    ╚═╝       ╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝
- `;
 ---
 
-<Layout title="www">
-  <div class="container mx-auto max-w-3xl px-4 py-2">
-    <pre class="overflow-x-auto font-mono text-sm text-white">{TITLE_TEXT}</pre>
-    <div class="grid gap-6">
-    </div>
+<Layout>
+  <div class="container mx-auto max-w-3xl px-4 py-16 text-center">
+    <img src="/logo-mark.png" alt="" width="190" height="96" class="mx-auto" />
+    <h1 class="mt-6 text-5xl font-bold">nukri</h1>
+    <p class="mt-4 text-lg text-neutral-400">
+      Fast and elegant terminal file manager for Linux
+    </p>
   </div>
 </Layout>
 

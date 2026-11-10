@@ -106,6 +106,7 @@ main() {
 	chmod 755 "$dir/.nukri.new"
 	mv -f "$dir/.nukri.new" "$dir/nukri"
 	say "Installed nukri $version to $dir/nukri"
+	install_menu_entry "$work/$archive"
 
 	case ":$PATH:" in
 	*":$dir:"*) say "Run it with: nukri" ;;
@@ -117,6 +118,18 @@ main() {
 	esac
 
 	offer_preview_tools
+}
+
+# install_menu_entry ARCHIVE adds nukri, with its icon, to the desktop's app
+# menu for this user. Releases before the entry existed have no such files, and
+# a failure here never stops the install.
+install_menu_entry() {
+	tar -xzf "$1" -C "$work" packaging/nukri.desktop packaging/nukri.png 2>/dev/null || return 0
+	data=${XDG_DATA_HOME:-$HOME/.local/share}
+	mkdir -p "$data/applications" "$data/icons/hicolor/256x256/apps" 2>/dev/null &&
+		cp "$work/packaging/nukri.desktop" "$data/applications/nukri.desktop" &&
+		cp "$work/packaging/nukri.png" "$data/icons/hicolor/256x256/apps/nukri.png" || return 0
+	say "Added nukri to your app menu"
 }
 
 # Preview tools: "check|description|apt|pacman|dnf|zypper|apk". check lists

@@ -1,6 +1,8 @@
-# Nukri
+<p align="center">
+  <img src="assets/logo.png" alt="nukri" width="280">
+</p>
 
-A fast terminal file manager for Linux, written in Go. Nukri is a work in progress.
+<p align="center">A fast terminal file manager for Linux, written in Go. Nukri is a work in progress.</p>
 
 ![Nukri with the Places sidebar, the file list of a home folder, and a preview of the selected folder](demo.png)
 

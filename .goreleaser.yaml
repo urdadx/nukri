@@ -18,6 +18,8 @@ archives:
     files:
       - README.md
       - LICENSE
+      - packaging/nukri.desktop # app menu entry, installed by install.sh
+      - packaging/nukri.png
 
 checksum:
   name_template: checksums.txt

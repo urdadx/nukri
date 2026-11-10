@@ -13,6 +13,12 @@ const inter = {
 export default defineConfig({
   title: "Nukri",
   description: "A fast terminal file manager for Linux, written in Go.",
+  // The mark's white frame needs a dark backdrop, so light mode shows it on its
+  // black tile. The favicon and home screen icon come from public/icon.png and
+  // public/apple-icon.png.
+  logo: {
+    image: { light: "/logo-light.png", dark: "/logo-dark.png", alt: "Nukri" },
+  },
   theme: {
     fonts: {
       display: inter,

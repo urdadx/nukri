@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Nukri
+GenericName=File Manager
+Comment=Fast terminal file manager
+Exec=nukri
+Icon=nukri
+Terminal=true
+Categories=System;FileTools;FileManager;ConsoleOnly;
+Keywords=files;folders;file manager;terminal;
