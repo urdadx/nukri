@@ -11,8 +11,8 @@ const inter = {
 } as const;
 
 export default defineConfig({
-  title: "Docs",
-  description: "Documentation powered by Blume.",
+  title: "Nukri",
+  description: "A fast terminal file manager for Linux, written in Go.",
   theme: {
     fonts: {
       display: inter,
