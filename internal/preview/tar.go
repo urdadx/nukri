@@ -48,65 +48,22 @@ func (s *Service) listTar(ctx context.Context, path, compression string) (*Archi
 		return nil, fmt.Errorf("open tar: %w", err)
 	}
 	defer file.Close()
-
-	var stream io.Reader = file
-	switch {
-	case compression == "gzip" && s.tools.Pigz != "" && fileSize(file) > pigzMinimumBytes:
-		// pigz decompresses about twice as fast as compress/gzip, which pays
-		// for starting it only on large files.
-		decompressor, err := startDecompressor(ctx, s.tools.Pigz, path)
-		if err != nil {
-			return nil, err
-		}
-		defer decompressor.stop()
-		stream = decompressor.output
-	case compression == "gzip":
-		decompressed, err := gzip.NewReader(bufio.NewReaderSize(file, 256<<10))
-		if err != nil {
-			return nil, fmt.Errorf("read tar: %w", err)
-		}
-		defer decompressed.Close()
-		stream = decompressed
-	case compression == "bzip2":
-		stream = bzip2.NewReader(bufio.NewReaderSize(file, 256<<10))
-	case compression == "xz" || compression == "zstd":
-		tool := s.tools.XZ
-		if compression == "zstd" {
-			tool = s.tools.Zstd
-		}
-		if tool == "" {
-			return nil, fmt.Errorf("archive preview: %w", ToolUnavailable(compression))
-		}
-		decompressor, err := startDecompressor(ctx, tool, path)
-		if err != nil {
-			return nil, err
-		}
-		// Stop the decompressor once enough entries are listed.
-		defer decompressor.stop()
-		stream = decompressor.output
+	archive, err := s.listTarStream(ctx, file, fileSize(file), path, compression)
+	if err != nil {
+		return nil, err
 	}
+	return &ArchivePreview{Archive: archive}, nil
+}
 
+// listTarStream lists the tar in input, compressed as compression says. path
+// names input on disk when it is a whole file, letting external tools read it
+// directly; otherwise they read input on standard input.
+func (s *Service) listTarStream(ctx context.Context, input io.Reader, size int64, path, compression string) (Archive, error) {
 	archive := Archive{}
-	reader := tar.NewReader(stream)
-	for {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		header, err := reader.Next()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			if len(archive.Entries) == 0 {
-				return nil, fmt.Errorf("read tar: %w", err)
-			}
-			// A damaged or cut-off tail: keep what was listed.
-			archive.Truncated = true
-			break
-		}
+	err := s.walkTar(ctx, input, size, path, compression, func(header *tar.Header, _ io.Reader) bool {
 		if len(archive.Entries) >= s.maxArchiveEntries {
 			archive.Truncated = true
-			break
+			return false
 		}
 		mode := header.FileInfo().Mode()
 		archive.Entries = append(archive.Entries, ArchiveEntry{
@@ -119,8 +76,85 @@ func (s *Service) listTar(ctx context.Context, path, compression string) (*Archi
 			Attributes: mode.String(),
 			Directory:  mode.IsDir(),
 		})
+		return true
+	})
+	if err != nil && len(archive.Entries) == 0 {
+		return Archive{}, err
 	}
-	return &ArchivePreview{Archive: archive}, nil
+	if err != nil {
+		// A damaged or cut-off tail: keep what was listed.
+		archive.Truncated = true
+	}
+	return archive, nil
+}
+
+// walkTar calls visit with each header of the tar in input, and a reader for
+// that entry's contents, until visit returns false or the tar ends.
+func (s *Service) walkTar(ctx context.Context, input io.Reader, size int64, path, compression string, visit func(*tar.Header, io.Reader) bool) error {
+	stream, done, err := s.decompress(ctx, input, size, path, compression)
+	if err != nil {
+		return err
+	}
+	// Stops an external decompressor, which may still be writing.
+	defer done()
+	reader := tar.NewReader(stream)
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		header, err := reader.Next()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("read tar: %w", err)
+		}
+		if !visit(header, reader) {
+			return nil
+		}
+	}
+}
+
+// decompress returns input decompressed: in-process for gzip (or by pigz for
+// large files, when installed) and bzip2, and by the xz or zstd tool otherwise.
+// A plain tar is input itself, so a file can be seeked through.
+func (s *Service) decompress(ctx context.Context, input io.Reader, size int64, path, compression string) (io.Reader, func(), error) {
+	none := func() {}
+	tool := ""
+	switch {
+	case compression == "":
+		return input, none, nil
+	case compression == "gzip" && s.tools.Pigz != "" && size > pigzMinimumBytes:
+		// pigz decompresses about twice as fast as compress/gzip, which pays
+		// for starting it only on large files.
+		tool = s.tools.Pigz
+	case compression == "gzip":
+		decompressed, err := gzip.NewReader(bufio.NewReaderSize(input, 256<<10))
+		if err != nil {
+			return nil, nil, fmt.Errorf("read tar: %w", err)
+		}
+		return decompressed, func() { decompressed.Close() }, nil
+	case compression == "bzip2":
+		return bzip2.NewReader(bufio.NewReaderSize(input, 256<<10)), none, nil
+	case compression == "xz":
+		tool = s.tools.XZ
+	case compression == "zstd":
+		tool = s.tools.Zstd
+	default:
+		return nil, nil, fmt.Errorf("unsupported compression %q", compression)
+	}
+	if tool == "" {
+		return nil, nil, fmt.Errorf("archive preview: %w", ToolUnavailable(compression))
+	}
+	var stdin io.Reader
+	if path == "" {
+		stdin = input
+	}
+	decompressor, err := startDecompressor(ctx, tool, path, stdin)
+	if err != nil {
+		return nil, nil, err
+	}
+	return decompressor.output, decompressor.stop, nil
 }
 
 // pigzMinimumBytes is the gzip tarball size from which pigz beats starting
@@ -141,8 +175,13 @@ type decompressor struct {
 	output  io.ReadCloser
 }
 
-func startDecompressor(ctx context.Context, tool, path string) (*decompressor, error) {
+// startDecompressor runs tool on path, or on stdin when it is set.
+func startDecompressor(ctx context.Context, tool, path string, stdin io.Reader) (*decompressor, error) {
 	command := exec.CommandContext(ctx, tool, "-dc", "--", path)
+	if stdin != nil {
+		command = exec.CommandContext(ctx, tool, "-dc")
+		command.Stdin = stdin
+	}
 	output, err := command.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("start %s: %w", tool, err)

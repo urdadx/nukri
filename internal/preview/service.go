@@ -159,6 +159,12 @@ func (s *Service) Render(ctx context.Context, request Request) (Preview, error) 
 		return s.renderVideo(ctx, path, request.Width)
 	}
 	if request.Facts.BuiltinClass == core.FileClassArchive {
+		switch {
+		case isDebPath(path):
+			return s.renderDeb(ctx, path)
+		case isAppImage(path):
+			return s.renderAppImage(ctx, path)
+		}
 		return s.listArchive(ctx, path)
 	}
 	if request.Facts.Preview.Kind == fileinfo.Source || request.Facts.Preview.Kind == fileinfo.PlainText {

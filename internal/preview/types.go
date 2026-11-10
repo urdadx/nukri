@@ -165,6 +165,14 @@ func (m CSVMetadata) rowCountLabel() string {
 	return fmt.Sprint(m.RowCount)
 }
 
+// PackagePreview is an installable package: a Debian package or an AppImage.
+type PackagePreview struct {
+	Kind     string // "Debian package" or "AppImage"
+	Metadata []Field
+	Archive  Archive // the files it contains
+	Note     string  // why the file list is missing, if it is
+}
+
 type TorrentPreview struct {
 	Torrent   Torrent
 	Files     []TorrentFile
@@ -233,6 +241,7 @@ func (*AudioPreview) isPreview()     {}
 func (*VideoPreview) isPreview()     {}
 func (*CSVPreview) isPreview()       {}
 func (*TorrentPreview) isPreview()   {}
+func (*PackagePreview) isPreview()   {}
 func (*ISOPreview) isPreview()       {}
 
 type Image struct {

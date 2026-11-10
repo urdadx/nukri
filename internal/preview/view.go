@@ -118,6 +118,8 @@ func BuildViewContext(ctx context.Context, value Preview, options ViewOptions) (
 		return torrentView(value, width, options.ColumnOffset), nil
 	case *ISOPreview:
 		return isoView(value, width, options.ColumnOffset), nil
+	case *PackagePreview:
+		return packageView(value, width, options.ColumnOffset), nil
 	case nil:
 		return View{}, ErrUnsupported
 	default:
@@ -200,6 +202,38 @@ func torrentView(value *TorrentPreview, width, offset int) View {
 		Detail: "BitTorrent metainfo",
 		Lines:  fieldLines(value.Metadata),
 	}
+}
+
+// packageView shows a package's details above its file list, like isoView.
+func packageView(value *PackagePreview, width, offset int) View {
+	lines := fieldLines(value.Metadata)
+	footer := value.Note
+	horizontal := false
+	if len(value.Archive.Entries) > 0 {
+		rows := make([][]string, 0, len(value.Archive.Entries))
+		for _, entry := range value.Archive.Entries {
+			rows = append(rows, []string{strconv.FormatInt(entry.Size, 10), entry.Path})
+		}
+		var table []string
+		table, footer, horizontal = tableLines([]string{"Size", "Path"}, rows, len(value.Archive.Entries), width, offset)
+		if len(lines) != 0 {
+			lines = append(lines, "")
+		}
+		lines = append(lines, table...)
+		if value.Archive.Truncated {
+			footer = joinFooter(footer, "listing truncated")
+		}
+	}
+	return View{Title: value.Kind, Detail: packageDetail(value), Lines: lines, Footer: footer, Scroll: tableScroll(horizontal)}
+}
+
+func packageDetail(value *PackagePreview) string {
+	for _, field := range value.Metadata {
+		if field.Name == "Version" {
+			return "version " + field.Value
+		}
+	}
+	return ""
 }
 
 func isoView(value *ISOPreview, width, offset int) View {
