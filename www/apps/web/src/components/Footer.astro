@@ -15,7 +15,7 @@ const link = "transition-colors hover:text-fg";
   <div class="mx-auto flex max-w-2xl flex-col items-center gap-5 px-4 py-12 text-center text-sm text-muted">
     <Logo size={28} />
     <nav class="flex flex-wrap justify-center gap-x-5 gap-y-2">
-      {nav.map((item) => <a href={item.href} class={link}>{item.label}</a>)}
+      {nav.map((item) => <a href={item.href} target="_blank" class={link}>{item.label}</a>)}
     </nav>
     <p>
       Free and open source under the <a href={`${siteLinks.github}/blob/HEAD/LICENSE`} class:list={[link, "underline underline-offset-2"]}>MIT License</a>.

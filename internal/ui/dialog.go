@@ -12,9 +12,9 @@ import (
 type dialogKind int
 
 const (
-	dialogText    dialogKind = iota // multi-line text input
-	dialogList                      // pick one row
-	dialogConfirm                   // yes or no
+	dialogText dialogKind = iota
+	dialogList
+	dialogConfirm
 )
 
 type dialogChoice struct {
@@ -33,11 +33,11 @@ to show validation errors.
 type dialog struct {
 	kind   dialogKind
 	title  string
-	detail string // line under the title
-	hint   string // key help at the bottom
+	detail string
+	hint   string
 
 	input      textEditor
-	lineErrors map[int]string // validation errors by 0-based input line
+	lineErrors map[int]string
 
 	choices  []dialogChoice
 	selected int

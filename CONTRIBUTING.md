@@ -55,11 +55,6 @@ Keep new previews that way.
   `toggle the preview pane with P`. Use the body to explain why.
 - Describe what you changed and how you tested it in the pull request.
 
-## Releases
-
-Pushing a `v*` tag, like `v0.1.0`, runs the release workflow, which publishes Linux
-binaries for amd64 and arm64 on GitHub.
-
 ## License
 
 By contributing, you agree that your contributions are licensed under the
