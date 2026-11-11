@@ -17,18 +17,20 @@ export const touchHint = "tap to explore · double tap opens";
 export const rows = 32;
 
 export class Demo {
-  theme = themes.dracula;
-  cwd = homePath;
-  selected = 4; // Downloads
+  theme = themes.kaolin;
+  // Open on Downloads with the screen recording selected, so the first paint
+  // shows a picture in the preview.
+  cwd = `${homePath}/Downloads`;
+  selected = 0; // 2026-08-15_16-20-52.mkv
   hidePreview = false;
   status = hint;
 
   constructor(
     public cols: number,
     public rows: number,
-    themeName = "dracula",
+    themeName = "kaolin",
   ) {
-    this.theme = themes[themeName] ?? themes.dracula;
+    this.theme = themes[themeName] ?? themes.kaolin;
   }
 
   private get entries() {

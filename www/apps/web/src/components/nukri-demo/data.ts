@@ -213,7 +213,7 @@ echo "done: $(date)"
 `;
 
 const nukriConfig = `# ~/.config/nukri/config.toml
-theme = "dracula"
+theme = "kaolin"
 show_hidden = false
 preview = true
 
