@@ -1,5 +1,5 @@
 ---
-import { Copy01Icon } from "@hugeicons/core-free-icons";
+import { Copy01Icon, PlayIcon } from "@hugeicons/core-free-icons";
 import CheckCircle from "../components/CheckCircle.astro";
 import GithubMark from "../components/GithubMark.astro";
 import Icon from "../components/Icon.astro";
@@ -60,14 +60,40 @@ const button =
         <TryArrow class="absolute right-10 bottom-full z-10 -mb-1 hidden text-fg/70 sm:flex lg:right-20" />
         <div class="relative isolate overflow-hidden rounded-xl px-3 py-8 sm:px-6 sm:py-10 lg:px-10 lg:py-12">
           <GradientBackground />
-          <!-- Phones get a screenshot: the terminal is too small to use there. -->
-          <img
-            src="/demo.png"
-            alt="Nukri with the Places sidebar, the file list of a home folder, and a preview of the selected folder"
-            width="1159"
-            height="744"
-            class="block w-full rounded-lg shadow-lg sm:hidden"
-          />
+          <!--
+            Phones get a screenshot and the launch video: the terminal is too small to use
+            there. The video loads after the page does (see the script below), so it never
+            holds up first paint.
+          -->
+          <div class="relative sm:hidden" data-demo-video>
+            <img
+              src="/demo.png"
+              alt="Nukri with the Places sidebar, the file list of a home folder, and a preview of the selected folder"
+              width="1159"
+              height="744"
+              class="block w-full rounded-lg shadow-lg"
+              data-demo-poster
+            />
+            <button
+              type="button"
+              class="absolute top-1/2 left-1/2 inline-flex h-12 -translate-x-1/2 -translate-y-1/2 items-center gap-2.5 rounded-full bg-linear-to-b from-white/95 to-neutral-200/90 py-1.5 pr-5 pl-1.5 text-sm font-semibold whitespace-nowrap text-neutral-900 shadow-[inset_0_1px_0_rgb(255_255_255),inset_0_-1px_0_rgb(0_0_0/0.08),0_10px_30px_rgb(0_0_0/0.35)] ring-1 ring-black/10 backdrop-blur-md active:scale-[0.97]"
+              data-demo-play
+            >
+              <span class="flex size-9 items-center justify-center rounded-full bg-neutral-900 text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.25)]">
+                <Icon icon={PlayIcon} size={16} class="translate-x-px" />
+              </span>
+              Watch demo
+            </button>
+            <video
+              class="aspect-video w-full rounded-lg bg-black shadow-lg"
+              hidden
+              data-src="/demo-video.mp4"
+              preload="none"
+              playsinline
+              controls
+              data-demo-player
+            ></video>
+          </div>
           <div class="hidden sm:block">
             <NukriDemo />
           </div>
@@ -93,6 +119,37 @@ const button =
 </Layout>
 
 <script>
+  // The phone demo: fetch the video once the page has loaded and gone idle, so
+  // the tap plays at once without the video competing with first paint. Wider
+  // screens get the live terminal and never fetch it; Save-Data skips the head
+  // start and loads it on the tap instead.
+  const demo = document.querySelector<HTMLElement>("[data-demo-video]");
+  const player = demo?.querySelector<HTMLVideoElement>("[data-demo-player]");
+  const loadVideo = () => {
+    if (!player || player.src) return;
+    player.src = player.dataset.src ?? "";
+    player.preload = "auto";
+    player.load();
+  };
+  const phone = matchMedia("(max-width: 639px)").matches;
+  const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData;
+  if (phone && !saveData) {
+    const idle = () => ("requestIdleCallback" in window ? requestIdleCallback(loadVideo) : setTimeout(loadVideo, 200));
+    if (document.readyState === "complete") idle();
+    else addEventListener("load", idle, { once: true });
+  }
+  demo?.querySelector("[data-demo-play]")?.addEventListener("click", (event) => {
+    if (!player) return;
+    loadVideo();
+    // The hidden attribute, not the class: Tailwind's preflight enforces it over
+    // the display utilities these elements carry.
+    const poster = demo.querySelector<HTMLElement>("[data-demo-poster]");
+    if (poster) poster.hidden = true;
+    (event.currentTarget as HTMLElement).hidden = true;
+    player.hidden = false;
+    void player.play();
+  });
+
   const button = document.getElementById("copy-install");
   let reset: ReturnType<typeof setTimeout> | undefined;
   button?.addEventListener("click", async () => {
