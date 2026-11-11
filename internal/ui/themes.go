@@ -6,34 +6,24 @@ import (
 	"github.com/urdadx/nukri/internal/theme"
 )
 
-// ThemeCatalog connects the theme picker to where themes live and where the
-// choice is saved.
 type ThemeCatalog struct {
-	Current string          // name of the theme in use
-	Names   func() []string // themes to offer
+	Current string
+	Names   func() []string
 	Load    func(name string) (theme.Theme, error)
-	Save    func(name string) error // remember the choice
+	Save    func(name string) error
 }
 
-// WithThemes enables the theme picker.
 func (m Model) WithThemes(catalog ThemeCatalog) Model {
 	m.themes = catalog
 	return m
 }
 
-// applyTheme restyles the UI. Icon colors are cached per entry, so callers
-// reload the listing when the change is kept.
 func (m Model) applyTheme(t theme.Theme) Model {
 	m.styles = NewStyles(t)
 	icons.InitIcon(true, t.DirectoryIconColor)
 	return m
 }
 
-/*
-openThemePicker lists the available themes. Moving through the list previews
-each one live; Enter keeps it and saves it to the config, Esc puts the original
-back.
-*/
 func (m Model) openThemePicker() (Model, tea.Cmd) {
 	if m.themes.Names == nil || m.themes.Load == nil {
 		return m, nil
@@ -83,8 +73,6 @@ func (m Model) openThemePicker() (Model, tea.Cmd) {
 	return m, nil
 }
 
-// reloadKeepingSelection reloads the current folder with the focused entry
-// still selected.
 func (m Model) reloadKeepingSelection() tea.Cmd {
 	if m.data.CWD == "" {
 		return nil
